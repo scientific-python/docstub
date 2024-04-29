@@ -36,6 +36,9 @@ dev = [
 [project.urls]
 Home = "https://github.com/lagru/docstub"
 
+[project.scripts]
+docstub = "docstub.__main__:main"
+
 
 [tool.setuptools_scm]
 write_to = "src/docstub/_version.py"
