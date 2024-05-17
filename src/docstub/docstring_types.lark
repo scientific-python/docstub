@@ -25,7 +25,7 @@ numpy_array_like : _shape_n_dtype{"numpy_array_like"} | _shape_n_dtype{"array-li
 
 numpy_ndarray : _shape_n_dtype{"ndarray"} | _shape_n_dtype{"array"}
 
-numpy_dtype : NP_UINT8 | NP_INT8 | PY_FLOAT | PY_INT | PY_COMPLEX
+numpy_dtype : NP_UINT8 | NP_INT8 | py_atomic
 
 numpy_shape : "(" dim ",)"
          | "(" leading_optional? dim (("," dim | insert_optional))* ")"

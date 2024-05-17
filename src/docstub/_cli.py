@@ -1,14 +1,13 @@
 import logging
-from pathlib import Path
 from functools import partial
+from pathlib import Path
 
 import click
 
-from ._version import __version__
+from ._config import load_config
 from ._docstrings import DocTransform, transform_docstring
 from ._stubs import TreeTransformer
-from ._config import load_config
-
+from ._version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -31,16 +30,14 @@ def _walk_python_package(root_dir, target_dir):
             if not name.endswith(".py"):
                 continue
             py_path = root / name
-            stub_path = target_dir / py_path.relative_to(root_dir)
+            stub_path = target_dir / py_path.with_suffix(".pyi").relative_to(root_dir)
             yield py_path, stub_path
 
 
 @click.command()
 @click.version_option(__version__)
 @click.argument("source_dir", type=click.Path(exists=True, file_okay=False))
-@click.option(
-    "--config", "config_path", type=click.Path(exists=True, dir_okay=False)
-)
+@click.option("--config", "config_path", type=click.Path(exists=True, dir_okay=False))
 def main(source_dir, config_path):
     source_dir = Path(source_dir)
     target_dir = source_dir.parent / (source_dir.name + "-stubs")
@@ -54,7 +51,7 @@ def main(source_dir, config_path):
         raise ValueError("no config")
 
     doc_transforms = {
-        rule: DocTransform.from_str(spec)
+        rule: DocTransform.from_cfg(spec)
         for rule, spec in config["doc_transforms"].items()
     }
     stub_transformer = TreeTransformer(
