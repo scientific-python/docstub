@@ -10,13 +10,13 @@ in NumPyDoc style docstrings.
 ## Installation
 
 ```shell
-pip install git+https://github.com/lagru/docstub
+pip install docstub
 ```
 
 
 ## Usage & configuration
 
-TBD
+- Allow extending of the parser (grammar) and the transformer via static files.
 
 
 ## Contributing

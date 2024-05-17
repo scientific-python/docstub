@@ -26,11 +26,18 @@ classifiers = [
   "Typing :: Typed",
 ]
 dynamic = ["version"]
-dependencies = []
+dependencies = [
+  "libcst >=1.31",
+  "lark >=1.1.9",
+]
 
 [project.optional-dependencies]
 dev = [
   "pre-commit >=3.7",
+]
+test = [
+  "pytest >=5.0.0",
+  "coverage >=7.5.0",
 ]
 
 [project.urls]

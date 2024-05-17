@@ -1,0 +1,80 @@
+?start : type_description
+
+type_description : type (("or" | "|") type)* ("," optional ("," extra_info)?)?
+
+?type : numpy_ndarray
+      | numpy_array_like
+      | py_builtin
+      | "{" literal ("," literal)* "}"
+
+extra_info : /[^\r\n]+/
+
+optional : "optional"
+         | "default" ("=" | ":") literal
+
+
+// NumPy
+_shape_n_dtype{t} : numpy_shape? t ("of" numpy_dtype)?
+                  | numpy_shape t "of" numpy_dtype
+                  | numpy_shape numpy_dtype t
+                  | numpy_dtype t
+                  | t "of shape" numpy_shape ("and dtype" numpy_dtype)?
+                  | t "of dtype" numpy_dtype ("and shape" numpy_shape)?
+
+numpy_array_like : _shape_n_dtype{"numpy_array_like"} | _shape_n_dtype{"array-like"}
+
+numpy_ndarray : _shape_n_dtype{"ndarray"} | _shape_n_dtype{"array"}
+
+numpy_dtype : NP_UINT8 | NP_INT8 | PY_FLOAT | PY_INT | PY_COMPLEX
+
+numpy_shape : "(" dim ",)"
+         | "(" leading_optional? dim (("," dim | insert_optional))* ")"
+         | NUMBER "-"? "D"
+
+leading_optional : "[" dim ("," dim)* ",]" -> optional
+insert_optional : "[," dim ("," dim)* "]" -> optional
+
+?dim : NUMBER
+     | PY_ELLIPSES
+     | NAME
+
+NP_UINT8 : "uint8"
+NP_INT8 : "int8"
+
+
+// Python
+
+?py_builtin : py_atomic | py_containers
+
+?py_containers : py_list | py_sequence | py_tuple | py_dict
+py_sequence : "sequence[" type "]" | "sequence of" type
+py_list : "list[" type "]" | "list of" type
+py_tuple : "tuple[" type "]" | "tuple of" type
+py_dict : "dict[" type ["," type] "]"
+
+?py_atomic : PY_BOOL | PY_INT | PY_FLOAT | PY_COMPLEX | PY_STR
+PY_BOOL : "bool"
+PY_FLOAT : "float"
+PY_INT : "int"
+PY_COMPLEX : "complex"
+PY_STR : "str"
+
+PY_TRUE : "True"
+PY_FALSE : "False"
+PY_NONE : "None"
+PY_ELLIPSES : "..."
+
+literal : STRING
+        | NUMBER
+        | NAME
+        | PY_TRUE
+        | PY_FALSE
+        | PY_NONE
+        | PY_ELLIPSES
+
+
+// imports
+%import python (STRING, NAME)
+%import common (NEWLINE, NUMBER, LETTER, TEXT, WS)
+
+%ignore WS
