@@ -12,8 +12,10 @@ ndarray = "NDArray"
 array = "NDArray"
 
 # trigger = "[<from>]::<import>[::<alias>]"
+# trigger = "builtin"
 [docstub.import_map]
 np = "::numpy::np"
 ArrayLike = "numpy.typing::ArrayLike"
 NDArray = "numpy.typing::NDArray"
+
 Union = "typing::Union"

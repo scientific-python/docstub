@@ -5,7 +5,7 @@
 from pprint import pprint
 
 
-def func_empty(a1, a2, a3):
+def func_empty(a1, a2, a3) -> None:
     """Dummy.
 
     Parameters
@@ -15,13 +15,12 @@ def func_empty(a1, a2, a3):
 
     Returns
     -------
-    r1 :
-    r2
+    list
     """
     pprint([a1, a2, a3])
 
 
-def func_ndarray(a1, a2, a3, a4):
+def func_ndarray(a1, a2, a3, a4=None):
     """Dummy.
 
     Parameters

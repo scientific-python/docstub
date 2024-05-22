@@ -1,6 +1,6 @@
 ?start : type_description
 
-type_description : type (("or" | "|") type)* ("," optional ("," extra_info)?)?
+type_description : type (("or" | "|") type)* ("," optional)? ("," extra_info)?
 
 ?type : qualname
       | "{" literal ("," literal)* "}"
