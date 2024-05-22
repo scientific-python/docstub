@@ -1,11 +1,12 @@
 import logging
+import sys
 from functools import partial
 from pathlib import Path
 
 import click
 
 from ._config import load_config
-from ._docstrings import DocTransform, transform_docstring
+from ._docstrings import ImportableName, transform_docstring
 from ._stubs import TreeTransformer
 from ._version import __version__
 
@@ -38,7 +39,14 @@ def _walk_python_package(root_dir, target_dir):
 @click.version_option(__version__)
 @click.argument("source_dir", type=click.Path(exists=True, file_okay=False))
 @click.option("--config", "config_path", type=click.Path(exists=True, dir_okay=False))
-def main(source_dir, config_path):
+@click.option("-v", "--verbose", count=True, help="Log more details")
+def main(source_dir, config_path, verbose):
+    logging.basicConfig(
+        level=logging.DEBUG if verbose > 0 else logging.INFO,
+        format="%(levelname)s: %(filename)s::%(funcName)s: %(message)s",
+        stream=sys.stderr,
+    )
+
     source_dir = Path(source_dir)
     target_dir = source_dir.parent / (source_dir.name + "-stubs")
 
@@ -50,12 +58,18 @@ def main(source_dir, config_path):
     else:
         raise ValueError("no config")
 
-    doc_transforms = {
-        rule: DocTransform.from_cfg(spec)
-        for rule, spec in config["doc_transforms"].items()
+    replace_map = {
+        name: replacement
+        for name, replacement in config["replace_map"].items()
+    }
+    import_map = {
+        name: ImportableName.from_cfg(spec)
+        for name, spec in config["import_map"].items()
     }
     stub_transformer = TreeTransformer(
-        transform_docstring=partial(transform_docstring, doc_transforms=doc_transforms)
+        transform_docstring=partial(
+            transform_docstring, replace_map=replace_map, import_map=import_map
+        )
     )
 
     for py_path, stub_path in _walk_python_package(source_dir, target_dir):

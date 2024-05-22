@@ -3,10 +3,17 @@ extend_grammar = """
 
 """
 
-# Map rules defined in the grammar to a Python object. The object is specified
-# with an import location and a name. e.g. `numpy_array = "numpy.typing:NDArray"
-# TODO maybe use "_typing.py" file instead to provide this information?
-[docstub.doc_transforms]
-numpy_array_like = "numpy.typing::ArrayLike"
-numpy_ndarray = "numpy.typing::NDArray"
-numpy_dtype = "numpy.typing::DTypeLike"
+[docstub.replace_map]
+numpy = "np"
+uint8 = "np.uint8"
+array-like = "ArrayLike"
+array_like = "ArrayLike"
+ndarray = "NDArray"
+array = "NDArray"
+
+# trigger = "[<from>]::<import>[::<alias>]"
+[docstub.import_map]
+np = "::numpy::np"
+ArrayLike = "numpy.typing::ArrayLike"
+NDArray = "numpy.typing::NDArray"
+Union = "typing::Union"

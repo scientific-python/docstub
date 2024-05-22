@@ -2,6 +2,7 @@
 
 """
 
+import black
 
 
 # Potential alternative(?): parso
@@ -23,14 +24,15 @@ class TreeTransformer(cst.CSTTransformer):
         self._context_doctypes = None
         self._required_type_imports = None
 
-    def python_to_stub(self, source):
+    def python_to_stub(self, source, format=True):
         try:
             self._context_doctypes = []
-            self._required_type_imports = {}
+            self._required_type_imports = []
 
             source_tree = cst.parse_module(source)
             stub_tree = source_tree.visit(self)
             stub = stub_tree.code
+            stub = black.format_str(stub, mode=black.Mode())
             return stub
         finally:
             self._context_doctypes = None
@@ -58,25 +60,20 @@ class TreeTransformer(cst.CSTTransformer):
         assert original_node.annotation is None
         doctypes = self._context_doctypes[-1]
         if doctypes:
-            param_type, imports = doctypes.params[name]
+            param_type, imports = doctypes.params.get(name, (None, None))
+            if param_type:
+                annotation = cst.Annotation(cst.parse_expression(param_type))
+                updated_node = updated_node.with_changes(annotation=annotation)
             if imports:
-                for import_ in imports:
-                    self._required_type_imports[import_.name] = import_
-            annotation = cst.Annotation(cst.parse_expression(param_type))
-            updated_node = updated_node.with_changes(annotation=annotation)
+                self._required_type_imports.extend(imports)
         return updated_node
 
     def leave_Expr(self, original_node, upated_node):
         return cst.RemovalSentinel.REMOVE
 
     def leave_Module(self, original_node, updated_node):
-        updated_node.get_docstring
-        type_imports = [
-            f"from {import_.path} import {name}"
-            for name, import_ in self._required_type_imports.items()
-        ]
+        type_imports = {str(imp) for imp in self._required_type_imports}
+        type_imports = sorted(type_imports)
         type_imports = tuple(cst.parse_statement(line) for line in type_imports)
         updated_node = updated_node.with_changes(body=type_imports + updated_node.body)
-
-        # TODO prepend imports!
         return updated_node

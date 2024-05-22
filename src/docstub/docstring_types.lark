@@ -2,75 +2,58 @@
 
 type_description : type (("or" | "|") type)* ("," optional ("," extra_info)?)?
 
-?type : numpy_ndarray
-      | numpy_array_like
-      | py_builtin
+?type : qualname
       | "{" literal ("," literal)* "}"
+      | shape_n_dtype
 
 extra_info : /[^\r\n]+/
 
 optional : "optional"
          | "default" ("=" | ":") literal
 
+// Name with leading dot separated path
+qualname : (NAME ".")* NAME contains?
 
-// NumPy
-_shape_n_dtype{t} : numpy_shape? t ("of" numpy_dtype)?
-                  | numpy_shape t "of" numpy_dtype
-                  | numpy_shape numpy_dtype t
-                  | numpy_dtype t
-                  | t "of shape" numpy_shape ("and dtype" numpy_dtype)?
-                  | t "of dtype" numpy_dtype ("and shape" numpy_shape)?
 
-numpy_array_like : _shape_n_dtype{"numpy_array_like"} | _shape_n_dtype{"array-like"}
+contains: "[" type ("," type)* "]"
 
-numpy_ndarray : _shape_n_dtype{"ndarray"} | _shape_n_dtype{"array"}
 
-numpy_dtype : NP_UINT8 | NP_INT8 | py_atomic
-
-numpy_shape : "(" dim ",)"
-         | "(" leading_optional? dim (("," dim | insert_optional))* ")"
-         | NUMBER "-"? "D"
-
+// Numeric
+shape_n_dtype : shape? ARRAY_NAME ("of" dtype)?
+              | shape? ARRAY_NAME "of" dtype
+              | shape dtype ARRAY_NAME
+              | dtype ARRAY_NAME
+              | ARRAY_NAME "of shape" shape ("and dtype" dtype)?
+              | ARRAY_NAME "of dtype" dtype ("and shape" shape)?
+ARRAY_NAME : "array"
+           | "ndarray"
+           | "array-like"
+           | "array_like"
+dtype : NAME
+shape : "(" dim ",)"
+      | "(" leading_optional? dim (("," dim | insert_optional))* ")"
+      | NUMBER "-"? "D"
 leading_optional : "[" dim ("," dim)* ",]" -> optional
 insert_optional : "[," dim ("," dim)* "]" -> optional
-
 ?dim : NUMBER
      | PY_ELLIPSES
      | NAME
 
-NP_UINT8 : "uint8"
-NP_INT8 : "int8"
-
 
 // Python
-
-?py_builtin : py_atomic | py_containers
-
-?py_containers : py_list | py_sequence | py_tuple | py_dict
-py_sequence : "sequence[" type "]" | "sequence of" type
-py_list : "list[" type "]" | "list of" type
-py_tuple : "tuple[" type "]" | "tuple of" type
-py_dict : "dict[" type ["," type] "]"
-
-?py_atomic : PY_BOOL | PY_INT | PY_FLOAT | PY_COMPLEX | PY_STR
-PY_BOOL : "bool"
-PY_FLOAT : "float"
-PY_INT : "int"
-PY_COMPLEX : "complex"
-PY_STR : "str"
 
 PY_TRUE : "True"
 PY_FALSE : "False"
 PY_NONE : "None"
 PY_ELLIPSES : "..."
 
-literal : STRING
-        | NUMBER
-        | NAME
-        | PY_TRUE
+literal : PY_TRUE
         | PY_FALSE
         | PY_NONE
         | PY_ELLIPSES
+        | STRING
+        | NUMBER
+        | NAME
 
 
 // imports

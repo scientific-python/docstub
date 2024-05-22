@@ -18,56 +18,114 @@ grammar_path = here / "docstring_types.lark"
 
 
 @dataclass(slots=True, frozen=True)
-class Import:
+class ImportableName:
     name: str
     path: str
-
-
-@dataclass(slots=True, frozen=True)
-class DocTransform:
-    """Information on how to transform a single rule."""
-
-    type_name: str
-    import_: Import
+    alias: str
 
     @classmethod
-    def from_cfg(cls, spec):
-        path, name = spec.split("::")
-        return cls(type_name=name, import_=Import(name=name, path=path))
+    def from_cfg(cls, value):
+        path, tail = value.split("::", maxsplit=1)
+        name, *alias = tail.split("::", maxsplit=1)
+        assert name
+        if not path:
+            path = None
+        if not alias:
+            alias = None
+        else:
+            assert len(alias) == 1
+            alias = alias[0]
+        return cls(name=name, path=path, alias=alias)
+
+    def __str__(self):
+        out = f"import {self.name}"
+        if self.path:
+            out = f"from {self.path} {out}"
+        if self.alias:
+            out = f"{out} as {self.alias}"
+        return out
+
+
+def _find_one_token(tree, token_name):
+    tokens = [child for child in tree.children if child.type == token_name]
+    if len(tokens) != 1:
+        raise ValueError(
+            f"expected exactly one Token of type {token_name}, found {len(tokens)}"
+        )
+    return tokens[0]
 
 
 @lark.visitors.v_args(tree=True)
 class DocTransformer(lark.visitors.Transformer):
     """Transformer using the docstring type grammar to return types."""
 
-    def __init__(self, doc_transforms, **kwargs):
-        self.doc_transforms = doc_transforms
-        self._imports = None
+    def __init__(self, replace_map, import_map, **kwargs):
+        self.replace_map = replace_map
+        self.import_map = import_map
+        self._collected_imports = None
         super().__init__(**kwargs)
 
     def __default__(self, data, children, meta):
-        if data in self.doc_transforms:
-            type_info = self.doc_transforms[data]
-            out = type_info.type_name
-            if type_info.import_:
-                self._imports.add(type_info.import_)
-            if children:
-                out = f"{out}[{', '.join(children)}]"
-            return out
+        if isinstance(children, list) and len(children) == 1:
+            out = lark.Token(type=data.upper(), value=children[0])
         else:
-            logger.warning("don't know how to deal with %r, dropping node", data)
-            return lark.Discard
+            out = children
+        return out
 
     def transform(self, tree):
         try:
-            self._imports = set()
+            self._collected_imports = set()
             result = super().transform(tree=tree)
-            return result, self._imports
+            return result, self._collected_imports
         finally:
-            self._imports = None
+            self._collected_imports = None
 
     def type_description(self, tree):
-        return " | ".join(tree.children)
+        out = " | ".join(tree.children)
+        return out
+
+    def qualname(self, tree):
+        out = []
+        for i, child in enumerate(tree.children):
+            if i != 0 and not child.startswith("["):
+                out.append(".")
+            out.append(child)
+        out = "".join(out)
+        return out
+
+    def NAME(self, token):
+        """Match type names to known imports."""
+        if token in self.replace_map:
+            token = self.replace_map[token]
+        if token in self.import_map:
+            imp = self.import_map[token]
+            if imp.alias:
+                token = imp.alias
+            elif imp.name:
+                token = imp.name
+            self._collected_imports.add(imp)
+        return token
+
+    def ARRAY_NAME(self, token):
+        new_token = self.NAME(token)
+        new_token = lark.Token(type="ARRAY_NAME", value=new_token)
+        return new_token
+
+    def shape(self, tree):
+        logger.debug("dropping shape information")
+        return lark.Discard
+
+    def shape_n_dtype(self, tree):
+        name = _find_one_token(tree, "ARRAY_NAME")
+        children = [child for child in tree.children if child != name]
+        if children:
+            name = f"{name}[{', '.join(children)}]"
+        return name
+
+    def contains(self, tree):
+        out = ", ".join(tree.children)
+        out = f"[{out}]"
+        return out
 
 
 with grammar_path.open() as file:
@@ -76,22 +134,22 @@ with grammar_path.open() as file:
 _lark = lark.Lark(_grammar)
 
 
-def _parse_type(description, transformer: DocTransformer):
+def parse_type(description, replace_map, import_map):
+    transformer = DocTransformer(replace_map=replace_map, import_map=import_map)
     tree = _lark.parse(description)
-    # TODO return imports as well
-    stub_type, import_paths = transformer.transform(tree)
-    return stub_type, import_paths
+    stub_type, imports = transformer.transform(tree)
+    return stub_type, imports
 
 
 @dataclass(frozen=True, slots=True)
 class ParamTypeList:
     """Parameter types collected from a single docstring."""
 
-    params: dict[str, str]
-    return_params: dict[str, str]
+    params: dict[str, tuple[str, ImportableName]]
+    return_params: dict[str, tuple[str, ImportableName]]
 
 
-def transform_docstring(text, doc_transforms):
+def transform_docstring(text, replace_map, import_map):
     """
 
     Parameters
@@ -113,14 +171,14 @@ def transform_docstring(text, doc_transforms):
         raise ValueError(f"{duplicate_params=}")
     params.update(other_params)
 
-    transformer = DocTransformer(doc_transforms)
     param_types = {
-        name: _parse_type(param.type, transformer=transformer)
-        for name, param in params.items()
+        name: parse_type(param.type, replace_map=replace_map, import_map=import_map)
+        for name, param in params.items() if param.type
     }
     return_param_types = {
-        name: _parse_type(param.type, transformer=transformer)
-        for name, param in return_params.items()
+        name: parse_type(param.type, replace_map=replace_map, import_map=import_map)
+        for name, param in return_params.items() if param.type
     }
 
-    return ParamTypeList(params=param_types, return_params=return_param_types)
+    out = ParamTypeList(params=param_types, return_params=return_param_types)
+    return out
