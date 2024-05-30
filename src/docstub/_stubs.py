@@ -6,7 +6,6 @@ import logging
 
 import black
 
-# Potential alternative(?): parso
 import libcst as cst
 
 
@@ -35,7 +34,7 @@ def walk_python_package(root_dir, target_dir):
             yield py_path, stub_path
 
 
-class TreeTransformer(cst.CSTTransformer):
+class Py2StubTransformer(cst.CSTTransformer):
     """Transform syntax tree of a Python file into the tree of a stub file."""
 
     # Equivalent to ` ...`, to replace the body of callables with
@@ -116,7 +115,7 @@ class TreeTransformer(cst.CSTTransformer):
         return cst.RemovalSentinel.REMOVE
 
     def leave_Module(self, original_node, updated_node):
-        type_imports = {str(imp) for imp in self._required_type_imports}
+        type_imports = {imp.format_import() for imp in self._required_type_imports}
         type_imports = sorted(type_imports)
         type_imports = tuple(cst.parse_statement(line) for line in type_imports)
         updated_node = updated_node.with_changes(body=type_imports + updated_node.body)

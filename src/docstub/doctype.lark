@@ -1,15 +1,15 @@
-?start : type_description
+?start : doctype
 
-type_description : type (("or" | "|") type)* ("," optional)? ("," extra_info)?
+doctype : type (("or" | "|") type)* ("," optional)? ("," extra_info)?
 
 ?type : qualname
       | "{" literal ("," literal)* "}"
       | shape_n_dtype
 
-extra_info : /[^\r\n]+/
-
 optional : "optional"
          | "default" ("=" | ":") literal
+
+extra_info : /[^\r\n]+/
 
 // Name with leading dot separated path
 qualname : (NAME ".")* NAME contains?
@@ -18,7 +18,7 @@ qualname : (NAME ".")* NAME contains?
 contains: "[" type ("," type)* "]"
 
 
-// Numeric
+// Array-likes with optional shape and dtype information
 shape_n_dtype : shape? ARRAY_NAME ("of" dtype)?
               | shape? ARRAY_NAME "of" dtype
               | shape dtype ARRAY_NAME
@@ -41,20 +41,12 @@ insert_optional : "[," dim ("," dim)* "]" -> optional
 
 
 // Python
-
-PY_TRUE : "True"
-PY_FALSE : "False"
-PY_NONE : "None"
-PY_ELLIPSES : "..."
-
-literal : PY_TRUE
-        | PY_FALSE
-        | PY_NONE
-        | PY_ELLIPSES
+literal : PY_ELLIPSES
         | STRING
         | NUMBER
         | NAME
 
+PY_ELLIPSES : "..."
 
 // imports
 %import python (STRING, NAME)

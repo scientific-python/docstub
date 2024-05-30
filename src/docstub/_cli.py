@@ -7,9 +7,9 @@ import click
 
 from ._config import load_config
 from ._docstrings import transform_docstring
-from ._stubs import TreeTransformer, walk_python_package
+from ._stubs import Py2StubTransformer, walk_python_package
 from ._version import __version__
-from ._static_analysis import KnownType, known_builtins
+from ._analysis import DocName, builtin_types
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @click.option("-o", "--out-dir", type=click.Path(file_okay=False))
 @click.option("--config", "config_path", type=click.Path(exists=True, dir_okay=False))
 @click.option("-v", "--verbose", count=True, help="Log more details")
+@click.help_option("-h", "--help")
 def main(source_dir, out_dir, config_path, verbose):
     logging.basicConfig(
         level=logging.DEBUG if verbose > 0 else logging.INFO,
@@ -40,18 +41,14 @@ def main(source_dir, out_dir, config_path, verbose):
     else:
         raise ValueError("no config")
 
-    replace_map = {
-        name: replacement
-        for name, replacement in config["replace_map"].items()
-    }
-    import_map = {name: KnownType(is_builtin=True) for name in known_builtins}
-    import_map.update({
-        name: KnownType.from_cfg(spec)
-        for name, spec in config["import_map"].items()
+    docnames = builtin_types()
+    docnames.update({
+        name: DocName.from_cfg(docname=name, spec=spec)
+        for name, spec in config["docnames"].items()
     })
-    stub_transformer = TreeTransformer(
+    stub_transformer = Py2StubTransformer(
         transform_docstring=partial(
-            transform_docstring, replace_map=replace_map, import_map=import_map
+            transform_docstring, docnames=docnames
         )
     )
 

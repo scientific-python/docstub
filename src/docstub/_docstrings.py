@@ -1,4 +1,4 @@
-"""Transform types defined in docstrings to Python types.
+"""Transform types defined in docstrings to Python parsable types.
 
 """
 
@@ -10,7 +10,7 @@ import lark
 import lark.visitors
 from numpydoc.docscrape import NumpyDocString
 
-from ._static_analysis import KnownType
+from ._analysis import DocName
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +29,11 @@ def _find_one_token(tree, token_name):
 
 
 @lark.visitors.v_args(tree=True)
-class DocTransformer(lark.visitors.Transformer):
-    """Transformer using the docstring type grammar to return types."""
+class DoctypeTransformer(lark.visitors.Transformer):
+    """Transform docstring type descriptions (doctypes)."""
 
-    def __init__(self, replace_map, import_map, **kwargs):
-        self.replace_map = replace_map
-        self.import_map = import_map
+    def __init__(self, docnames, **kwargs):
+        self.docnames = docnames
         self._collected_imports = None
         super().__init__(**kwargs)
 
@@ -53,7 +52,7 @@ class DocTransformer(lark.visitors.Transformer):
         finally:
             self._collected_imports = None
 
-    def type_description(self, tree):
+    def doctype(self, tree):
         out = " | ".join(tree.children)
         return out
 
@@ -100,16 +99,15 @@ class DocTransformer(lark.visitors.Transformer):
 
     def _match_n_record_name(self, token):
         """Match type names to known imports."""
-        if token in self.replace_map:
-            token = self.replace_map[token]
-        if token in self.import_map:
-            known_type = self.import_map[token]
-            if known_type.import_alias:
-                token = known_type.import_alias
-            elif known_type.import_name:
-                token = known_type.import_name
-            if not known_type.is_builtin:
-                self._collected_imports.add(known_type)
+        assert "." not in token
+        if token in self.docnames:
+            docname = self.docnames[token]
+            if docname.import_alias:
+                token = docname.import_alias
+            elif docname.import_name:
+                token = docname.import_name
+            if not docname.is_builtin:
+                self._collected_imports.add(docname)
         else:
             logger.warning("type with unknown origin: %s", token)
         return token
@@ -121,9 +119,9 @@ with grammar_path.open() as file:
 _lark = lark.Lark(_grammar)
 
 
-def parse_type(description, replace_map, import_map):
+def parse_type(description, docnames, import_map):
     try:
-        transformer = DocTransformer(replace_map=replace_map, import_map=import_map)
+        transformer = DoctypeTransformer(replace_map=docnames, import_map=import_map)
         tree = _lark.parse(description)
         stub_type, imports = transformer.transform(tree)
         return stub_type, imports
@@ -132,15 +130,7 @@ def parse_type(description, replace_map, import_map):
         return "", set()
 
 
-@dataclass(frozen=True, slots=True)
-class ParamTypeList:
-    """Parameter types collected from a single docstring."""
-
-    params: dict[str, tuple[str, KnownType]]
-    return_params: dict[str, tuple[str, KnownType]]
-
-
-def transform_docstring(text, replace_map, import_map):
+def transform_docstring(text, docnames):
     """
 
     Parameters
@@ -152,9 +142,8 @@ def transform_docstring(text, replace_map, import_map):
 
     """
     docstring = NumpyDocString(text)
-
-    params = {p.name: p for p in docstring["Parameters"]}
-    other_params = {p.name: p for p in docstring["Other Parameters"]}
+    params = {p.use_name: p for p in docstring["Parameters"]}
+    other_params = {p.use_name: p for p in docstring["Other Parameters"]}
     return_params = {i: p for i, p in enumerate(docstring["Returns"])}
 
     duplicate_params = params.keys() & other_params.keys()
@@ -162,15 +151,15 @@ def transform_docstring(text, replace_map, import_map):
         raise ValueError(f"{duplicate_params=}")
     params.update(other_params)
 
-    param_types = {
-        name: parse_type(param.type, replace_map=replace_map, import_map=import_map)
+    param_pytypes = {
+        name: parse_type(param.type, docnames=docnames)
         for name, param in params.items() if param.type
     }
-    return_param_types = {
-        name: parse_type(param.type, replace_map=replace_map, import_map=import_map)
+    return_pytypes = {
+        name: parse_type(param.type, docnames=docnames)
         for name, param in return_params.items() if param.type
     }
 
-    out = ParamTypeList(params=param_types, return_params=return_param_types)
-    return out
+    out = PyTypeList(params=param_pytypes, return_params=return_pytypes)
+    return param_pytypes, re
 

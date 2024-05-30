@@ -3,19 +3,10 @@ extend_grammar = """
 
 """
 
-[docstub.replace_map]
-numpy = "np"
-uint8 = "np.uint8"
-array-like = "ArrayLike"
-array_like = "ArrayLike"
-ndarray = "NDArray"
-array = "NDArray"
 
-# trigger = "[<from>]::<import>[::<alias>]"
-# trigger = "builtin"
-[docstub.import_map]
-np = "::numpy::np"
-ArrayLike = "numpy.typing::ArrayLike"
-NDArray = "numpy.typing::NDArray"
-
-Union = "typing::Union"
+[docstub.docnames]
+np = { import = "numpy", as = "np" }
+uint8 = { use = "np.uint8", import = "numpy", as = "np" }
+ArrayLike = { from = "numpy.typing" }
+NDArray = { from = "numpy.typing" }
+Union = { from = "typing" }
