@@ -3,7 +3,7 @@
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import lark
@@ -28,6 +28,19 @@ def _find_one_token(tree, token_name):
     return tokens[0]
 
 
+@dataclass(frozen=True, slots=True)
+class PyType:
+    value: str
+    imports: set[DocName] = field(default_factory=set)
+
+    def __str__(self):
+        return self.value
+
+
+class MatchedName(lark.Token):
+    pass
+
+
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
     """Transform docstring type descriptions (doctypes)."""
@@ -45,10 +58,23 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return out
 
     def transform(self, tree):
+        """
+
+        Parameters
+        ----------
+        tree :
+
+        Returns
+        -------
+        pytype : PyType
+            The doctype formatted as a stub-file compatible string with
+            necessary imports attached.
+        """
         try:
             self._collected_imports = set()
-            result = super().transform(tree=tree)
-            return result, self._collected_imports
+            value = super().transform(tree=tree)
+            pytype = PyType(value=value, imports=self._collected_imports)
+            return pytype
         finally:
             self._collected_imports = None
 
@@ -56,13 +82,22 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = " | ".join(tree.children)
         return out
 
+    def type_or(self, tree):
+        out = " | ".join(tree.children)
+        return out
+
     def qualname(self, tree):
+        matched = False
         out = []
         for i, child in enumerate(tree.children):
             if i != 0 and not child.startswith("["):
                 out.append(".")
+            if isinstance(child, MatchedName):
+                matched = True
             out.append(child)
         out = "".join(out)
+        if matched is False:
+            logger.warning("unmatched name %r", out)
         return out
 
     def NAME(self, token):
@@ -71,7 +106,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
     def ARRAY_NAME(self, token):
         new_token = self._match_n_record_name(token)
-        new_token = lark.Token(type="ARRAY_NAME", value=new_token)
+        new_token.type = "ARRAY_NAME"
         return new_token
 
     def shape(self, tree):
@@ -85,6 +120,11 @@ class DoctypeTransformer(lark.visitors.Transformer):
             name = f"{name}[{', '.join(children)}]"
         return name
 
+    def container_of(self, tree):
+        assert len(tree.children) == 2
+        out = f"{tree.children[0]}[{tree.children[1]}, ...]"
+        return out
+
     def contains(self, tree):
         out = ", ".join(tree.children)
         out = f"[{out}]"
@@ -97,19 +137,26 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping extra info")
         return lark.Discard
 
+    def literals(self, tree):
+        out = " | ".join(tree.children)
+        return out
+
+    def literal(self, tree):
+        assert len(tree.children) == 1
+        out = f"Literal[{tree.children[0]}]"
+        self._collected_imports.add(
+            DocName.from_cfg("Literal", spec={"from": "typing"})
+        )
+        return out
+
     def _match_n_record_name(self, token):
         """Match type names to known imports."""
         assert "." not in token
         if token in self.docnames:
             docname = self.docnames[token]
-            if docname.import_alias:
-                token = docname.import_alias
-            elif docname.import_name:
-                token = docname.import_name
-            if not docname.is_builtin:
+            token = MatchedName(token.type, value=docname.use_name)
+            if docname.has_import:
                 self._collected_imports.add(docname)
-        else:
-            logger.warning("type with unknown origin: %s", token)
         return token
 
 
@@ -119,47 +166,55 @@ with grammar_path.open() as file:
 _lark = lark.Lark(_grammar)
 
 
-def parse_type(description, docnames, import_map):
+def doc2pytype(description, docnames):
     try:
-        transformer = DoctypeTransformer(replace_map=docnames, import_map=import_map)
+        transformer = DoctypeTransformer(docnames=docnames)
         tree = _lark.parse(description)
-        stub_type, imports = transformer.transform(tree)
-        return stub_type, imports
-    except Exception as e:
-        logger.error("couldn't parse docstring type:\n\n%s", e)
-        return "", set()
+        pytype = transformer.transform(tree)
+        return pytype
+    except Exception:
+        logger.exception("couldn't parse docstring %r:", description)
+        return PyType(
+            value="Any", imports={DocName.from_cfg("Any", {"from": "typing"})}
+        )
 
 
-def transform_docstring(text, docnames):
-    """
+@dataclass(frozen=True, slots=True)
+class CollectedPyTypes:
+    params: dict[str, PyType]
+    returns: dict[str, PyType]
 
-    Parameters
-    ----------
-    text : str
+    @classmethod
+    def from_docstring(cls, docstring, *, docnames):
+        """
 
-    Returns
-    -------
+        Parameters
+        ----------
+        docstring : str
 
-    """
-    docstring = NumpyDocString(text)
-    params = {p.use_name: p for p in docstring["Parameters"]}
-    other_params = {p.use_name: p for p in docstring["Other Parameters"]}
-    return_params = {i: p for i, p in enumerate(docstring["Returns"])}
+        Returns
+        -------
 
-    duplicate_params = params.keys() & other_params.keys()
-    if duplicate_params:
-        raise ValueError(f"{duplicate_params=}")
-    params.update(other_params)
+        """
+        np_docstring = NumpyDocString(docstring)
 
-    param_pytypes = {
-        name: parse_type(param.type, docnames=docnames)
-        for name, param in params.items() if param.type
-    }
-    return_pytypes = {
-        name: parse_type(param.type, docnames=docnames)
-        for name, param in return_params.items() if param.type
-    }
+        params = {p.name: p for p in np_docstring["Parameters"]}
+        other = {p.name: p for p in np_docstring["Other Parameters"]}
+        duplicate_params = params.keys() & other.keys()
+        if duplicate_params:
+            raise ValueError(f"{duplicate_params=}")
+        params.update(other)
 
-    out = PyTypeList(params=param_pytypes, return_params=return_pytypes)
-    return param_pytypes, re
+        pytypes_param = {
+            name: doc2pytype(param.type, docnames=docnames)
+            for name, param in params.items()
+            if param.type
+        }
+        pytypes_return = {
+            name: doc2pytype(param.type, docnames=docnames)
+            for name, param in enumerate(np_docstring["Returns"])
+            if param.type
+        }
 
+        collected = CollectedPyTypes(params=pytypes_param, returns=pytypes_return)
+        return collected

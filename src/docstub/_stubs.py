@@ -4,10 +4,9 @@
 
 import logging
 
-import black
-
 import libcst as cst
 
+from ._docstrings import CollectedPyTypes
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +28,28 @@ def walk_python_package(root_dir, target_dir):
         for name in files:
             if not name.endswith(".py"):
                 continue
+            if name.startswith("test_"):
+                logger.debug("skipping %s", name)
+                continue
             py_path = root / name
             stub_path = target_dir / py_path.with_suffix(".pyi").relative_to(root_dir)
             yield py_path, stub_path
+
+
+def try_format_stub(stub):
+    try:
+        import isort
+
+        stub = isort.code(stub)
+    except ImportError:
+        logger.warning("isort is not available, couldn't sort imports")
+    try:
+        import black
+
+        stub = black.format_str(stub, mode=black.Mode())
+    except ImportError:
+        logger.warning("black is not available, couldn't format stubs")
+    return stub
 
 
 class Py2StubTransformer(cst.CSTTransformer):
@@ -42,25 +60,29 @@ class Py2StubTransformer(cst.CSTTransformer):
         leading_whitespace=cst.SimpleWhitespace(value=" "),
         body=[cst.Expr(value=cst.Ellipsis())],
     )
+    _Annotation_Any = cst.Annotation(cst.Name("Any"))
+    _Annotation_None = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, transform_docstring):
-        self.transform_docstring = transform_docstring
+    def __init__(self, *, docnames, format_stubs=True):
+        self.docnames = docnames
+        self.format_stubs = format_stubs
         # Relevant docstring for the current context
-        self._context_doctypes = None
+        self._context_pytypes = None
         self._required_type_imports = None
 
-    def python_to_stub(self, source, format=True):
+    def python_to_stub(self, source):
         try:
-            self._context_doctypes = []
-            self._required_type_imports = []
+            self._context_pytypes = []
+            self._required_type_imports = set()
 
             source_tree = cst.parse_module(source)
             stub_tree = source_tree.visit(self)
             stub = stub_tree.code
-            stub = black.format_str(stub, mode=black.Mode())
+            if self.format_stubs:
+                stub = try_format_stub(stub)
             return stub
         finally:
-            self._context_doctypes = None
+            self._context_pytypes = None
             self._required_type_imports = None
 
     def visit_Import(self, node):
@@ -68,55 +90,81 @@ class Py2StubTransformer(cst.CSTTransformer):
 
     def visit_FunctionDef(self, node):
         docstring = node.get_docstring()
-        doctypes = None
+        pytypes = None
         if docstring:
             try:
-                doctypes = self.transform_docstring(docstring)
-            except Exception as e:
-                logger.error(
-                    "error while parsing docstring of `%s`:\n\n%s",
-                    node.name.value, e
+                pytypes = CollectedPyTypes.from_docstring(
+                    docstring, docnames=self.docnames
                 )
-        self._context_doctypes.append(doctypes)
+            except Exception as e:
+                logger.exception(
+                    "error while parsing docstring of `%s`:\n\n%s", node.name.value, e
+                )
+        self._context_pytypes.append(pytypes)
         return True
 
     def leave_FunctionDef(self, original_node, updated_node):
-        updated_node = updated_node.with_changes(body=self._body_replacement)
-        return_type = "None"
+        node_changes = {
+            "body": self._body_replacement,
+            "returns": self._Annotation_None,
+        }
 
-        context = self._context_doctypes.pop()
-        if context:
-            return_params = context.return_params
-            if return_params:
-                if len(return_params) > 1:
-                    return_type = f"tuple[{', '.join(r[0] for r in return_params.values())}]"
+        pytypes = self._context_pytypes.pop()
+        if pytypes:
+            if pytypes.returns:
+                if len(pytypes.returns) > 1:
+                    return_type = (
+                        f"tuple[{', '.join(r.value for r in pytypes.returns.values())}]"
+                    )
                 else:
-                    return_type = return_params[0][0]
-        annotation = cst.Annotation(cst.parse_expression(return_type))
-        updated_node = updated_node.with_changes(returns=annotation)
+                    return_type = pytypes.returns[0].value
+                node_changes["returns"] = cst.Annotation(
+                    cst.parse_expression(return_type)
+                )
+                for pytype in pytypes.returns.values():
+                    self._required_type_imports |= pytype.imports
+
+        updated_node = updated_node.with_changes(**node_changes)
         return updated_node
 
     def leave_Param(self, original_node, updated_node):
+        node_changes = {}
+
+        if updated_node.annotation is None:
+            node_changes["annotation"] = self._Annotation_Any
+            self._required_type_imports.add(self.docnames["Any"])
+
         name = original_node.name.value
-        assert original_node.annotation is None
-        doctypes = self._context_doctypes[-1]
-        if doctypes:
-            param_type, imports = doctypes.params.get(name, (None, None))
-            if param_type:
-                annotation = cst.Annotation(cst.parse_expression(param_type))
-                updated_node = updated_node.with_changes(annotation=annotation)
-            if imports:
-                self._required_type_imports.extend(imports)
-        if original_node.default is not None:
-            updated_node = updated_node.with_changes(default=cst.Ellipsis())
+        pytypes = self._context_pytypes[-1]
+        if pytypes:
+            pytype = pytypes.params.get(name)
+            if pytype:
+                annotation = cst.Annotation(cst.parse_expression(pytype.value))
+                node_changes["annotation"] = annotation
+                if pytype.imports:
+                    self._required_type_imports |= pytype.imports
+
+        if updated_node.default is not None:
+            node_changes["default"] = cst.Ellipsis()
+
+        if node_changes:
+            updated_node = updated_node.with_changes(**node_changes)
         return updated_node
 
     def leave_Expr(self, original_node, upated_node):
         return cst.RemovalSentinel.REMOVE
 
+    def leave_Comment(self, original_node, updated_node):
+        return cst.RemovalSentinel.REMOVE
+
     def leave_Module(self, original_node, updated_node):
-        type_imports = {imp.format_import() for imp in self._required_type_imports}
-        type_imports = sorted(type_imports)
-        type_imports = tuple(cst.parse_statement(line) for line in type_imports)
-        updated_node = updated_node.with_changes(body=type_imports + updated_node.body)
+        import_nodes = self._parse_imports(self._required_type_imports)
+        updated_node = updated_node.with_changes(body=import_nodes + updated_node.body)
         return updated_node
+
+    @staticmethod
+    def _parse_imports(imports):
+        lines = {imp.format_import() for imp in imports}
+        lines = sorted(lines)  # TODO use isort instead?
+        import_nodes = tuple(cst.parse_statement(line) for line in lines)
+        return import_nodes

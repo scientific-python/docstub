@@ -1,9 +1,12 @@
 ?start : doctype
 
-doctype : type (("or" | "|") type)* ("," optional)? ("," extra_info)?
+doctype : type_or ("," optional)? ("," extra_info)?
+
+type_or : type (("or" | "|") type)*
 
 ?type : qualname
-      | "{" literal ("," literal)* "}"
+      | "{" literal ("," literal)* "}" -> literals
+      | container_of
       | shape_n_dtype
 
 optional : "optional"
@@ -15,7 +18,12 @@ extra_info : /[^\r\n]+/
 qualname : (NAME ".")* NAME contains?
 
 
-contains: "[" type ("," type)* "]"
+contains: "[" type_or ("," type_or)* "]"
+        | "[" type_or "," PY_ELLIPSES "]"
+
+
+// Container-of
+container_of : NAME "of" type_or
 
 
 // Array-likes with optional shape and dtype information
@@ -48,8 +56,10 @@ literal : PY_ELLIPSES
 
 PY_ELLIPSES : "..."
 
+NAME: /[^\W\d][\w-]*/
+
 // imports
-%import python (STRING, NAME)
+%import python (STRING)
 %import common (NEWLINE, NUMBER, LETTER, TEXT, WS)
 
 %ignore WS

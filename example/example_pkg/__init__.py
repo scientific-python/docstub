@@ -5,6 +5,8 @@
 from pprint import pprint
 
 
+# Ensure multi-line
+# comments are stripped
 def func_empty(a1, a2, a3) -> None:
     """Dummy.
 
@@ -76,7 +78,21 @@ def func_contains(a1, a2, a3, a4):
     ----------
     a1 : list[float]
     a2 : dict[str, Union[int, str]]
-    a3
+    a3 : Sequence[int | float, ...]
     a4 : np.typing.DTypeLike
+
+    Returns
+    -------
+    r1 : tuple of int
     """
     pprint([a1, a2, a3, a4])
+
+
+def func_literals(a1, a2):
+    """Dummy
+
+    Parameters
+    ----------
+    a1 : {1, 3, "foo"}, optional
+    """
+    print([a1, a2])

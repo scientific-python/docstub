@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from docstub._stubs import create_stub
-from docstub._docstrings import parse_type
+from docstub._docstrings import doc2pytype
 
 
 def test_type_descriptions(descr):

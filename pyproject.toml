@@ -29,10 +29,13 @@ dynamic = ["version"]
 dependencies = [
   "libcst >=1.31",
   "lark >=1.1.9",
-  "black >=24.4.2",
 ]
 
 [project.optional-dependencies]
+optional = [
+  "black >=24.4.2",
+  "isort >=5.13.2",
+]
 dev = [
   "pre-commit >=3.7",
 ]
