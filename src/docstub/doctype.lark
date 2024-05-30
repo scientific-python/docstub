@@ -26,7 +26,7 @@ contains: "[" type_or ("," type_or)* "]"
 container_of : NAME "of" type_or
 
 
-// Array-likes with optional shape and dtype information
+// Array-like form with dtype or shape information
 shape_n_dtype : shape? ARRAY_NAME ("of" dtype)?
               | shape? ARRAY_NAME "of" dtype
               | shape dtype ARRAY_NAME

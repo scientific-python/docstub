@@ -3,40 +3,64 @@
 """
 
 import logging
+import fnmatch
+from pathlib import Path
+from typing import Literal
 
 import libcst as cst
 
-from ._docstrings import CollectedPyTypes
+from ._docstrings import collect_pytypes, ReturnKey
 
 logger = logging.getLogger(__name__)
 
 
 def walk_python_package(root_dir, target_dir):
-    """
+    """Iterate modules in a Python package and it's target stub files.
 
     Parameters
     ----------
     root_dir : Path
+        Root directory of a Python package.
     target_dir : Path
+        Root directory in which a matching stub package will be created.
 
     Returns
     -------
-    py_path : Path
+    source_path : Path
+        Either a Python file or a stub file that takes precedence.
     stub_path : Path
+        Target stub file.
+
+    Notes
+    -----
+    Files starting with "test_" are skipped entirely for now.
     """
     for root, dirs, files in root_dir.walk(top_down=True):
         for name in files:
-            if not name.endswith(".py"):
-                continue
+            source_path = root / name
+
             if name.startswith("test_"):
                 logger.debug("skipping %s", name)
                 continue
-            py_path = root / name
-            stub_path = target_dir / py_path.with_suffix(".pyi").relative_to(root_dir)
-            yield py_path, stub_path
+
+            if source_path.suffix.lower() not in {".py", ".pyi"}:
+                continue
+
+            if (
+                source_path.suffix.lower() == ".py"
+                and source_path.with_suffix(".pyi").exists()
+            ):
+                # Stub file already exists and takes precedence
+                continue
+
+            stub_path = target_dir / source_path.with_suffix(".pyi").relative_to(
+                root_dir
+            )
+            yield source_path, stub_path
 
 
-def try_format_stub(stub):
+def try_format_stub(stub: str) -> str:
+    """Try to format a stub file with isort and black if available."""
     try:
         import isort
 
@@ -63,14 +87,14 @@ class Py2StubTransformer(cst.CSTTransformer):
     _Annotation_Any = cst.Annotation(cst.Name("Any"))
     _Annotation_None = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, *, docnames, format_stubs=True):
+    def __init__(self, *, docnames):
         self.docnames = docnames
-        self.format_stubs = format_stubs
         # Relevant docstring for the current context
         self._context_pytypes = None
         self._required_type_imports = None
 
-    def python_to_stub(self, source):
+    def python_to_stub(self, source: str) -> str:
+        """Convert Python source code to stub-file ready code."""
         try:
             self._context_pytypes = []
             self._required_type_imports = set()
@@ -78,24 +102,18 @@ class Py2StubTransformer(cst.CSTTransformer):
             source_tree = cst.parse_module(source)
             stub_tree = source_tree.visit(self)
             stub = stub_tree.code
-            if self.format_stubs:
-                stub = try_format_stub(stub)
+            stub = try_format_stub(stub)
             return stub
         finally:
             self._context_pytypes = None
             self._required_type_imports = None
-
-    def visit_Import(self, node):
-        return None
 
     def visit_FunctionDef(self, node):
         docstring = node.get_docstring()
         pytypes = None
         if docstring:
             try:
-                pytypes = CollectedPyTypes.from_docstring(
-                    docstring, docnames=self.docnames
-                )
+                pytypes = collect_pytypes(docstring, docnames=self.docnames)
             except Exception as e:
                 logger.exception(
                     "error while parsing docstring of `%s`:\n\n%s", node.name.value, e
@@ -111,18 +129,12 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         pytypes = self._context_pytypes.pop()
         if pytypes:
-            if pytypes.returns:
-                if len(pytypes.returns) > 1:
-                    return_type = (
-                        f"tuple[{', '.join(r.value for r in pytypes.returns.values())}]"
-                    )
-                else:
-                    return_type = pytypes.returns[0].value
+            return_pytype = pytypes.get(ReturnKey)
+            if return_pytype:
                 node_changes["returns"] = cst.Annotation(
-                    cst.parse_expression(return_type)
+                    cst.parse_expression(return_pytype.value)
                 )
-                for pytype in pytypes.returns.values():
-                    self._required_type_imports |= pytype.imports
+                self._required_type_imports |= return_pytype.imports
 
         updated_node = updated_node.with_changes(**node_changes)
         return updated_node
@@ -137,7 +149,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         name = original_node.name.value
         pytypes = self._context_pytypes[-1]
         if pytypes:
-            pytype = pytypes.params.get(name)
+            pytype = pytypes.get(name)
             if pytype:
                 annotation = cst.Annotation(cst.parse_expression(pytype.value))
                 node_changes["annotation"] = annotation
@@ -164,7 +176,16 @@ class Py2StubTransformer(cst.CSTTransformer):
 
     @staticmethod
     def _parse_imports(imports):
+        """Create nodes to include in the module tree from given imports.
+
+        Parameters
+        ----------
+        imports : set[DocName]
+
+        Returns
+        -------
+        import_nodes : tuple[cst.SimpleStatementLine, ...]
+        """
         lines = {imp.format_import() for imp in imports}
-        lines = sorted(lines)  # TODO use isort instead?
         import_nodes = tuple(cst.parse_statement(line) for line in lines)
         return import_nodes

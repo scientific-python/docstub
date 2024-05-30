@@ -1,17 +1,26 @@
 [docstub]
+
+# TODO not implemented and used yet
 extend_grammar = """
 
 """
 
-
+# A mapping of docnames to import information. Each item maps a docname on the
+# left side to a dictionary on the right side, which supports the following
+# fields:
+#     use : A string to replace the docname with, defaults to the docname.
+#     from : Indicate that the docname can be imported from this path.
+#     import : Import this object, defaults to the docname.
+#     as : Use this alias for the imported object
+#     is_builtin : Indicate that this docname doesn't need to be imported,
+#         defaults to "false"
 [docstub.docnames]
+
+Path = { from = "pathlib" }
 
 function = { use = "Callable", from = "typing" }
 func = { use = "Callable", from = "typing" }
 callable = { use = "Callable", from = "typing" }
-
-True = { use = "Literal[True]", from = "typing", import = "Literal"}
-False = { use = "Literal[False]", from = "typing", import = "Literal"}
 
 np = { import = "numpy", as = "np" }
 numpy = { use = "np", import = "numpy", as = "np" }
