@@ -5,7 +5,6 @@
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from itertools import chain
 
 import lark
 import lark.visitors
@@ -24,9 +23,8 @@ def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token:
     """Find token with a specific type name in tree."""
     tokens = [child for child in tree.children if child.type == name]
     if len(tokens) != 1:
-        raise ValueError(
-            f"expected exactly one Token of type {name}, found {len(tokens)}"
-        )
+        msg = f"expected exactly one Token of type {name}, found {len(tokens)}"
+        raise ValueError(msg)
     return tokens[0]
 
 
@@ -44,8 +42,11 @@ class PyType:
         return self.value
 
     @classmethod
-    def from_joined(cls, pytypes):
-        """Join multiple PyType instances into a single one.
+    def from_concatenated(cls, pytypes):
+        """Concatenate multiple PyTypes in a tuple.
+
+        Useful to combine multiple returned types for a function into a single
+        PyType.
 
         Parameters
         ----------
@@ -54,15 +55,16 @@ class PyType:
 
         Returns
         -------
-        joined : PyType
-            The combined types.
+        concatenated : PyType
+            The concatenated types.
         """
-        values = set()
+        values = []
         imports = set()
         for p in pytypes:
-            values.add(p.value)
+            values.append(p.value)
             imports.update(p.imports)
-        joined = cls(value=" | ".join(values), imports=imports)
+        value = f"tuple[{' , '.join(values)}]"
+        joined = cls(value=value, imports=imports)
         return joined
 
 
@@ -296,12 +298,12 @@ def collect_pytypes(docstring, *, docnames):
         if param.type
     }
 
-    returns = {
+    returns = [
         doc2pytype(param.type, docnames=docnames)
         for param in np_docstring["Returns"]
         if param.type
-    }
+    ]
     if returns:
-        pytypes[ReturnKey] = PyType.from_joined(returns)
+        pytypes[ReturnKey] = PyType.from_concatenated(returns)
 
     return pytypes

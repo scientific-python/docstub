@@ -4,12 +4,11 @@
 
 import logging
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import libcst as cst
 
-from ._docstrings import collect_pytypes, ReturnKey
+from ._docstrings import ReturnKey, collect_pytypes
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ def walk_python_package(root_dir, target_dir):
     -----
     Files starting with "test_" are skipped entirely for now.
     """
-    for root, dirs, files in root_dir.walk(top_down=True):
+    for root, _, files in root_dir.walk(top_down=True):
         for name in files:
             source_path = root / name
 
@@ -78,21 +77,25 @@ def try_format_stub(stub: str) -> str:
 
 @dataclass(slots=True, frozen=True)
 class _Scope:
-    type : Literal["module", "class", "func", "method", "classmethod", "staticmethod"]
-    value : str = None
+    type: Literal["module", "class", "func", "method", "classmethod", "staticmethod"]
+    value: str = None
 
     def __post_init__(self):
         allowed_types = {
-            "module", "class", "func", "method", "classmethod", "staticmethod"
+            "module",
+            "class",
+            "func",
+            "method",
+            "classmethod",
+            "staticmethod",
         }
         if self.type not in allowed_types:
-            raise ValueError(
-                f"type {self.type!r} is not allowed, allowed are {allowed_types!r}"
-            )
+            msg = f"type {self.type!r} is not allowed, allowed are {allowed_types!r}"
+            raise ValueError(msg)
 
     @property
-    def is_method(self):
-        return self.type == "method"
+    def has_self_or_cls(self):
+        return self.type in {"method", "classmethod"}
 
 
 class Py2StubTransformer(cst.CSTTransformer):
@@ -149,7 +152,7 @@ class Py2StubTransformer(cst.CSTTransformer):
             if decorator.decorator.value == "classmethod":
                 func_type = "classmethod"
                 break
-            elif decorator.decorator.value == "staticmethod":
+            if decorator.decorator.value == "staticmethod":
                 func_type = "staticmethod"
                 break
         self._scope_path.append(_Scope(type=func_type, value=node.name.value))
@@ -214,12 +217,10 @@ class Py2StubTransformer(cst.CSTTransformer):
         # Remove "Any" type for first method parameter, if it was added
         # in leave_Param earlier, leave be otherwise
         if (
-            self._scope_path[-1].is_method
+            self._scope_path[-1].has_self_or_cls
             and first_param.annotation is self._Annotation_Any
         ):
-            updated_node = updated_node.with_deep_changes(
-                first_param, annotation=None
-            )
+            updated_node = updated_node.with_deep_changes(first_param, annotation=None)
         return updated_node
 
     def leave_Expr(self, original_node, upated_node):

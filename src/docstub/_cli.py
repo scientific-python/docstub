@@ -5,11 +5,14 @@ from pathlib import Path
 import click
 
 from . import _config
-from ._analysis import DocName, builtin_types, typing_types
+from ._analysis import DocName, common_docnames
 from ._stubs import Py2StubTransformer, walk_python_package
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
+
+
+_VERBOSITY_LEVEL = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
 
 
 @click.command()
@@ -20,8 +23,9 @@ logger = logging.getLogger(__name__)
 @click.option("-v", "--verbose", count=True, help="Log more details")
 @click.help_option("-h", "--help")
 def main(source_dir, out_dir, config_path, verbose):
+    verbose = min(2, max(0, verbose))  # Limit to range [0, 2]
     logging.basicConfig(
-        level=logging.DEBUG if verbose > 0 else logging.INFO,
+        level=_VERBOSITY_LEVEL[verbose],
         format="%(levelname)s: %(filename)s, line %(lineno)d, in %(funcName)s: %(message)s",
         stream=sys.stderr,
     )
@@ -39,7 +43,7 @@ def main(source_dir, out_dir, config_path, verbose):
         config = _config.merge_config(config, _user_config)
 
     # Build docname map
-    docnames = builtin_types() | typing_types()
+    docnames = common_docnames()
     docnames.update(
         {
             name: DocName.from_cfg(docname=name, spec=spec)

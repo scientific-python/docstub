@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONFIG_PATH = Path(__file__).parent / "default_config.toml"
 
 
-def load_config_file(path: Path) -> dict:
+def load_config_file(path: Path | str) -> dict:
     """Return configuration options in local TOML file if they exist."""
     with open(path, "rb") as fp:
         config = tomllib.load(fp)

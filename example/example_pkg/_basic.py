@@ -24,7 +24,6 @@ def func_empty(a1, a2, a3):
     a1 :
     a2
     """
-    pass
 
 
 def func_contains(self, a1, a2, a3, a4):
@@ -42,7 +41,6 @@ def func_contains(self, a1, a2, a3, a4):
     r1 : tuple of int
     r2 : list of int
     """
-    pass
 
 
 def func_literals(a1, a2="uno"):
@@ -53,7 +51,6 @@ def func_literals(a1, a2="uno"):
     a1 : {1, 3, "foo"}
     a2 : {"uno", 2, "drei", "four"}, default: "uno"
     """
-    pass
 
 
 class ExampleClass:
@@ -79,7 +76,6 @@ class ExampleClass:
         -------
         r1 : list of float
         """
-        pass
 
     @staticmethod
     def some_staticmethod(a1, a2="uno"):
@@ -94,7 +90,6 @@ class ExampleClass:
         -------
         r1 : dict[str, Any]
         """
-        pass
 
     @property
     def some_property(self):
@@ -107,8 +102,8 @@ class ExampleClass:
         return str(self)
 
     @classmethod
-    def from_config(cls, config):
-        """Create ExampleClass from configuration.
+    def method_returning_cls(cls, config):
+        """Using `Self` in context of classmethods is supported.
 
         Parameters
         ----------
@@ -117,7 +112,6 @@ class ExampleClass:
 
         Returns
         -------
-        out : ExampleClass
+        out : Self
             New class.
         """
-        pass

@@ -1,6 +1,7 @@
 """Collect type information."""
 
 import builtins
+import collections.abc
 import typing
 from dataclasses import dataclass
 
@@ -42,7 +43,8 @@ class DocName:
 
     def format_import(self):
         if self.is_builtin:
-            raise RuntimeError("cannot import builtin")
+            msg = "cannot import builtin"
+            raise RuntimeError(msg)
         out = f"import {self.import_name}"
         if self.import_path:
             out = f"from {self.import_path} {out}"
@@ -55,25 +57,86 @@ class DocName:
         return not self.is_builtin
 
 
-def builtin_types():
-    """Return a map of types for all bultins (in the current runtime).
+def _is_type(value) -> bool:
+    """Check if value is a type."""
+    # Checking for isinstance(..., type) isn't enough, some types such as
+    # typing.Literal don't pass that check. So combine with checking for a
+    # __class__ attribute. Not sure about edge cases!
+    is_type = isinstance(value, type) or hasattr(value, "__class__")
+    return is_type
+
+
+def _builtin_docnames():
+    """Return docnames for all builtins (in the current runtime).
 
     Returns
     -------
-    types : dict[str, DocName]
+    docnames : dict[str, DocName]
     """
     known_builtins = set(dir(builtins))
-    types = {name: DocName(use_name=name, is_builtin=True) for name in known_builtins}
-    return types
+
+    docnames = {}
+    for name in known_builtins:
+        if name.startswith("_"):
+            continue
+        value = getattr(builtins, name)
+        if not _is_type(value):
+            continue
+        docnames[name] = DocName(use_name=name, is_builtin=True)
+
+    return docnames
 
 
-def typing_types():
-    types = {}
+def _typing_docnames():
+    """Return docnames for public types in the `typing` module.
+
+    Returns
+    -------
+    docnames : dict[str, DocName]
+    """
+    docnames = {}
     for name in typing.__all__:
         if name.startswith("_"):
             continue
-        types[name] = DocName.from_cfg(name, spec={"from": "typing"})
-    return types
+        value = getattr(typing, name)
+        if not _is_type(value):
+            continue
+        docnames[name] = DocName.from_cfg(name, spec={"from": "typing"})
+    return docnames
+
+
+def _collections_abc_docnames():
+    """Return docnames for public types in the `collections.abc` module.
+
+    Returns
+    -------
+    docnames : dict[str, DocName]
+    """
+    docnames = {}
+    for name in collections.abc.__all__:
+        if name.startswith("_"):
+            continue
+        value = getattr(collections.abc, name)
+        if not _is_type(value):
+            continue
+        docnames[name] = DocName.from_cfg(name, spec={"from": "collections.abc"})
+    return docnames
+
+
+def common_docnames():
+    """Return docnames for commonly supported types.
+
+    This includes builtin types, and types from the `typing` or
+    `collections.abc` module.
+
+    Returns
+    -------
+    docnames : dict[str, DocName]
+    """
+    docnames = _builtin_docnames()
+    docnames |= _typing_docnames()
+    docnames |= _collections_abc_docnames()  # Overrides containers from typing
+    return docnames
 
 
 def find_module_paths_using_search():

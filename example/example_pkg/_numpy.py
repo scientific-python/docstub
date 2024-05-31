@@ -11,7 +11,6 @@ def func_object_with_numpy_objects(a1, a2, a3, a4):
     a3 : numpy.typing.DTypeLike
     a4 : np.typing.DTypeLike
     """
-    pass
 
 
 def func_ndarray(a1, a2, a3, a4=None):
@@ -29,7 +28,6 @@ def func_ndarray(a1, a2, a3, a4=None):
     r1 : uint8 array
     r2 : array of dtype complex and shape (1, ..., 3)
     """
-    pass
 
 
 def func_array_like(a1, a2, a3, a4):
@@ -47,4 +45,3 @@ def func_array_like(a1, a2, a3, a4):
     r1 : uint8 array-like
     r2 : array_like of dtype complex and shape (1, ..., 3)
     """
-    pass
