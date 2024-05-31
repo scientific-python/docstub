@@ -1,4 +1,4 @@
-[docstub]
+[tool.docstub]
 
 # TODO not implemented and used yet
 extend_grammar = """
@@ -14,76 +14,5 @@ extend_grammar = """
 #     as : Use this alias for the imported object
 #     is_builtin : Indicate that this docname doesn't need to be imported,
 #         defaults to "false"
-[docstub.docnames]
-
-Path = { from = "pathlib" }
-
-function = { use = "Callable", from = "typing" }
-func = { use = "Callable", from = "typing" }
-callable = { use = "Callable", from = "typing" }
-
-np = { import = "numpy", as = "np" }
-numpy = { use = "np", import = "numpy", as = "np" }
-
-scalar = { use = "np.ScalarType", import = "numpy", as = "np" }
-
-integer = { use = "np.integer", import = "numpy", as = "np" }
-signedinteger = { use = "np.signedinteger", import = "numpy", as = "np" }
-byte = { use = "np.byte", import = "numpy", as = "np" }
-short = { use = "np.short", import = "numpy", as = "np" }
-intc = { use = "np.intc", import = "numpy", as = "np" }
-int_ = { use = "np.int_", import = "numpy", as = "np" }
-longlong = { use = "np.longlong", import = "numpy", as = "np" }
-int8 = { use = "np.int8", import = "numpy", as = "np" }
-int16 = { use = "np.int16", import = "numpy", as = "np" }
-int32 = { use = "np.int32", import = "numpy", as = "np" }
-int64 = { use = "np.int64", import = "numpy", as = "np" }
-intp = { use = "np.intp", import = "numpy", as = "np" }
-
-unsignedinteger = { use = "np.unsignedinteger", import = "numpy", as = "np" }
-ushort = { use = "np.ushort", import = "numpy", as = "np" }
-uintc = { use = "np.uintc", import = "numpy", as = "np" }
-uint = { use = "np.uint", import = "numpy", as = "np" }
-ulonglong = { use = "np.ulonglong", import = "numpy", as = "np" }
-uint8 = { use = "np.uint8", import = "numpy", as = "np" }
-uint16 = { use = "np.uint16", import = "numpy", as = "np" }
-uint32 = { use = "np.uint32", import = "numpy", as = "np" }
-uint64 = { use = "np.uint64", import = "numpy", as = "np" }
-uintp = { use = "np.uintp", import = "numpy", as = "np" }
-
-floating = { use = "np.floating", import = "numpy", as = "np" }
-#half = { use = "np.half", import = "numpy", as = "np" }
-#single = { use = "np.single", import = "numpy", as = "np" }
-double = { use = "np.double", import = "numpy", as = "np" }
-longdouble = { use = "np.longdouble", import = "numpy", as = "np" }
-float16 = { use = "np.float16", import = "numpy", as = "np" }
-float32 = { use = "np.float32", import = "numpy", as = "np" }
-float64 = { use = "np.float64", import = "numpy", as = "np" }
-float96 = { use = "np.float96", import = "numpy", as = "np" }
-float128 = { use = "np.float128", import = "numpy", as = "np" }
-
-complexfloating = { use = "np.complexfloating", import = "numpy", as = "np" }
-csingle = { use = "np.csingle", import = "numpy", as = "np" }
-cdouble = { use = "np.cdouble", import = "numpy", as = "np" }
-clongdouble = { use = "np.clongdouble", import = "numpy", as = "np" }
-complex64 = { use = "np.complex64", import = "numpy", as = "np" }
-complex128 = { use = "np.complex128", import = "numpy", as = "np" }
-complex192 = { use = "np.complex192", import = "numpy", as = "np" }
-complex256 = { use = "np.complex256", import = "numpy", as = "np" }
-
-bool_ = { use = "np.bool_", import = "numpy", as = "np" }
-datetime64 = { use = "np.datetime64", import = "numpy", as = "np" }
-timedelta64 = { use = "np.timedelta64", import = "numpy", as = "np" }
-object_ = { use = "np.object_", import = "numpy", as = "np" }
-#flexible = { use = "np.flexible", import = "numpy", as = "np" }
-#character = { use = "np.character", import = "numpy", as = "np" }
-bytes_ = { use = "np.bytes_", import = "numpy", as = "np" }
-#str_ = { use = "np.str_", import = "numpy", as = "np" }
-#void = { use = "np.void", import = "numpy", as = "np" }
-
-NDArray = { from = "numpy.typing" }
-ndarray = { use = "NDArray", from = "numpy.typing" }
-array = { use = "NDArray", from = "numpy.typing" }
-ArrayLike = { from = "numpy.typing" }
-array-like = { use = "ArrayLike", from = "numpy.typing" }
-array_like = { use = "ArrayLike", from = "numpy.typing" }
+[tool.docstub.docnames]
+configparser = {import = "configparser"}

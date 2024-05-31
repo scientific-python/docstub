@@ -3,9 +3,9 @@
 """
 
 import logging
-import fnmatch
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional, Union
 
 import libcst as cst
 
@@ -76,6 +76,25 @@ def try_format_stub(stub: str) -> str:
     return stub
 
 
+@dataclass(slots=True, frozen=True)
+class _Scope:
+    type : Literal["module", "class", "func", "method", "classmethod", "staticmethod"]
+    value : str = None
+
+    def __post_init__(self):
+        allowed_types = {
+            "module", "class", "func", "method", "classmethod", "staticmethod"
+        }
+        if self.type not in allowed_types:
+            raise ValueError(
+                f"type {self.type!r} is not allowed, allowed are {allowed_types!r}"
+            )
+
+    @property
+    def is_method(self):
+        return self.type == "method"
+
+
 class Py2StubTransformer(cst.CSTTransformer):
     """Transform syntax tree of a Python file into the tree of a stub file."""
 
@@ -90,12 +109,14 @@ class Py2StubTransformer(cst.CSTTransformer):
     def __init__(self, *, docnames):
         self.docnames = docnames
         # Relevant docstring for the current context
+        self._scope_path = None
         self._context_pytypes = None
         self._required_type_imports = None
 
     def python_to_stub(self, source: str) -> str:
         """Convert Python source code to stub-file ready code."""
         try:
+            self._scope_path = []
             self._context_pytypes = []
             self._required_type_imports = set()
 
@@ -105,10 +126,34 @@ class Py2StubTransformer(cst.CSTTransformer):
             stub = try_format_stub(stub)
             return stub
         finally:
+            assert len(self._scope_path) == 0
+            assert len(self._context_pytypes) == 0
+            self._scope_path = None
             self._context_pytypes = None
             self._required_type_imports = None
 
+    def visit_ClassDef(self, node):
+        self._scope_path.append(_Scope(type="class", value=node.name.value))
+        return True
+
+    def leave_ClassDef(self, original_node, updated_node):
+        self._scope_path.pop()
+        return updated_node
+
     def visit_FunctionDef(self, node):
+        func_type = "func"
+        if self._scope_path[-1].type == "class":
+            func_type = "method"
+        for decorator in node.decorators:
+            assert func_type in {"func", "method"}
+            if decorator.decorator.value == "classmethod":
+                func_type = "classmethod"
+                break
+            elif decorator.decorator.value == "staticmethod":
+                func_type = "staticmethod"
+                break
+        self._scope_path.append(_Scope(type=func_type, value=node.name.value))
+
         docstring = node.get_docstring()
         pytypes = None
         if docstring:
@@ -137,6 +182,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                 self._required_type_imports |= return_pytype.imports
 
         updated_node = updated_node.with_changes(**node_changes)
+        self._scope_path.pop()
         return updated_node
 
     def leave_Param(self, original_node, updated_node):
@@ -163,15 +209,33 @@ class Py2StubTransformer(cst.CSTTransformer):
             updated_node = updated_node.with_changes(**node_changes)
         return updated_node
 
+    def leave_Parameters(self, original_node, updated_node):
+        first_param = updated_node.children[0]
+        # Remove "Any" type for first method parameter, if it was added
+        # in leave_Param earlier, leave be otherwise
+        if (
+            self._scope_path[-1].is_method
+            and first_param.annotation is self._Annotation_Any
+        ):
+            updated_node = updated_node.with_deep_changes(
+                first_param, annotation=None
+            )
+        return updated_node
+
     def leave_Expr(self, original_node, upated_node):
         return cst.RemovalSentinel.REMOVE
 
     def leave_Comment(self, original_node, updated_node):
         return cst.RemovalSentinel.REMOVE
 
+    def visit_Module(self, node):
+        self._scope_path.append(_Scope(type="module", value=""))
+        return True
+
     def leave_Module(self, original_node, updated_node):
         import_nodes = self._parse_imports(self._required_type_imports)
         updated_node = updated_node.with_changes(body=import_nodes + updated_node.body)
+        self._scope_path.pop()
         return updated_node
 
     @staticmethod

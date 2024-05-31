@@ -10,18 +10,23 @@ in NumPyDoc style docstrings.
 ## Installation
 
 ```shell
-pip install docstub
+pip install docstub[optional]
 ```
 
 
 ## Usage & configuration
 
-- Allow extending of the parser (grammar) and the transformer via static files.
+```shell
+docstub example/example_pkg/
+```
+will create stub files for `example_pkg/` in `example/example_pkg-stubs/`.
+For now, refer to `docstub --help` for more.
 
 
 ## Contributing
 
 TBD
+
 
 ## Acknowledgements
 

@@ -1,6 +1,19 @@
 """NumPy and array specific docstring examples."""
 
 
+def func_object_with_numpy_objects(a1, a2, a3, a4):
+    """Dummy.
+
+    Parameters
+    ----------
+    a1 : numpy.int8
+    a2 : np.int16
+    a3 : numpy.typing.DTypeLike
+    a4 : np.typing.DTypeLike
+    """
+    pass
+
+
 def func_ndarray(a1, a2, a3, a4=None):
     """Dummy.
 

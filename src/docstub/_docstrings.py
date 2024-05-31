@@ -143,7 +143,12 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return out
 
     def optional(self, tree):
-        return "None"
+        out = "None"
+        literal = [child for child in tree.children if child.type == "LITERAL"]
+        assert len(literal) <= 1
+        if len(literal) == 1:
+            out = lark.Discard  # Should be covered by doctype
+        return out
 
     def extra_info(self, tree):
         logger.debug("dropping extra info")
@@ -185,7 +190,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
     def container_of(self, tree):
         assert len(tree.children) == 2
-        out = f"{tree.children[0]}[{tree.children[1]}, ...]"
+        container_name, item_type = tree.children
+        if container_name == "tuple":
+            item_type += ", ..."
+        out = f"{container_name}[{item_type}]"
         return out
 
     def contains(self, tree):
@@ -194,15 +202,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return out
 
     def literals(self, tree):
-        out = " | ".join(tree.children)
-        return out
-
-    def literal(self, tree):
-        assert len(tree.children) == 1
-        out = f"Literal[{tree.children[0]}]"
-        self._collected_imports.add(
-            DocName.from_cfg("Literal", spec={"from": "typing"})
-        )
+        out = " , ".join(tree.children)
+        out = f"Literal[{out}]"
+        self._collected_imports.add(self.docnames["Literal"])
         return out
 
     def _match_n_record_name(self, token):

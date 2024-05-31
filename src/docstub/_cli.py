@@ -4,8 +4,8 @@ from pathlib import Path
 
 import click
 
+from . import _config
 from ._analysis import DocName, builtin_types, typing_types
-from ._config import load_config
 from ._stubs import Py2StubTransformer, walk_python_package
 from ._version import __version__
 
@@ -27,17 +27,18 @@ def main(source_dir, out_dir, config_path, verbose):
     )
 
     source_dir = Path(source_dir)
-    # raise Exception
+
+    # Handle configuration
     if config_path is None:
         config_path = source_dir.parent / "docstub.toml"
     else:
         config_path = Path(config_path)
-
+    config = _config.default_config()
     if config_path.exists():
-        config = load_config(config_path)
-    else:
-        raise ValueError("no config")
+        _user_config = _config.load_config_file(config_path)
+        config = _config.merge_config(config, _user_config)
 
+    # Build docname map
     docnames = builtin_types() | typing_types()
     docnames.update(
         {
@@ -45,6 +46,7 @@ def main(source_dir, out_dir, config_path, verbose):
             for name, spec in config["docnames"].items()
         }
     )
+    # and the stub transformer
     stub_transformer = Py2StubTransformer(docnames=docnames)
 
     if not out_dir:
