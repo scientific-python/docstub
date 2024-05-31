@@ -27,7 +27,9 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "libcst >=1.31",
+  "numpydoc >=1.7.0",
+  "click >=8.1.7",
+  "libcst >=1.3.1",
   "lark >=1.1.9",
 ]
 
