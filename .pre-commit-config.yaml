@@ -2,7 +2,7 @@
 
 exclude: |
     (?x)^(
-        example/.*-stubs/.*|
+        examples/.*-stubs/.*|
     )$
 
 repos:
