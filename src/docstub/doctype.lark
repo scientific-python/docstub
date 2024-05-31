@@ -1,0 +1,65 @@
+?start : doctype
+
+doctype : type_or ("," optional)? ("," extra_info)?
+
+type_or : type (("or" | "|") type)*
+
+?type : qualname
+      | "{" literal ("," literal)* "}" -> literals
+      | container_of
+      | shape_n_dtype
+
+optional : "optional"
+         | "default" ("=" | ":") literal
+
+extra_info : /[^\r\n]+/
+
+// Name with leading dot separated path
+qualname : (NAME ".")* NAME contains?
+
+
+contains: "[" type_or ("," type_or)* "]"
+        | "[" type_or "," PY_ELLIPSES "]"
+
+
+// Container-of
+container_of : NAME "of" type_or
+
+
+// Array-like form with dtype or shape information
+shape_n_dtype : shape? ARRAY_NAME ("of" dtype)?
+              | shape? ARRAY_NAME "of" dtype
+              | shape dtype ARRAY_NAME
+              | dtype ARRAY_NAME
+              | ARRAY_NAME "of shape" shape ("and dtype" dtype)?
+              | ARRAY_NAME "of dtype" dtype ("and shape" shape)?
+ARRAY_NAME : "array"
+           | "ndarray"
+           | "array-like"
+           | "array_like"
+dtype : NAME
+shape : "(" dim ",)"
+      | "(" leading_optional? dim (("," dim | insert_optional))* ")"
+      | NUMBER "-"? "D"
+leading_optional : "[" dim ("," dim)* ",]" -> optional
+insert_optional : "[," dim ("," dim)* "]" -> optional
+?dim : NUMBER
+     | PY_ELLIPSES
+     | NAME
+
+
+// Python
+literal : PY_ELLIPSES
+        | STRING
+        | NUMBER
+        | NAME
+
+PY_ELLIPSES : "..."
+
+NAME: /[^\W\d][\w-]*/
+
+// imports
+%import python (STRING)
+%import common (NEWLINE, NUMBER, LETTER, TEXT, WS)
+
+%ignore WS

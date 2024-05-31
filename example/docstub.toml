@@ -1,0 +1,18 @@
+[tool.docstub]
+
+# TODO not implemented and used yet
+extend_grammar = """
+
+"""
+
+# A mapping of docnames to import information. Each item maps a docname on the
+# left side to a dictionary on the right side, which supports the following
+# fields:
+#     use : A string to replace the docname with, defaults to the docname.
+#     from : Indicate that the docname can be imported from this path.
+#     import : Import this object, defaults to the docname.
+#     as : Use this alias for the imported object
+#     is_builtin : Indicate that this docname doesn't need to be imported,
+#         defaults to "false"
+[tool.docstub.docnames]
+configparser = {import = "configparser"}
