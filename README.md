@@ -10,7 +10,7 @@ in NumPyDoc style docstrings.
 ## Installation
 
 ```shell
-pip install docstub[optional]
+pip install 'docstub [optional] @ git+https://github.com/lagru/docstub'
 ```
 
 
