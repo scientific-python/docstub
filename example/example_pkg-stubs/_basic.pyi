@@ -1,7 +1,7 @@
 import configparser
 import logging
 from collections.abc import Sequence
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, Union
 
 logger = logging.getLogger(__name__)
 
@@ -12,9 +12,9 @@ __all__ = [
 
 def func_empty(a1: Any, a2: Any, a3: Any) -> None: ...
 def func_contains(
-    self: Any,
+    self,
     a1: list[float],
-    a2: dict[str, int | str],
+    a2: dict[str, Union[int, str]],
     a3: Sequence[int | float],
     a4: frozenset[bytes],
 ) -> tuple[tuple[int, ...], list[int]]: ...
