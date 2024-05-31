@@ -63,7 +63,9 @@ class PyType:
         for p in pytypes:
             values.append(p.value)
             imports.update(p.imports)
-        value = f"tuple[{' , '.join(values)}]"
+        value = " , ".join(values)
+        if len(values) > 1:
+            value = f"tuple[{value}]"
         joined = cls(value=value, imports=imports)
         return joined
 
