@@ -13,8 +13,8 @@ from ._docstrings import ReturnKey, collect_pytypes
 logger = logging.getLogger(__name__)
 
 
-def walk_python_package(root_dir, target_dir):
-    """Iterate modules in a Python package and it's target stub files.
+def walk_source_and_targets(root_dir, target_dir):
+    """Iterate modules in a Python package and its target stub files.
 
     Parameters
     ----------
@@ -51,7 +51,6 @@ def walk_python_package(root_dir, target_dir):
             ):
                 # Stub file already exists and takes precedence
                 continue
-
             stub_path = target_dir / source_path.with_suffix(".pyi").relative_to(
                 root_dir
             )
@@ -109,8 +108,8 @@ class Py2StubTransformer(cst.CSTTransformer):
     _Annotation_Any = cst.Annotation(cst.Name("Any"))
     _Annotation_None = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, *, docnames):
-        self.docnames = docnames
+    def __init__(self, *, inspector):
+        self.inspector = inspector
         # Relevant docstring for the current context
         self._scope_stack = None  # Store current class or function scope
         self._pytypes_stack = None  # Store current parameter types
@@ -161,7 +160,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         pytypes = None
         if docstring:
             try:
-                pytypes = collect_pytypes(docstring, docnames=self.docnames)
+                pytypes = collect_pytypes(docstring, inspector=self.inspector)
             except Exception as e:
                 logger.exception(
                     "error while parsing docstring of `%s`:\n\n%s", node.name.value, e
@@ -210,7 +209,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         # Potentially use "Any" except for first param in (class)methods
         elif not is_self_or_cls and updated_node.annotation is None:
             node_changes["annotation"] = self._Annotation_Any
-            self._required_imports.add(self.docnames["Any"])
+            self._required_imports.add(self.inspector.query("Any"))
 
         if updated_node.default is not None:
             node_changes["default"] = cst.Ellipsis()

@@ -87,8 +87,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         Keyword arguments passed to the init of the parent class.
     """
 
-    def __init__(self, *, docnames, **kwargs):
-        self.docnames = docnames
+    def __init__(self, *, inspector, **kwargs):
+        self.inspector = inspector
         self._collected_imports = None
         super().__init__(**kwargs)
 
@@ -169,7 +169,12 @@ class DoctypeTransformer(lark.visitors.Transformer):
             out.append(child)
         out = "".join(out)
         if matched is False:
-            logger.warning("unmatched name %r", out)
+            docname = self.inspector.query(out)
+            if docname:
+                out = docname.use_name
+                self._collected_imports.add(docname)
+            else:
+                logger.warning("unmatched name %r", out)
         return out
 
     def NAME(self, token):
@@ -208,14 +213,14 @@ class DoctypeTransformer(lark.visitors.Transformer):
     def literals(self, tree):
         out = " , ".join(tree.children)
         out = f"Literal[{out}]"
-        self._collected_imports.add(self.docnames["Literal"])
+        self._collected_imports.add(self.inspector.query("Literal"))
         return out
 
     def _match_n_record_name(self, token):
         """Match type names to known imports."""
         assert "." not in token
-        if token in self.docnames:
-            docname = self.docnames[token]
+        docname = self.inspector.query(token)
+        if docname:
             token = MatchedName(token.type, value=docname.use_name)
             if docname.has_import:
                 self._collected_imports.add(docname)
@@ -228,7 +233,7 @@ with grammar_path.open() as file:
 _lark = lark.Lark(_grammar)
 
 
-def doc2pytype(doctype, *, docnames):
+def doc2pytype(doctype, *, inspector):
     """Convert a type description to a Python-ready type.
 
     Parameters
@@ -236,9 +241,7 @@ def doc2pytype(doctype, *, docnames):
     doctype : str
         The type description of a parameter or return value, as extracted from
         a docstring.
-    docnames : dict[str, DocName]
-        A dictionary mapping atomic names used in doctypes to information such
-        as where to import from or how to replace the name itself.
+    inspector : docstub._analysis.StaticInspector
 
     Returns
     -------
@@ -247,7 +250,7 @@ def doc2pytype(doctype, *, docnames):
         necessary imports attached.
     """
     try:
-        transformer = DoctypeTransformer(docnames=docnames)
+        transformer = DoctypeTransformer(inspector=inspector)
         tree = _lark.parse(doctype)
         pytype = transformer.transform(tree)
         return pytype
@@ -268,16 +271,14 @@ class ReturnKey:
 ReturnKey = ReturnKey()
 
 
-def collect_pytypes(docstring, *, docnames):
+def collect_pytypes(docstring, *, inspector):
     """Collect PyTypes from a docstring.
 
     Parameters
     ----------
     docstring : str
         The docstring to collect from.
-    docnames : dict[str, DocName]
-        A dictionary mapping atomic names used in doctypes to information such
-        as where to import from or how to replace the name itself.
+    inspector : docstub._analysis.StaticInspector
 
     Returns
     -------
@@ -295,13 +296,13 @@ def collect_pytypes(docstring, *, docnames):
     params.update(other)
 
     pytypes = {
-        name: doc2pytype(param.type, docnames=docnames)
+        name: doc2pytype(param.type, inspector=inspector)
         for name, param in params.items()
         if param.type
     }
 
     returns = [
-        doc2pytype(param.type, docnames=docnames)
+        doc2pytype(param.type, inspector=inspector)
         for param in np_docstring["Returns"]
         if param.type
     ]

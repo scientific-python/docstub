@@ -2,8 +2,12 @@
 
 import builtins
 import collections.abc
+import itertools
 import typing
 from dataclasses import dataclass
+from pathlib import Path
+
+import libcst as cst
 
 
 @dataclass(slots=True, frozen=True)
@@ -55,6 +59,20 @@ class DocName:
     @property
     def has_import(self):
         return not self.is_builtin
+
+    def __repr__(self):
+        classname = type(self).__name__
+        if self.has_import:
+            info = f"{self.import_name}"
+            if self.import_path:
+                info = f"{self.import_path}.{info}"
+            if self.import_alias:
+                info = f"{info} as {self.import_alias}"
+            if self.use_name not in info:
+                info = f"{info}; {self.use_name}"
+        else:
+            info = f"{self.use_name} (builtin)"
+        return f"{classname}: {info}"
 
 
 def _is_type(value) -> bool:
@@ -139,7 +157,103 @@ def common_docnames():
     return docnames
 
 
-def find_module_paths_using_search():
-    # TODO use from mypy.stubgen import find_module_paths_using_search ?
-    #   https://github.com/python/mypy/blob/66b48cbe97bf9c7660525766afe6d7089a984769/mypy/stubgen.py#L1526
-    pass
+class DocNameCollector(cst.CSTVisitor):
+
+    @classmethod
+    def collect(cls, file, module_name):
+        file = Path(file)
+        with file.open("r") as fo:
+            source = fo.read()
+
+        tree = cst.parse_module(source)
+        collector = cls(module_name=module_name)
+        tree.visit(collector)
+        return collector.docnames
+
+    def __init__(self, *, module_name):
+        self.module_name = module_name
+        self._stack = []
+        self.docnames = {}
+
+    def visit_ClassDef(self, node):
+        self._stack.append(node.name.value)
+
+        use_name = ".".join(self._stack[:1])
+        qualname = f"{self.module_name}.{'.'.join(self._stack)}"
+        docname = DocName(
+            use_name=use_name, import_name=use_name, import_path=self.module_name
+        )
+        self.docnames[qualname] = docname
+
+        return True
+
+    def leave_ClassDef(self, original_node):
+        self._stack.pop()
+
+    def visit_FunctionDef(self, node):
+        self._stack.append(node.name.value)
+        return True
+
+    def leave_FunctionDef(self, original_node):
+        self._stack.pop()
+
+
+class StaticInspector:
+    """Try to find docnames when requested."""
+
+    def __init__(self, *, source_pkgs=None, docnames=None):
+        if source_pkgs is None:
+            source_pkgs = []
+        if docnames is None:
+            docnames = {}
+
+        self.source_pkgs: list[Path] = source_pkgs
+        self.docnames = docnames
+        self._inspected = {}
+
+    @staticmethod
+    def _accumulate_module_name(qualname):
+        fragments = qualname.split(".")
+        yield from itertools.accumulate(fragments, lambda x, y: f"{x}.{y}")
+
+    def _find_modules(self, qualname):
+        for source in self.source_pkgs:
+            for module_name in self._accumulate_module_name(qualname):
+                module_path = module_name.replace(".", "/")
+                # Return PYI files last, so their content overwrites
+                files = [
+                    source / f"{module_path}.py",
+                    source / f"{module_path}.pyi",
+                    source / f"{module_path}/__init__.py",
+                    source / f"{module_path}/__init__.pyi",
+                ]
+                for file in files:
+                    if file.is_file():
+                        yield file, module_name
+
+    def inspect_module(self, file, module_name):
+        """Collect docnames from the given file.
+
+        Parameters
+        ----------
+        file : Path
+
+        Returns
+        -------
+        collected : set[DocName]
+        """
+        if file in self._inspected:
+            return self._inspected[file]
+
+        docnames = DocNameCollector.collect(file, module_name)
+        self._inspected[file] = docnames
+        self.docnames.update(docnames)
+        return docnames
+
+    def query(self, qualname):
+        out = self.docnames.get(qualname)
+        if out is None:
+            for file, module_name in self._find_modules(qualname):
+                self.inspect_module(file, module_name)
+            out = self.docnames.get(qualname)
+        return out

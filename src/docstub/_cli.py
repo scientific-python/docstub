@@ -5,8 +5,8 @@ from pathlib import Path
 import click
 
 from . import _config
-from ._analysis import DocName, common_docnames
-from ._stubs import Py2StubTransformer, walk_python_package
+from ._analysis import DocName, StaticInspector, common_docnames
+from ._stubs import Py2StubTransformer, walk_source_and_targets
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
@@ -33,14 +33,21 @@ def main(source_dir, out_dir, config_path, verbose):
     source_dir = Path(source_dir)
 
     # Handle configuration
-    if config_path is None:
-        config_path = source_dir.parent / "docstub.toml"
-    else:
-        config_path = Path(config_path)
     config = _config.default_config()
-    if config_path.exists():
-        _user_config = _config.load_config_file(config_path)
-        config = _config.merge_config(config, _user_config)
+    pyproject_toml = source_dir.parent / "pyproject.toml"
+    docstub_toml = source_dir.parent / "docstub.toml"
+    if pyproject_toml.is_file():
+        logger.info("using %s", pyproject_toml)
+        add_config = _config.load_config_file(pyproject_toml)
+        config = _config.merge_config(config, add_config)
+    if docstub_toml.is_file():
+        logger.info("using %s", docstub_toml)
+        add_config = _config.load_config_file(docstub_toml)
+        config = _config.merge_config(config, add_config)
+    if config_path:
+        logger.info("using %s", config_path)
+        add_config = _config.load_config_file(config_path)
+        config = _config.merge_config(config, add_config)
 
     # Build docname map
     docnames = common_docnames()
@@ -50,15 +57,18 @@ def main(source_dir, out_dir, config_path, verbose):
             for name, spec in config["docnames"].items()
         }
     )
+    inspector = StaticInspector(
+        source_pkgs=[source_dir.parent.resolve()], docnames=docnames
+    )
     # and the stub transformer
-    stub_transformer = Py2StubTransformer(docnames=docnames)
+    stub_transformer = Py2StubTransformer(inspector=inspector)
 
     if not out_dir:
         out_dir = source_dir.parent
     out_dir = Path(out_dir) / (source_dir.name + "-stubs")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    for source_path, stub_path in walk_python_package(source_dir, out_dir):
+    for source_path, stub_path in walk_source_and_targets(source_dir, out_dir):
         if source_path.suffix.lower() == ".pyi":
             logger.debug("using existing stub file %s", source_path)
             with source_path.open() as fo:
