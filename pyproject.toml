@@ -87,3 +87,8 @@ ignore = [
   "RET504",   # Assignment before `return` statement facilitates debugging
   "PTH123",   # Using builtin open() instead of Path.open() is fine
 ]
+
+
+[tool.docstub.docnames]
+cst = {import = "cst"}
+lark = {import = "lark"}

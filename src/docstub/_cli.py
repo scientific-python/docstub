@@ -15,23 +15,18 @@ logger = logging.getLogger(__name__)
 _VERBOSITY_LEVEL = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
 
 
-@click.command()
-@click.version_option(__version__)
-@click.argument("source_dir", type=click.Path(exists=True, file_okay=False))
-@click.option("-o", "--out-dir", type=click.Path(file_okay=False))
-@click.option("--config", "config_path", type=click.Path(exists=True, dir_okay=False))
-@click.option("-v", "--verbose", count=True, help="Log more details")
-@click.help_option("-h", "--help")
-def main(source_dir, out_dir, config_path, verbose):
-    verbose = min(2, max(0, verbose))  # Limit to range [0, 2]
-    logging.basicConfig(
-        level=_VERBOSITY_LEVEL[verbose],
-        format="%(levelname)s: %(filename)s, line %(lineno)d, in %(funcName)s: %(message)s",
-        stream=sys.stderr,
-    )
+def _find_configuration(source_dir, config_path):
+    """Find and load configuration from multiple possible sources.
 
-    source_dir = Path(source_dir)
+    Parameters
+    ----------
+    source_dir : Path
+    config_path : Path
 
+    Returns
+    -------
+    config : dict[str, Any]
+    """
     # Handle configuration
     config = _config.default_config()
     pyproject_toml = source_dir.parent / "pyproject.toml"
@@ -48,15 +43,30 @@ def main(source_dir, out_dir, config_path, verbose):
         logger.info("using %s", config_path)
         add_config = _config.load_config_file(config_path)
         config = _config.merge_config(config, add_config)
+    return config
+
+
+@click.command()
+@click.version_option(__version__)
+@click.argument("source_dir", type=click.Path(exists=True, file_okay=False))
+@click.option("-o", "--out-dir", type=click.Path(file_okay=False))
+@click.option("--config", "config_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("-v", "--verbose", count=True, help="Log more details")
+@click.help_option("-h", "--help")
+def main(source_dir, out_dir, config_path, verbose):
+    verbose = min(2, max(0, verbose))  # Limit to range [0, 2]
+    logging.basicConfig(
+        level=_VERBOSITY_LEVEL[verbose],
+        format="%(levelname)s: %(filename)s#L%(lineno)d::%(funcName)s: %(message)s",
+        stream=sys.stderr,
+    )
+
+    source_dir = Path(source_dir)
+    config = _find_configuration(source_dir, config_path)
 
     # Build docname map
     docnames = common_docnames()
-    docnames.update(
-        {
-            name: DocName.from_cfg(docname=name, spec=spec)
-            for name, spec in config["docnames"].items()
-        }
-    )
+    docnames.update(DocName.many_from_config(config["docnames"]))
     inspector = StaticInspector(
         source_pkgs=[source_dir.parent.resolve()], docnames=docnames
     )

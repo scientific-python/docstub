@@ -53,6 +53,16 @@ def func_literals(a1, a2="uno"):
     """
 
 
+def func_use_from_elsewhere(a1, a2):
+    """Check if types with full import names are matched.
+
+    Parameters
+    ----------
+    a1 : example_pkg.CustomException
+    a2 : example_pkg._basic.ExampleClass
+    """
+
+
 class ExampleClass:
     # TODO also take into account class level docstring
 
@@ -101,8 +111,32 @@ class ExampleClass:
         """
         return str(self)
 
+    @some_property.setter
+    def some_property(self, value):
+        """Dummy
+
+        Parameters
+        ----------
+        value : str
+        """
+
     @classmethod
     def method_returning_cls(cls, config):
+        """Using `Self` in context of classmethods is supported.
+
+        Parameters
+        ----------
+        config : configparser.ConfigParser
+            Configuation.
+
+        Returns
+        -------
+        out : Self
+            New class.
+        """
+
+    @classmethod()
+    def method_returning_cls2(cls, config):
         """Using `Self` in context of classmethods is supported.
 
         Parameters

@@ -21,29 +21,58 @@ class DocName:
     is_builtin: bool = False
 
     @classmethod
-    def from_cfg(cls, docname: str, spec: dict):
+    def one_from_config(cls, docname, *, info):
+        """Create one DocName from the configuration format.
+
+        Parameters
+        ----------
+        docname : str
+        info : dict[{"use", "from", "import", "as", "is_builtin"}, str]
+
+        Returns
+        -------
+        docname : Self
+        """
         use_name = docname
-        if "import" in spec:
-            use_name = spec["import"]
-        if "as" in spec:
-            use_name = spec["as"]
-        if "use" in spec:
-            use_name = spec["use"]
+        if "import" in info:
+            use_name = info["import"]
+        if "as" in info:
+            use_name = info["as"]
+        if "use" in info:
+            use_name = info["use"]
 
         import_name = docname
-        if "use" in spec:
-            import_name = spec["use"]
-        if "import" in spec:
-            import_name = spec["import"]
+        if "use" in info:
+            import_name = info["use"]
+        if "import" in info:
+            import_name = info["import"]
 
         docname = cls(
             use_name=use_name,
             import_name=import_name,
-            import_path=spec.get("from"),
-            import_alias=spec.get("as"),
-            is_builtin=spec.get("builtin", False),
+            import_path=info.get("from"),
+            import_alias=info.get("as"),
+            is_builtin=info.get("builtin", False),
         )
         return docname
+
+    @classmethod
+    def many_from_config(cls, mapping):
+        """Create many DocNames from the configuration format.
+
+        Parameters
+        ----------
+        mapping : dict[str, dict[{"use", "from", "import", "as", "is_builtin"}, str]]
+
+        Returns
+        -------
+        docnames : dict[str, Self]
+        """
+        docnames = {
+            docname: cls.one_from_config(docname, info=info)
+            for docname, info in mapping.items()
+        }
+        return docnames
 
     def format_import(self):
         if self.is_builtin:
@@ -73,6 +102,14 @@ class DocName:
         else:
             info = f"{self.use_name} (builtin)"
         return f"{classname}: {info}"
+
+
+@dataclass(slots=True, frozen=True)
+class InspectionContext:
+    """Currently inspected module and other information."""
+
+    file_path: Path
+    in_package_path: str
 
 
 def _is_type(value) -> bool:
@@ -119,7 +156,7 @@ def _typing_docnames():
         value = getattr(typing, name)
         if not _is_type(value):
             continue
-        docnames[name] = DocName.from_cfg(name, spec={"from": "typing"})
+        docnames[name] = DocName.one_from_config(name, info={"from": "typing"})
     return docnames
 
 
@@ -137,7 +174,7 @@ def _collections_abc_docnames():
         value = getattr(collections.abc, name)
         if not _is_type(value):
             continue
-        docnames[name] = DocName.from_cfg(name, spec={"from": "collections.abc"})
+        docnames[name] = DocName.one_from_config(name, info={"from": "collections.abc"})
     return docnames
 
 
@@ -199,15 +236,26 @@ class DocNameCollector(cst.CSTVisitor):
 
 
 class StaticInspector:
-    """Try to find docnames when requested."""
+    """Static analysis of Python packages.
 
-    def __init__(self, *, source_pkgs=None, docnames=None):
+    Parameters
+    ----------
+    source_pkgs: list[Path]
+    docnames: dict[str, DocName]
+    """
+
+    def __init__(
+        self,
+        *,
+        source_pkgs=None,
+        docnames=None,
+    ):
         if source_pkgs is None:
             source_pkgs = []
         if docnames is None:
             docnames = {}
 
-        self.source_pkgs: list[Path] = source_pkgs
+        self.source_pkgs = source_pkgs
         self.docnames = docnames
         self._inspected = {}
 

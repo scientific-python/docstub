@@ -2,15 +2,95 @@
 
 """
 
+import enum
 import logging
 from dataclasses import dataclass
-from typing import Literal
+from pathlib import Path
 
 import libcst as cst
 
-from ._docstrings import ReturnKey, collect_pytypes
+from ._docstrings import NPDocSection, collect_pytypes
 
 logger = logging.getLogger(__name__)
+
+
+class PythonFile(Path):
+
+    def __init__(self, *args, package_root):
+        self.package_root = package_root
+        super().__init__(*args)
+        if not self.is_file():
+            raise ValueError("must be a file")
+        if not self.is_relative_to(self.package_root):
+            raise ValueError("path must be relative to package_root")
+
+    @property
+    def import_name(self):
+        relative_to_root = self.relative_to(self.package_root)
+        parts = relative_to_root.with_suffix("").parts
+        if parts[-1] == "__init__":
+            parts = parts[:-1]
+        import_name = ".".join(parts)
+        return import_name
+
+    def with_segments(self, *args):
+        return Path(*args)
+
+
+def _is_python_package(path):
+    """
+    Parameters
+    ----------
+    path : Path
+
+    Returns
+    -------
+    is_package : bool
+    """
+    is_package = (path / "__init__.py").is_file() or (path / "__init__.pyi").is_file()
+    return is_package
+
+
+def walk_source(root_dir):
+    """Iterate modules in a Python package and its target stub files.
+
+    Parameters
+    ----------
+    root_dir : Path
+        Root directory of a Python package.
+    target_dir : Path
+        Root directory in which a matching stub package will be created.
+
+    Yields
+    ------
+    source_path : PythonFile
+        Either a Python file or a stub file that takes precedence.
+
+    Notes
+    -----
+    Files starting with "test_" are skipped entirely for now.
+    """
+    queue = [root_dir]
+    while queue:
+        path = queue.pop(0)
+
+        if path.is_dir():
+            if _is_python_package(path):
+                queue.extend(path.iterdir())
+            else:
+                logger.debug("skipping directory %s", path)
+            continue
+
+        assert path.is_file()
+
+        suffix = path.suffix.lower()
+        if suffix not in {".py", ".pyi"}:
+            continue
+        if suffix == ".py" and path.with_suffix(".pyi").exists():
+            continue  # Stub file already exists and takes precedence
+
+        python_file = PythonFile(path, package_root=root_dir)
+        yield python_file
 
 
 def walk_source_and_targets(root_dir, target_dir):
@@ -25,36 +105,19 @@ def walk_source_and_targets(root_dir, target_dir):
 
     Returns
     -------
-    source_path : Path
+    source_path : PythonFile
         Either a Python file or a stub file that takes precedence.
-    stub_path : Path
+    stub_path : PythonFile
         Target stub file.
 
     Notes
     -----
     Files starting with "test_" are skipped entirely for now.
     """
-    for root, _, files in root_dir.walk(top_down=True):
-        for name in files:
-            source_path = root / name
-
-            if name.startswith("test_"):
-                logger.debug("skipping %s", name)
-                continue
-
-            if source_path.suffix.lower() not in {".py", ".pyi"}:
-                continue
-
-            if (
-                source_path.suffix.lower() == ".py"
-                and source_path.with_suffix(".pyi").exists()
-            ):
-                # Stub file already exists and takes precedence
-                continue
-            stub_path = target_dir / source_path.with_suffix(".pyi").relative_to(
-                root_dir
-            )
-            yield source_path, stub_path
+    for source_path in walk_source(root_dir):
+        stub_path = target_dir / source_path.with_suffix(".pyi").relative_to(root_dir)
+        stub_path = PythonFile(stub_path, package_root=target_dir)
+        yield source_path, stub_path
 
 
 def try_format_stub(stub: str) -> str:
@@ -74,27 +137,23 @@ def try_format_stub(stub: str) -> str:
     return stub
 
 
+class FuncType(enum.Enum):
+    MODULE = enum.auto()
+    CLASS = enum.auto()
+    FUNC = enum.auto()
+    METHOD = enum.auto()
+    CLASSMETHOD = enum.auto()
+    STATICMETHOD = enum.auto()
+
+
 @dataclass(slots=True, frozen=True)
 class _Scope:
-    type: Literal["module", "class", "func", "method", "classmethod", "staticmethod"]
+    type: FuncType
     node: cst.CSTNode = None
-
-    def __post_init__(self):
-        allowed_types = {
-            "module",
-            "class",
-            "func",
-            "method",
-            "classmethod",
-            "staticmethod",
-        }
-        if self.type not in allowed_types:
-            msg = f"type {self.type!r} is not allowed, allowed are {allowed_types!r}"
-            raise ValueError(msg)
 
     @property
     def has_self_or_cls(self):
-        return self.type in {"method", "classmethod"}
+        return self.type in {FuncType.METHOD, FuncType.CLASSMETHOD}
 
 
 class Py2StubTransformer(cst.CSTTransformer):
@@ -115,12 +174,14 @@ class Py2StubTransformer(cst.CSTTransformer):
         self._pytypes_stack = None  # Store current parameter types
         self._required_imports = None  # Collect imports for used types
 
-    def python_to_stub(self, source: str) -> str:
+    def python_to_stub(self, source: str, module_path=None) -> str:
         """Convert Python source code to stub-file ready code."""
         try:
             self._scope_stack = []
             self._pytypes_stack = []
             self._required_imports = set()
+            if module_path:
+                self.inspector.set_current_module(module_path)
 
             source_tree = cst.parse_module(source)
             stub_tree = source_tree.visit(self)
@@ -128,8 +189,6 @@ class Py2StubTransformer(cst.CSTTransformer):
             stub = try_format_stub(stub)
             return stub
         finally:
-            assert len(self._scope_stack) == 0
-            assert len(self._pytypes_stack) == 0
             self._scope_stack = None
             self._pytypes_stack = None
             self._required_imports = None
@@ -143,17 +202,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         return updated_node
 
     def visit_FunctionDef(self, node):
-        func_type = "func"
-        if self._scope_stack[-1].type == "class":
-            func_type = "method"
-        for decorator in node.decorators:
-            assert func_type in {"func", "method"}
-            if decorator.decorator.value == "classmethod":
-                func_type = "classmethod"
-                break
-            if decorator.decorator.value == "staticmethod":
-                func_type = "staticmethod"
-                break
+        func_type = self._function_type(node)
         self._scope_stack.append(_Scope(type=func_type, node=node))
 
         docstring = node.get_docstring()
@@ -176,8 +225,9 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         pytypes = self._pytypes_stack.pop()
         if pytypes:
-            return_pytype = pytypes.get(ReturnKey)
+            return_pytype = pytypes.get(NPDocSection.RETURNS)
             if return_pytype:
+                assert return_pytype.value
                 node_changes["returns"] = cst.Annotation(
                     cst.parse_expression(return_pytype.value)
                 )
@@ -234,6 +284,10 @@ class Py2StubTransformer(cst.CSTTransformer):
         self._scope_stack.pop()
         return updated_node
 
+    def visit_Lambda(self, node):
+        # Skip visiting parameters of lambda which can't have an annotation.
+        return False
+
     @staticmethod
     def _parse_imports(imports):
         """Create nodes to include in the module tree from given imports.
@@ -249,3 +303,29 @@ class Py2StubTransformer(cst.CSTTransformer):
         lines = {imp.format_import() for imp in imports}
         import_nodes = tuple(cst.parse_statement(line) for line in lines)
         return import_nodes
+
+    def _function_type(self, func_def):
+        """Determine if a function is a method, property, staticmethod, ...
+
+        Parameters
+        ----------
+        func_def : cst.FunctionDef
+
+        Returns
+        -------
+        func_type : FuncType
+        """
+        func_type = FuncType.FUNC
+        if self._scope_stack[-1].type == FuncType.CLASS:
+            func_type = FuncType.METHOD
+            for decorator in func_def.decorators:
+                if not hasattr(decorator.decorator, "value"):
+                    continue
+                if decorator.decorator.value == "classmethod":
+                    func_type = FuncType.CLASSMETHOD
+                    break
+                if decorator.decorator.value == "staticmethod":
+                    assert func_type == FuncType.METHOD
+                    func_type = FuncType.STATICMETHOD
+                    break
+        return func_type

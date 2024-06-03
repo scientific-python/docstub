@@ -2,6 +2,7 @@
 
 """
 
+import enum
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -42,15 +43,15 @@ class PyType:
         return self.value
 
     @classmethod
-    def from_concatenated(cls, pytypes):
-        """Concatenate multiple PyTypes in a tuple.
+    def as_return_tuple(cls, return_types):
+        """Concatenate multiple PyTypes and wrap in tuple if more than one.
 
         Useful to combine multiple returned types for a function into a single
         PyType.
 
         Parameters
         ----------
-        pytypes : Iterable[PyType]
+        return_types : Iterable[PyType]
             The types to combine.
 
         Returns
@@ -58,16 +59,51 @@ class PyType:
         concatenated : PyType
             The concatenated types.
         """
-        values = []
-        imports = set()
-        for p in pytypes:
-            values.append(p.value)
-            imports.update(p.imports)
+        values, imports = cls._aggregate_pytypes(*return_types)
         value = " , ".join(values)
         if len(values) > 1:
             value = f"tuple[{value}]"
-        joined = cls(value=value, imports=imports)
-        return joined
+        concatenated = cls(value=value, imports=imports)
+        return concatenated
+
+    @classmethod
+    def as_yields_generator(cls, yield_types, receive_types=()):
+        """Create new iterator type from yield and receive types.
+
+        Parameters
+        ----------
+        yield_types : Iterable[PyType]
+            The types to yield.
+        receive_types : Iterable[PyType], optional
+            The types the generator receives.
+
+        Returns
+        -------
+        iterator : PyType
+            The yielded and received types wrapped in a generator.
+        """
+        # TODO
+        raise NotImplementedError()
+
+    @staticmethod
+    def _aggregate_pytypes(*types):
+        """Aggregate values and imports of given PyTypes.
+
+        Parameters
+        ----------
+        types : Iterable[PyType]
+
+        Returns
+        -------
+        values : list[str]
+        imports : set[DocName]
+        """
+        values = []
+        imports = set()
+        for p in types:
+            values.append(p.value)
+            imports.update(p.imports)
+        return values, imports
 
 
 class MatchedName(lark.Token):
@@ -261,14 +297,9 @@ def doc2pytype(doctype, *, inspector):
         )
 
 
-class ReturnKey:
-    """Simple "singleton" key to access the return PyType in a dictionary.
-
-    See :func:`collect_pytypes` for more.
-    """
-
-
-ReturnKey = ReturnKey()
+class NPDocSection(enum.Enum):
+    RETURNS = enum.auto()
+    YIELDS = enum.auto()
 
 
 def collect_pytypes(docstring, *, inspector):
@@ -290,6 +321,7 @@ def collect_pytypes(docstring, *, inspector):
 
     params = {p.name: p for p in np_docstring["Parameters"]}
     other = {p.name: p for p in np_docstring["Other Parameters"]}
+
     duplicate_params = params.keys() & other.keys()
     if duplicate_params:
         raise ValueError(f"{duplicate_params=}")
@@ -306,7 +338,26 @@ def collect_pytypes(docstring, *, inspector):
         for param in np_docstring["Returns"]
         if param.type
     ]
+    yields = [
+        doc2pytype(param.type, inspector=inspector)
+        for param in np_docstring["Yields"]
+        if param.type
+    ]
+    receives = [
+        doc2pytype(param.type, inspector=inspector)
+        for param in np_docstring["Receives"]
+        if param.type
+    ]
+    if returns and yields:
+        logger.warning(
+            "found 'Returns' and 'Yields' section in docstring, ignoring 'Yields'"
+        )
+    if receives and not yields:
+        logger.warning("found 'Receives' section in docstring without 'Yields' section")
+
     if returns:
-        pytypes[ReturnKey] = PyType.from_concatenated(returns)
+        pytypes[NPDocSection.RETURNS] = PyType.as_return_tuple(returns)
+    elif yields:
+        logger.error("yields is not supported yet, ignoring")
 
     return pytypes
