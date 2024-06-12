@@ -3,7 +3,7 @@ import logging
 from collections.abc import Sequence
 from typing import Any, Literal, Self, Union
 
-from example_pkg import CustomException
+from . import CustomException
 
 logger = logging.getLogger(__name__)
 

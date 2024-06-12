@@ -90,5 +90,5 @@ ignore = [
 
 
 [tool.docstub.docnames]
-cst = {import = "cst"}
+cst = {import = "libcst", as="cst"}
 lark = {import = "lark"}

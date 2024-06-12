@@ -14,6 +14,29 @@ import libcst as cst
 logger = logging.getLogger(__name__)
 
 
+def _shared_leading_path(*paths):
+    """Identify the common leading parts between import paths.
+
+    Parameters
+    ----------
+    *paths : tuple[str]
+
+    Returns
+    -------
+    shared : str
+    """
+    if len(paths) < 2:
+        raise ValueError("need more than two paths")
+    splits = (p.split(".") for p in paths)
+    shared = []
+    for paths in zip(*splits, strict=False):
+        if all(paths[0] == p for p in paths):
+            shared.append(paths[0])
+        else:
+            break
+    return ".".join(shared)
+
+
 @dataclass(slots=True, frozen=True)
 class DocName:
     """An atomic name (without ".") in a docstring type with import info."""
@@ -78,13 +101,22 @@ class DocName:
         }
         return docnames
 
-    def format_import(self):
+    def format_import(self, relative_to=None):
         if self.is_builtin:
             msg = "cannot import builtin"
             raise RuntimeError(msg)
         out = f"import {self.import_name}"
-        if self.import_path:
-            out = f"from {self.import_path} {out}"
+
+        import_path = self.import_path
+        if import_path:
+            if relative_to:
+                shared = _shared_leading_path(relative_to, import_path)
+                if shared == import_path:
+                    import_path = "."
+                else:
+                    import_path = self.import_path.replace(shared, "")
+
+            out = f"from {import_path} {out}"
         if self.import_alias:
             out = f"{out} as {self.import_alias}"
         return out

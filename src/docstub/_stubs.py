@@ -300,7 +300,9 @@ class Py2StubTransformer(cst.CSTTransformer):
             for imp in self._required_imports
             if imp.import_path != self.inspector.current_module.import_name
         ]
-        import_nodes = self._parse_imports(required_imports)
+        import_nodes = self._parse_imports(
+            required_imports, current_module=self.inspector.current_module.import_name
+        )
         updated_node = updated_node.with_changes(body=import_nodes + updated_node.body)
         self._scope_stack.pop()
         return updated_node
@@ -310,18 +312,19 @@ class Py2StubTransformer(cst.CSTTransformer):
         return False
 
     @staticmethod
-    def _parse_imports(imports):
+    def _parse_imports(imports, *, current_module=None):
         """Create nodes to include in the module tree from given imports.
 
         Parameters
         ----------
         imports : set[~.DocName]
+        current_module : str, optional
 
         Returns
         -------
         import_nodes : tuple[cst.SimpleStatementLine, ...]
         """
-        lines = {imp.format_import() for imp in imports}
+        lines = {imp.format_import(relative_to=current_module) for imp in imports}
         import_nodes = tuple(cst.parse_statement(line) for line in lines)
         return import_nodes
 
