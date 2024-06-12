@@ -9,8 +9,11 @@ in NumPyDoc style docstrings.
 
 ## Installation
 
+To try out docstub, for now, we recommend installing docstub directly from this
+repo:
+
 ```shell
-pip install 'docstub [optional] @ git+https://github.com/lagru/docstub'
+pip install 'docstub [optional] @ git+https://github.com/scientific-python/docstub'
 ```
 
 
