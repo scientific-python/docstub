@@ -67,6 +67,7 @@ def main(source_dir, out_dir, config_path, verbose):
     # Build docname map
     docnames = common_docnames()
     for source_path in walk_source(source_dir):
+        logger.info("collecting types in %s", source_path)
         docnames_in_source = DocNameCollector.collect(
             source_path, module_name=source_path.import_name
         )

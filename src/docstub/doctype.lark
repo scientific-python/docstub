@@ -5,6 +5,7 @@ doctype : type_or ("," optional)? ("," extra_info)?
 type_or : type (("or" | "|") type)*
 
 ?type : qualname
+      | sphinx_ref
       | "{" literal ("," literal)* "}" -> literals
       | container_of
       | shape_n_dtype
@@ -13,6 +14,8 @@ optional : "optional"
          | "default" ("=" | ":") literal
 
 extra_info : /[^\r\n]+/
+
+sphinx_ref : ":" (NAME ":")? NAME ":`" qualname "`"
 
 // Name with leading dot separated path
 qualname : (/~/ ".")? (NAME ".")* NAME contains?

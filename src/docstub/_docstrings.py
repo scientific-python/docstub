@@ -112,18 +112,18 @@ class MatchedName(lark.Token):
 
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
-    """Transformer for docstring type descriptions (doctypes).
-
-    Parameters
-    ----------
-    docnames : dict[str, ~.DocName]
-        A dictionary mapping atomic names used in doctypes to information such
-        as where to import from or how to replace the name itself.
-    kwargs : dict[Any, Any]
-        Keyword arguments passed to the init of the parent class.
-    """
+    """Transformer for docstring type descriptions (doctypes)."""
 
     def __init__(self, *, inspector, **kwargs):
+        """
+        Parameters
+        ----------
+        inspector : ~.StaticInspector
+            A dictionary mapping atomic names used in doctypes to information such
+            as where to import from or how to replace the name itself.
+        kwargs : dict[Any, Any]
+            Keyword arguments passed to the init of the parent class.
+        """
         self.inspector = inspector
         self._collected_imports = None
         super().__init__(**kwargs)
@@ -194,6 +194,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping extra info")
         return lark.Discard
 
+    def sphinx_ref(self, tree):
+        qualname = _find_one_token(tree, name="QUALNAME")
+        return qualname
+
     def qualname(self, tree):
         matched = False
         out = []
@@ -213,6 +217,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 logger.warning(
                     "unmatched name %r in %s", out, self.inspector.current_module
                 )
+        out = lark.Token("QUALNAME", out)
         return out
 
     def NAME(self, token):
