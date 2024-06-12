@@ -295,7 +295,12 @@ class Py2StubTransformer(cst.CSTTransformer):
         return True
 
     def leave_Module(self, original_node, updated_node):
-        import_nodes = self._parse_imports(self._required_imports)
+        required_imports = [
+            imp
+            for imp in self._required_imports
+            if imp.import_path != self.inspector.current_module.import_name
+        ]
+        import_nodes = self._parse_imports(required_imports)
         updated_node = updated_node.with_changes(body=import_nodes + updated_node.body)
         self._scope_stack.pop()
         return updated_node
@@ -310,7 +315,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Parameters
         ----------
-        imports : set[DocName]
+        imports : set[~.DocName]
 
         Returns
         -------

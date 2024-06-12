@@ -15,7 +15,7 @@ optional : "optional"
 extra_info : /[^\r\n]+/
 
 // Name with leading dot separated path
-qualname : (NAME ".")* NAME contains?
+qualname : (/~/ ".")? (NAME ".")* NAME contains?
 
 
 contains: "[" type_or ("," type_or)* "]"

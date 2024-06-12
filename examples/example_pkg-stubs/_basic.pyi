@@ -4,7 +4,6 @@ from collections.abc import Sequence
 from typing import Any, Literal, Self, Union
 
 from example_pkg import CustomException
-from example_pkg._basic import ExampleClass
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,9 @@ def func_contains(
 def func_literals(
     a1: Literal[1, 3, "foo"], a2: Literal["uno", 2, "drei", "four"] = ...
 ) -> None: ...
-def func_use_from_elsewhere(a1: CustomException, a2: ExampleClass) -> None: ...
+def func_use_from_elsewhere(
+    a1: CustomException, a2: ExampleClass
+) -> CustomException: ...
 
 class ExampleClass:
     def __init__(self, a1: int, a2: float | None = ...) -> None: ...

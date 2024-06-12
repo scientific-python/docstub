@@ -59,7 +59,11 @@ def func_use_from_elsewhere(a1, a2):
     Parameters
     ----------
     a1 : example_pkg.CustomException
-    a2 : example_pkg._basic.ExampleClass
+    a2 : ExampleClass
+
+    Returns
+    -------
+    r1 : ~.CustomException
     """
 
 

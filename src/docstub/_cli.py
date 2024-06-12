@@ -5,8 +5,8 @@ from pathlib import Path
 import click
 
 from . import _config
-from ._analysis import DocName, StaticInspector, common_docnames
-from ._stubs import Py2StubTransformer, walk_source_and_targets
+from ._analysis import DocName, DocNameCollector, StaticInspector, common_docnames
+from ._stubs import Py2StubTransformer, walk_source, walk_source_and_targets
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,13 @@ def main(source_dir, out_dir, config_path, verbose):
 
     # Build docname map
     docnames = common_docnames()
+    for source_path in walk_source(source_dir):
+        docnames_in_source = DocNameCollector.collect(
+            source_path, module_name=source_path.import_name
+        )
+        docnames.update(docnames_in_source)
     docnames.update(DocName.many_from_config(config["docnames"]))
+
     inspector = StaticInspector(
         source_pkgs=[source_dir.parent.resolve()], docnames=docnames
     )

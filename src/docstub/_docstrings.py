@@ -96,7 +96,7 @@ class PyType:
         Returns
         -------
         values : list[str]
-        imports : set[DocName]
+        imports : set[~.DocName]
         """
         values = []
         imports = set()
@@ -116,7 +116,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
     Parameters
     ----------
-    docnames : dict[str, DocName]
+    docnames : dict[str, ~.DocName]
         A dictionary mapping atomic names used in doctypes to information such
         as where to import from or how to replace the name itself.
     kwargs : dict[Any, Any]
@@ -210,7 +210,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 out = docname.use_name
                 self._collected_imports.add(docname)
             else:
-                logger.warning("unmatched name %r", out)
+                logger.warning(
+                    "unmatched name %r in %s", out, self.inspector.current_module
+                )
         return out
 
     def NAME(self, token):
@@ -314,7 +316,7 @@ def collect_pytypes(docstring, *, inspector):
 
     Returns
     -------
-    pytypes : dict[str | Literal[ReturnKey], PyType]
+    pytypes : dict[str | NPDocSection, PyType]
         The collected PyType for each parameter. If a return type is documented
         it's saved under the special key :class:`ReturnKey`.
     """

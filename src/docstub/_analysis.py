@@ -3,11 +3,15 @@
 import builtins
 import collections.abc
 import itertools
+import logging
+import re
 import typing
 from dataclasses import dataclass
 from pathlib import Path
 
 import libcst as cst
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True, frozen=True)
@@ -309,21 +313,39 @@ class StaticInspector:
         """
         Parameters
         ----------
-        qualname
+        qualname : str
 
         Returns
         -------
-
+        out : DocName | None
         """
         out = self.docnames.get(qualname)
-        if out is None:
-            for file, module_name in self._find_modules(qualname):
-                self.inspect_module(file, module_name)
-            out = self.docnames.get(qualname)
 
         *prefix, name = qualname.split(".")
-        if out is None and not prefix and self.current_module:
-            out = self.query(f"{self.current_module.import_name}.{qualname}")
+        if not out and "~" in prefix:
+            pattern = qualname.replace(".", r"\.")
+            pattern = pattern.replace("~", ".*")
+            pattern = re.compile(pattern + "$")
+            matches = {
+                key: value
+                for key, value in self.docnames.items()
+                if re.match(pattern, key)
+            }
+            if len(matches) > 1:
+                shortest_key = sorted(matches.keys(), key=lambda x: len(x))[0]
+                out = matches[shortest_key]
+                logger.warning(
+                    "%s matches multiple types %s, using %s",
+                    qualname,
+                    matches.keys(),
+                    shortest_key,
+                )
+            elif len(matches) == 1:
+                _, out = matches.popitem()
+
+        elif not out and self.current_module:
+            try_qualname = f"{self.current_module.import_name}.{qualname}"
+            out = self.docnames.get(try_qualname)
 
         return out
 
