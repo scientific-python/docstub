@@ -242,6 +242,13 @@ class StaticInspector:
     ----------
     source_pkgs: list[Path]
     docnames: dict[str, DocName]
+
+    Examples
+    --------
+    >>> from docstub._analysis import StaticInspector, common_docnames
+    >>> inspector = StaticInspector(docnames=common_docnames())
+    >>> inspector.query("Any")
+
     """
 
     def __init__(
@@ -255,9 +262,9 @@ class StaticInspector:
         if docnames is None:
             docnames = {}
 
+        self.current_module = None
         self.source_pkgs = source_pkgs
-        self.docnames = docnames
-        self._inspected = {}
+        self._inspected = {"initial": docnames}
 
     @staticmethod
     def _accumulate_module_name(qualname):
@@ -299,9 +306,36 @@ class StaticInspector:
         return docnames
 
     def query(self, qualname):
+        """
+        Parameters
+        ----------
+        qualname
+
+        Returns
+        -------
+
+        """
         out = self.docnames.get(qualname)
         if out is None:
             for file, module_name in self._find_modules(qualname):
                 self.inspect_module(file, module_name)
             out = self.docnames.get(qualname)
+
+        *prefix, name = qualname.split(".")
+        if out is None and not prefix and self.current_module:
+            out = self.query(f"{self.current_module.import_name}.{qualname}")
+
         return out
+
+    @property
+    def docnames(self):
+        current_docnames = {}
+
+        for _, docnames in self._inspected.items():
+            current_docnames.update(docnames)
+
+        return current_docnames
+
+    def __repr__(self):
+        repr = f"{type(self).__name__}({self.source_pkgs})"
+        return repr

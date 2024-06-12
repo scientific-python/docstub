@@ -19,8 +19,8 @@ class PythonFile(Path):
     def __init__(self, *args, package_root):
         self.package_root = package_root
         super().__init__(*args)
-        if not self.is_file():
-            raise ValueError("must be a file")
+        if self.is_dir():
+            raise ValueError("mustn't be a directory")
         if not self.is_relative_to(self.package_root):
             raise ValueError("path must be relative to package_root")
 
@@ -28,6 +28,7 @@ class PythonFile(Path):
     def import_name(self):
         relative_to_root = self.relative_to(self.package_root)
         parts = relative_to_root.with_suffix("").parts
+        parts = (self.package_root.name, *parts)
         if parts[-1] == "__init__":
             parts = parts[:-1]
         import_name = ".".join(parts)
@@ -173,15 +174,29 @@ class Py2StubTransformer(cst.CSTTransformer):
         self._scope_stack = None  # Store current class or function scope
         self._pytypes_stack = None  # Store current parameter types
         self._required_imports = None  # Collect imports for used types
+        self._current_module = None
 
-    def python_to_stub(self, source: str, module_path=None) -> str:
-        """Convert Python source code to stub-file ready code."""
+    def python_to_stub(self, source, *, module_path=None):
+        """Convert Python source code to stub-file ready code.
+
+        Parameters
+        ----------
+        source  : str
+        module_path : PythonFile, optional
+            The location of the source that is transformed into a stub file.
+            If given, used to enhance logging & error messages with more
+            context information.
+
+        Returns
+        -------
+        stub : str
+        """
         try:
             self._scope_stack = []
             self._pytypes_stack = []
             self._required_imports = set()
             if module_path:
-                self.inspector.set_current_module(module_path)
+                self.inspector.current_module = module_path
 
             source_tree = cst.parse_module(source)
             stub_tree = source_tree.visit(self)
@@ -192,6 +207,7 @@ class Py2StubTransformer(cst.CSTTransformer):
             self._scope_stack = None
             self._pytypes_stack = None
             self._required_imports = None
+            self.inspector.current_module = None
 
     def visit_ClassDef(self, node):
         self._scope_stack.append(_Scope(type="class", node=node))

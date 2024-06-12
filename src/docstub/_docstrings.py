@@ -293,7 +293,8 @@ def doc2pytype(doctype, *, inspector):
     except Exception:
         logger.exception("couldn't parse docstring %r:", doctype)
         return PyType(
-            value="Any", imports={DocName.from_cfg("Any", {"from": "typing"})}
+            value="Any",
+            imports={DocName.one_from_config("Any", info={"from": "typing"})},
         )
 
 

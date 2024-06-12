@@ -88,7 +88,9 @@ def main(source_dir, out_dir, config_path, verbose):
                 py_content = fo.read()
             logger.debug("creating stub from %s", source_path)
             try:
-                stub_content = stub_transformer.python_to_stub(py_content)
+                stub_content = stub_transformer.python_to_stub(
+                    py_content, module_path=source_path
+                )
             except Exception as e:
                 logger.exception("failed creating stub for %s:\n\n%s", source_path, e)
                 continue
