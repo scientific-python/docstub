@@ -68,15 +68,16 @@ def func_use_from_elsewhere(a1, a2):
 
 
 class ExampleClass:
-    # TODO also take into account class level docstring
+    """Dummy.
+
+    Parameters
+    ----------
+    a1 : str
+    a2 : float, optional
+    """
 
     def __init__(self, a1, a2=None):
-        """
-        Parameters
-        ----------
-        a1 : int
-        a2 : float, optional
-        """
+        pass
 
     def method(self, a1, a2):
         """Dummy.

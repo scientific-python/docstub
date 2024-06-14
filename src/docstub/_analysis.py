@@ -274,17 +274,15 @@ class DocNameCollector(cst.CSTVisitor):
 class StaticInspector:
     """Static analysis of Python packages.
 
-    Parameters
+    Attributes
     ----------
-    source_pkgs: list[Path]
-    docnames: dict[str, DocName]
+    current_source : ~.PackageFile | None
 
     Examples
     --------
     >>> from docstub._analysis import StaticInspector, common_docnames
     >>> inspector = StaticInspector(docnames=common_docnames())
     >>> inspector.query("Any")
-
     """
 
     def __init__(
@@ -293,12 +291,18 @@ class StaticInspector:
         source_pkgs=None,
         docnames=None,
     ):
+        """
+        Parameters
+        ----------
+        source_pkgs: list[Path], optional
+        docnames: dict[str, DocName], optional
+        """
         if source_pkgs is None:
             source_pkgs = []
         if docnames is None:
             docnames = {}
 
-        self.current_module = None
+        self.current_source = None
         self.source_pkgs = source_pkgs
         self._inspected = {"initial": docnames}
 
@@ -375,8 +379,8 @@ class StaticInspector:
             elif len(matches) == 1:
                 _, out = matches.popitem()
 
-        elif not out and self.current_module:
-            try_qualname = f"{self.current_module.import_name}.{qualname}"
+        elif not out and self.current_source:
+            try_qualname = f"{self.current_source.import_path}.{qualname}"
             out = self.docnames.get(try_qualname)
 
         return out

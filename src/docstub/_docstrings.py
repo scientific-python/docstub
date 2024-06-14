@@ -215,7 +215,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 self._collected_imports.add(docname)
             else:
                 logger.warning(
-                    "unmatched name %r in %s", out, self.inspector.current_module
+                    "unmatched name %r in %s", out, self.inspector.current_source
                 )
         out = lark.Token("QUALNAME", out)
         return out

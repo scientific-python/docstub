@@ -14,9 +14,16 @@ from ._docstrings import NPDocSection, collect_pytypes
 logger = logging.getLogger(__name__)
 
 
-class PythonFile(Path):
+class PackageFile(Path):
+    """File in a Python package."""
 
     def __init__(self, *args, package_root):
+        """
+        Parameters
+        ----------
+        args : tuple[Any, ...]
+        package_root : Path
+        """
         self.package_root = package_root
         super().__init__(*args)
         if self.is_dir():
@@ -25,7 +32,12 @@ class PythonFile(Path):
             raise ValueError("path must be relative to package_root")
 
     @property
-    def import_name(self):
+    def import_path(self):
+        """
+        Returns
+        -------
+        str
+        """
         relative_to_root = self.relative_to(self.package_root)
         parts = relative_to_root.with_suffix("").parts
         parts = (self.package_root.name, *parts)
@@ -64,7 +76,7 @@ def walk_source(root_dir):
 
     Yields
     ------
-    source_path : PythonFile
+    source_path : PackageFile
         Either a Python file or a stub file that takes precedence.
 
     Notes
@@ -90,7 +102,7 @@ def walk_source(root_dir):
         if suffix == ".py" and path.with_suffix(".pyi").exists():
             continue  # Stub file already exists and takes precedence
 
-        python_file = PythonFile(path, package_root=root_dir)
+        python_file = PackageFile(path, package_root=root_dir)
         yield python_file
 
 
@@ -106,9 +118,9 @@ def walk_source_and_targets(root_dir, target_dir):
 
     Returns
     -------
-    source_path : PythonFile
+    source_path : PackageFile
         Either a Python file or a stub file that takes precedence.
-    stub_path : PythonFile
+    stub_path : PackageFile
         Target stub file.
 
     Notes
@@ -117,7 +129,7 @@ def walk_source_and_targets(root_dir, target_dir):
     """
     for source_path in walk_source(root_dir):
         stub_path = target_dir / source_path.with_suffix(".pyi").relative_to(root_dir)
-        stub_path = PythonFile(stub_path, package_root=target_dir)
+        stub_path = PackageFile(stub_path, package_root=target_dir)
         yield source_path, stub_path
 
 
@@ -149,6 +161,8 @@ class FuncType(enum.Enum):
 
 @dataclass(slots=True, frozen=True)
 class _Scope:
+    """"""
+
     type: FuncType
     node: cst.CSTNode = None
 
@@ -156,9 +170,27 @@ class _Scope:
     def has_self_or_cls(self):
         return self.type in {FuncType.METHOD, FuncType.CLASSMETHOD}
 
+    @property
+    def is_method(self):
+        return self.type in {
+            FuncType.METHOD,
+            FuncType.CLASSMETHOD,
+            FuncType.STATICMETHOD,
+        }
+
+    @property
+    def is_class_init(self):
+        out = self.is_method and self.node.name.value == "__init__"
+        return out
+
 
 class Py2StubTransformer(cst.CSTTransformer):
-    """Transform syntax tree of a Python file into the tree of a stub file."""
+    """Transform syntax tree of a Python file into the tree of a stub file.
+
+    Attributes
+    ----------
+    inspector : ~._analysis.StaticInspector
+    """
 
     # Equivalent to ` ...`, to replace the body of callables with
     _body_replacement = cst.SimpleStatementSuite(
@@ -169,6 +201,11 @@ class Py2StubTransformer(cst.CSTTransformer):
     _Annotation_None = cst.Annotation(cst.Name("None"))
 
     def __init__(self, *, inspector):
+        """
+        Parameters
+        ----------
+        inspector : ~._analysis.StaticInspector
+        """
         self.inspector = inspector
         # Relevant docstring for the current context
         self._scope_stack = None  # Store current class or function scope
@@ -182,7 +219,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         Parameters
         ----------
         source  : str
-        module_path : PythonFile, optional
+        module_path : PackageFile, optional
             The location of the source that is transformed into a stub file.
             If given, used to enhance logging & error messages with more
             context information.
@@ -196,7 +233,7 @@ class Py2StubTransformer(cst.CSTTransformer):
             self._pytypes_stack = []
             self._required_imports = set()
             if module_path:
-                self.inspector.current_module = module_path
+                self.inspector.current_source = module_path
 
             source_tree = cst.parse_module(source)
             stub_tree = source_tree.visit(self)
@@ -207,33 +244,68 @@ class Py2StubTransformer(cst.CSTTransformer):
             self._scope_stack = None
             self._pytypes_stack = None
             self._required_imports = None
-            self.inspector.current_module = None
+            self.inspector.current_source = None
 
     def visit_ClassDef(self, node):
-        self._scope_stack.append(_Scope(type="class", node=node))
+        """Collect pytypes from class docstring and add scope to stack.
+
+        Parameters
+        ----------
+        node : cst.ClassDef
+
+        Returns
+        -------
+        out : Literal[True]
+        """
+        self._scope_stack.append(_Scope(type=FuncType.CLASS, node=node))
+        pytypes = self._pytypes_from_func(node)
+        self._pytypes_stack.append(pytypes)
         return True
 
     def leave_ClassDef(self, original_node, updated_node):
+        """Drop class scope from the stack.
+
+        Parameters
+        ----------
+        original_node : cst.ClassDef
+        updated_node : cst.ClassDef
+
+        Returns
+        -------
+        updated_node : cst.ClassDef
+        """
         self._scope_stack.pop()
         return updated_node
 
     def visit_FunctionDef(self, node):
+        """Collect pytypes from function docstring and add scope to stack.
+
+        Parameters
+        ----------
+        node : cst.FunctionDef
+
+        Returns
+        -------
+        out : Literal[True]
+        """
         func_type = self._function_type(node)
         self._scope_stack.append(_Scope(type=func_type, node=node))
-
-        docstring = node.get_docstring()
-        pytypes = None
-        if docstring:
-            try:
-                pytypes = collect_pytypes(docstring, inspector=self.inspector)
-            except Exception as e:
-                logger.exception(
-                    "error while parsing docstring of `%s`:\n\n%s", node.name.value, e
-                )
+        pytypes = self._pytypes_from_func(node)
         self._pytypes_stack.append(pytypes)
         return True
 
     def leave_FunctionDef(self, original_node, updated_node):
+        """Add type annotation for return to function.
+
+        Parameters
+        ----------
+        original_node : cst.FunctionDef
+        updated_node : cst.FunctionDef
+
+        Returns
+        -------
+        updated_node : cst.FunctionDef
+        """
         node_changes = {
             "body": self._body_replacement,
             "returns": self._Annotation_None,
@@ -254,6 +326,17 @@ class Py2StubTransformer(cst.CSTTransformer):
         return updated_node
 
     def leave_Param(self, original_node, updated_node):
+        """Add type annotation to parameter.
+
+        Parameters
+        ----------
+        original_node : cst.Param
+        updated_node : cst.Param
+
+        Returns
+        -------
+        updated_node : cst.Param
+        """
         node_changes = {}
 
         scope = self._scope_stack[-1]
@@ -264,6 +347,8 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         name = original_node.name.value
         pytypes = self._pytypes_stack[-1]
+        if not pytypes and scope.is_class_init:
+            pytypes = self._pytypes_stack[-2]
         if pytypes:
             pytype = pytypes.get(name)
             if pytype:
@@ -284,31 +369,98 @@ class Py2StubTransformer(cst.CSTTransformer):
             updated_node = updated_node.with_changes(**node_changes)
         return updated_node
 
-    def leave_Expr(self, original_node, upated_node):
+    def leave_Expr(self, original_node, updated_node):
+        """Drop expression from stub file.
+
+        Parameters
+        ----------
+        original_node : cst.Expr
+        updated_node : cst.Expr
+
+        Returns
+        -------
+        cst.RemovalSentinel
+        """
         return cst.RemovalSentinel.REMOVE
 
     def leave_Comment(self, original_node, updated_node):
+        """Drop comment from stub file.
+
+        Parameters
+        ----------
+        original_node : cst.Comment
+        updated_node : cst.Comment
+
+        Returns
+        -------
+        cst.RemovalSentinel
+        """
         return cst.RemovalSentinel.REMOVE
 
+    def leave_Assign(self, original_node, updated_node):
+        """Drop value of assign statements from stub files.
+
+        Parameters
+        ----------
+        original_node : cst.Assign
+        updated_node : cst.Assign
+
+        Returns
+        -------
+        updated_node : cst.Assign
+        """
+        # TODO replace with AnnAssign if possible / figure out assign type?
+        updated_node = updated_node.with_changes(value=self._body_replacement)
+        return updated_node
+
     def visit_Module(self, node):
+        """Add module scope to stack.
+
+        Parameters
+        ----------
+        node : cst.Module
+
+        Returns
+        -------
+        Literal[True]
+        """
         self._scope_stack.append(_Scope(type="module", node=node))
         return True
 
     def leave_Module(self, original_node, updated_node):
+        """Add required type imports to module
+
+        Parameters
+        ----------
+        original_node : cst.Module
+        updated_node : cst.Module
+
+        Returns
+        -------
+        updated_node : cst.Module
+        """
+        current_module = self.inspector.current_source.import_path
         required_imports = [
-            imp
-            for imp in self._required_imports
-            if imp.import_path != self.inspector.current_module.import_name
+            imp for imp in self._required_imports if imp.import_path != current_module
         ]
         import_nodes = self._parse_imports(
-            required_imports, current_module=self.inspector.current_module.import_name
+            required_imports, current_module=current_module
         )
         updated_node = updated_node.with_changes(body=import_nodes + updated_node.body)
         self._scope_stack.pop()
         return updated_node
 
     def visit_Lambda(self, node):
-        # Skip visiting parameters of lambda which can't have an annotation.
+        """Don't visit parameters fo lambda which can't have an annotation.
+
+        Parameters
+        ----------
+        node : cst.Lambda
+
+        Returns
+        -------
+        Literal[False]
+        """
         return False
 
     @staticmethod
@@ -353,3 +505,27 @@ class Py2StubTransformer(cst.CSTTransformer):
                     func_type = FuncType.STATICMETHOD
                     break
         return func_type
+
+    def _pytypes_from_func(self, node):
+        """Extract types from function or class docstrings.
+
+        Parameters
+        ----------
+        node : cst.FunctionDef | cst.ClassDef
+
+        Returns
+        -------
+        pytypes : dict[str, ~._docstrings.PyType]
+        """
+        pytypes = None
+        docstring = node.get_docstring()
+        if docstring:
+            try:
+                pytypes = collect_pytypes(docstring, inspector=self.inspector)
+            except Exception as e:
+                logger.exception(
+                    "error while parsing docstring of `%s`:\n\n%s",
+                    node.name.value,
+                    e,
+                )
+        return pytypes

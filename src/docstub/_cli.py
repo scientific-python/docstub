@@ -69,7 +69,7 @@ def main(source_dir, out_dir, config_path, verbose):
     for source_path in walk_source(source_dir):
         logger.info("collecting types in %s", source_path)
         docnames_in_source = DocNameCollector.collect(
-            source_path, module_name=source_path.import_name
+            source_path, module_name=source_path.import_path
         )
         docnames.update(docnames_in_source)
     docnames.update(DocName.many_from_config(config["docnames"]))
