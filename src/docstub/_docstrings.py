@@ -2,7 +2,6 @@
 
 """
 
-import enum
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -305,9 +304,14 @@ def doc2pytype(doctype, *, inspector):
         )
 
 
-class NPDocSection(enum.Enum):
-    RETURNS = enum.auto()
-    YIELDS = enum.auto()
+@dataclass(frozen=True, slots=True)
+class DocstringPyTypes:
+    """Groups Pytypes in a docstring."""
+
+    parameters: dict[str, PyType]
+    attributes: dict[str, PyType]
+    returns: PyType | None
+    yields: PyType | None
 
 
 def collect_pytypes(docstring, *, inspector):
@@ -321,9 +325,9 @@ def collect_pytypes(docstring, *, inspector):
 
     Returns
     -------
-    pytypes : dict[str | NPDocSection, PyType]
-        The collected PyType for each parameter. If a return type is documented
-        it's saved under the special key :class:`ReturnKey`.
+    pytypes : DocstringPyTypes
+        The collected PyTypes grouped by parameters, attributes, returns, and
+        yields.
     """
     np_docstring = NumpyDocString(docstring)
 
@@ -335,7 +339,7 @@ def collect_pytypes(docstring, *, inspector):
         raise ValueError(f"{duplicate_params=}")
     params.update(other)
 
-    pytypes = {
+    parameters = {
         name: doc2pytype(param.type, inspector=inspector)
         for name, param in params.items()
         if param.type
@@ -346,6 +350,8 @@ def collect_pytypes(docstring, *, inspector):
         for param in np_docstring["Returns"]
         if param.type
     ]
+    returns = PyType.as_return_tuple(returns) if returns else None
+
     yields = [
         doc2pytype(param.type, inspector=inspector)
         for param in np_docstring["Yields"]
@@ -356,16 +362,21 @@ def collect_pytypes(docstring, *, inspector):
         for param in np_docstring["Receives"]
         if param.type
     ]
+    attributes = [
+        doc2pytype(param.type, inspector=inspector)
+        for param in np_docstring["Attributes"]
+        if param.type
+    ]
     if returns and yields:
         logger.warning(
             "found 'Returns' and 'Yields' section in docstring, ignoring 'Yields'"
         )
     if receives and not yields:
         logger.warning("found 'Receives' section in docstring without 'Yields' section")
+    if yields:
+        logger.warning("yields is not supported yet")
 
-    if returns:
-        pytypes[NPDocSection.RETURNS] = PyType.as_return_tuple(returns)
-    elif yields:
-        logger.error("yields is not supported yet, ignoring")
-
-    return pytypes
+    ds_pytypes = DocstringPyTypes(
+        parameters=parameters, attributes=attributes, returns=returns, yields=None
+    )
+    return ds_pytypes

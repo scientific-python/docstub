@@ -8,8 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import libcst as cst
+import libcst.matchers as cstm
 
-from ._docstrings import NPDocSection, collect_pytypes
+from ._docstrings import collect_pytypes
 
 logger = logging.getLogger(__name__)
 
@@ -208,8 +209,8 @@ class Py2StubTransformer(cst.CSTTransformer):
         """
         self.inspector = inspector
         # Relevant docstring for the current context
-        self._scope_stack = None  # Store current class or function scope
-        self._pytypes_stack = None  # Store current parameter types
+        self._scope_stack = None  # Entered module, class or function scopes
+        self._pytypes_stack = None  # Collected pytypes for each stack
         self._required_imports = None  # Collect imports for used types
         self._current_module = None
 
@@ -258,7 +259,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         out : Literal[True]
         """
         self._scope_stack.append(_Scope(type=FuncType.CLASS, node=node))
-        pytypes = self._pytypes_from_func(node)
+        pytypes = self._pytypes_from_node(node)
         self._pytypes_stack.append(pytypes)
         return True
 
@@ -275,6 +276,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         updated_node : cst.ClassDef
         """
         self._scope_stack.pop()
+        self._pytypes_stack.pop()
         return updated_node
 
     def visit_FunctionDef(self, node):
@@ -290,7 +292,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         """
         func_type = self._function_type(node)
         self._scope_stack.append(_Scope(type=func_type, node=node))
-        pytypes = self._pytypes_from_func(node)
+        pytypes = self._pytypes_from_node(node)
         self._pytypes_stack.append(pytypes)
         return True
 
@@ -312,14 +314,12 @@ class Py2StubTransformer(cst.CSTTransformer):
         }
 
         pytypes = self._pytypes_stack.pop()
-        if pytypes:
-            return_pytype = pytypes.get(NPDocSection.RETURNS)
-            if return_pytype:
-                assert return_pytype.value
-                node_changes["returns"] = cst.Annotation(
-                    cst.parse_expression(return_pytype.value)
-                )
-                self._required_imports |= return_pytype.imports
+        if pytypes and pytypes.returns:
+            assert pytypes.returns.value
+            node_changes["returns"] = cst.Annotation(
+                cst.parse_expression(pytypes.returns.value)
+            )
+            self._required_imports |= pytypes.returns.imports
 
         updated_node = updated_node.with_changes(**node_changes)
         self._scope_stack.pop()
@@ -350,7 +350,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         if not pytypes and scope.is_class_init:
             pytypes = self._pytypes_stack[-2]
         if pytypes:
-            pytype = pytypes.get(name)
+            pytype = pytypes.parameters.get(name)
             if pytype:
                 annotation = cst.Annotation(cst.parse_expression(pytype.value))
                 node_changes["annotation"] = annotation
@@ -409,8 +409,15 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.Assign
         """
-        # TODO replace with AnnAssign if possible / figure out assign type?
-        updated_node = updated_node.with_changes(value=self._body_replacement)
+        targets = cstm.findall(updated_node, cstm.AssignTarget())
+        names_are__all__ = [
+            name
+            for target in targets
+            for name in cstm.findall(target, cst.Name(value="__all__"))
+        ]
+        if not names_are__all__:
+            # TODO replace with AnnAssign if possible / figure out assign type?
+            updated_node = updated_node.with_changes(value=self._body_replacement)
         return updated_node
 
     def visit_Module(self, node):
@@ -424,7 +431,9 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         Literal[True]
         """
-        self._scope_stack.append(_Scope(type="module", node=node))
+        self._scope_stack.append(_Scope(type=FuncType.MODULE, node=node))
+        pytypes = self._pytypes_from_node(node)
+        self._pytypes_stack.append(pytypes)
         return True
 
     def leave_Module(self, original_node, updated_node):
@@ -448,6 +457,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         )
         updated_node = updated_node.with_changes(body=import_nodes + updated_node.body)
         self._scope_stack.pop()
+        self._pytypes_stack.pop()
         return updated_node
 
     def visit_Lambda(self, node):
@@ -462,6 +472,37 @@ class Py2StubTransformer(cst.CSTTransformer):
         Literal[False]
         """
         return False
+
+    def leave_Decorator(self, original_node, updated_node):
+        """Drop decorators except for a few out of the SDL.
+
+        Parameters
+        ----------
+        original_node : cst.Decorator
+        updated_node : cst.Decorator
+
+        Returns
+        -------
+        cst.Decorator | cst.RemovalSentinel
+        """
+        names = cstm.findall(original_node, cstm.Name())
+        names = ".".join(name.value for name in names)
+
+        allowlist = (
+            "classmethod",
+            "staticmethod",
+            "property",
+            ".setter",
+            "abstractmethod",
+            "dataclass",
+            "coroutine",
+        )
+        out = cst.RemovalSentinel.REMOVE
+        # TODO add decorators in typing module
+        for allowed in allowlist:
+            if allowed in names:
+                out = updated_node
+        return out
 
     @staticmethod
     def _parse_imports(imports, *, current_module=None):
@@ -506,12 +547,12 @@ class Py2StubTransformer(cst.CSTTransformer):
                     break
         return func_type
 
-    def _pytypes_from_func(self, node):
-        """Extract types from function or class docstrings.
+    def _pytypes_from_node(self, node):
+        """Extract types from function, class or module docstrings.
 
         Parameters
         ----------
-        node : cst.FunctionDef | cst.ClassDef
+        node : cst.FunctionDef | cst.ClassDef | cst.Module
 
         Returns
         -------
