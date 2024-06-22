@@ -1,11 +1,12 @@
 ?start : doctype
 
-doctype : type_or ("," optional)? ("," extra_info)?
+doctype : (literals | type_or) ("," optional)? ("," extra_info)?
 
 type_or : type (("or" | "|") type)*
 
+literals : "{" literal (("," | "or") literal)* "}"
+
 ?type : qualname
-      | "{" literal ("," literal)* "}" -> literals
       | container_of
       | shape_n_dtype
 
@@ -23,7 +24,9 @@ contains: "[" type_or ("," type_or)* "]"
 
 
 // Container-of
-container_of : NAME "of" type_or
+container_of : NAME "of" ( type_or | dict_subtypes )
+
+dict_subtypes : "{" type_or ":" type_or "}"
 
 
 // Array-like form with dtype or shape information

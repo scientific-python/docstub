@@ -32,7 +32,7 @@ def func_contains(self, a1, a2, a3, a4):
     Parameters
     ----------
     a1 : list[float]
-    a2 : dict[str, Union[int, str]]
+    a2 : sequence of int or float
     a3 : Sequence[int | float]
     a4 : frozenset[bytes]
 
@@ -40,6 +40,29 @@ def func_contains(self, a1, a2, a3, a4):
     -------
     r1 : tuple of int
     r2 : list of int
+    """
+
+def func_contains_dict(self, a1, a2, a3):
+    """Dummy.
+
+    Parameters
+    ----------
+    a1 : dict of {str : int or str}
+    a2 : dict[str, Union[int, str]]
+    a3 : mapping of {int : str}
+
+    Returns
+    -------
+    r1 : dict of {int or str : float}
+    """
+
+def func_literals(self, a1, a2):
+    """Dummy.
+
+    Parameters
+    ----------
+    a1 : {"A", "B", "C"}
+    a2 : {0 or "index", 1 or "columns", None}, default None
     """
 
 
