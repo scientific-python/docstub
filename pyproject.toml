@@ -10,7 +10,7 @@ authors = [
 description = "Generate Python stub files (PYI) from docstrings"
 readme = "README.md"
 license.file = "LICENSE"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 classifiers = [
   "Development Status :: 1 - Planning",
   "Intended Audience :: Developers",
