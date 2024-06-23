@@ -1,12 +1,13 @@
-?start : doctype
+?start : annotation
 
-doctype : type_or ("," optional)? ("," extra_info)?
+annotation : (literals | types_or) ("," optional)? ("," extra_info)?
 
-type_or : type (("or" | "|") type)*
+literals : "{" literal ("," literal)* "}"
+
+types_or : type (("or" | "|") type)*
 
 ?type : qualname
       | sphinx_ref
-      | "{" literal ("," literal)* "}" -> literals
       | shape_n_dtype
 
 optional : "optional"
@@ -19,11 +20,11 @@ sphinx_ref : ":" (NAME ":")? NAME ":`" qualname "`"
 // Name with leading dot separated path
 qualname : (/~/ ".")? (NAME ".")* NAME contains?
 
-contains: "[" type_or ("," type_or)* "]"
-        | "[" type_or "," PY_ELLIPSES "]"
+contains: "[" types_or ("," types_or)* "]"
+        | "[" types_or "," PY_ELLIPSES "]"
         | "of" type
-        | "of" "(" type_or ("," type_or)* ")"
-        | "of" "{" type_or ":" type_or "}"
+        | "of" "(" types_or ("," types_or)* ")"
+        | "of" "{" types_or ":" types_or "}"
 
 // Array-like form with dtype or shape information
 shape_n_dtype : shape? ARRAY_NAME ("of" dtype)?

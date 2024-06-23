@@ -173,11 +173,11 @@ class DoctypeTransformer(lark.visitors.Transformer):
         finally:
             self._collected_imports = None
 
-    def doctype(self, tree):
+    def annotation(self, tree):
         out = " | ".join(tree.children)
         return out
 
-    def type_or(self, tree):
+    def types_or(self, tree):
         out = " | ".join(tree.children)
         return out
 
@@ -185,8 +185,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = "None"
         literal = [child for child in tree.children if child.type == "LITERAL"]
         assert len(literal) <= 1
-        if len(literal) == 1:
-            out = lark.Discard  # Should be covered by doctype
+        if literal:
+            out = lark.Discard  # Type should cover the default
         return out
 
     def extra_info(self, tree):
