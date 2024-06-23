@@ -7,7 +7,6 @@ type_or : type (("or" | "|") type)*
 ?type : qualname
       | sphinx_ref
       | "{" literal ("," literal)* "}" -> literals
-      | container_of
       | shape_n_dtype
 
 optional : "optional"
@@ -20,14 +19,11 @@ sphinx_ref : ":" (NAME ":")? NAME ":`" qualname "`"
 // Name with leading dot separated path
 qualname : (/~/ ".")? (NAME ".")* NAME contains?
 
-
 contains: "[" type_or ("," type_or)* "]"
         | "[" type_or "," PY_ELLIPSES "]"
-
-
-// Container-of
-container_of : NAME "of" type_or
-
+        | "of" type
+        | "of" "(" type_or ("," type_or)* ")"
+        | "of" "{" type_or ":" type_or "}"
 
 // Array-like form with dtype or shape information
 shape_n_dtype : shape? ARRAY_NAME ("of" dtype)?
@@ -40,7 +36,7 @@ ARRAY_NAME : "array"
            | "ndarray"
            | "array-like"
            | "array_like"
-dtype : NAME
+dtype : qualname
 shape : "(" dim ",)"
       | "(" leading_optional? dim (("," dim | insert_optional))* ")"
       | NUMBER "-"? "D"

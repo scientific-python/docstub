@@ -26,7 +26,7 @@ def func_empty(a1, a2, a3):
     """
 
 
-def func_contains(self, a1, a2, a3, a4):
+def func_contains(a1, a2, a3, a4, a5, a6, a7):
     """Dummy.
 
     Parameters
@@ -35,11 +35,9 @@ def func_contains(self, a1, a2, a3, a4):
     a2 : dict[str, Union[int, str]]
     a3 : Sequence[int | float]
     a4 : frozenset[bytes]
-
-    Returns
-    -------
-    r1 : tuple of int
-    r2 : list of int
+    a5 : tuple of int
+    a6 : list of (int, str)
+    a7 : dict of {str: int}
     """
 
 

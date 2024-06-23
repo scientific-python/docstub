@@ -14,12 +14,14 @@ __all__ = [
 
 def func_empty(a1, a2, a3) -> None: ...
 def func_contains(
-    self,
     a1: list[float],
     a2: dict[str, Union[int, str]],
     a3: Sequence[int | float],
     a4: frozenset[bytes],
-) -> tuple[tuple[int, ...], list[int]]: ...
+    a5: tuple[int],
+    a6: list[int, str],
+    a7: dict[str, int],
+) -> None: ...
 def func_literals(
     a1: Literal[1, 3, "foo"], a2: Literal["uno", 2, "drei", "four"] = ...
 ) -> None: ...

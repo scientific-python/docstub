@@ -239,14 +239,6 @@ class DoctypeTransformer(lark.visitors.Transformer):
             name = f"{name}[{', '.join(children)}]"
         return name
 
-    def container_of(self, tree):
-        assert len(tree.children) == 2
-        container_name, item_type = tree.children
-        if container_name == "tuple":
-            item_type += ", ..."
-        out = f"{container_name}[{item_type}]"
-        return out
-
     def contains(self, tree):
         out = ", ".join(tree.children)
         out = f"[{out}]"
