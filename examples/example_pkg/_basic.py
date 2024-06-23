@@ -71,10 +71,10 @@ class ExampleClass:
     Parameters
     ----------
     a1 : str
-    a2 : float, optional
+    a2 : float, default 0
     """
 
-    def __init__(self, a1, a2=None):
+    def __init__(self, a1, a2=0):
         pass
 
     def method(self, a1, a2):

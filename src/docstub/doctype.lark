@@ -11,7 +11,7 @@ types_or : type (("or" | "|") type)*
       | shape_n_dtype
 
 optional : "optional"
-         | "default" ("=" | ":") literal
+         | "default" ("=" | ":")? literal
 
 extra_info : /[^\r\n]+/
 
