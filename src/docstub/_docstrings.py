@@ -198,14 +198,19 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return qualname
 
     def qualname(self, tree):
-        matched = False
-        out = []
-        for i, child in enumerate(tree.children):
-            if i != 0 and not child.startswith("["):
+        children = tree.children
+
+        # Try to match only first child to known imports
+        children[0] = self._match_n_record_name(children[0])
+        matched = isinstance(children[0], MatchedName)
+
+        # Insert dots except for containers (when child starts with "[")
+        out = [children[0]]
+        for child in children[1:]:
+            if not child.startswith("["):
                 out.append(".")
-            if isinstance(child, MatchedName):
-                matched = True
             out.append(child)
+
         out = "".join(out)
         if matched is False:
             docname = self.inspector.query(out)
@@ -216,12 +221,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 logger.warning(
                     "unmatched name %r in %s", out, self.inspector.current_source
                 )
+
         out = lark.Token("QUALNAME", out)
         return out
-
-    def NAME(self, token):
-        new_token = self._match_n_record_name(token)
-        return new_token
 
     def ARRAY_NAME(self, token):
         new_token = self._match_n_record_name(token)
