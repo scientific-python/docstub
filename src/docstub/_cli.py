@@ -4,8 +4,13 @@ from pathlib import Path
 
 import click
 
-from . import _config
-from ._analysis import DocName, DocNameCollector, StaticInspector, common_docnames
+from ._config import Config
+from ._analysis import (
+    KnownImport,
+    KnownImportCollector,
+    StaticInspector,
+    common_known_imports,
+)
 from ._stubs import Py2StubTransformer, walk_source, walk_source_and_targets
 from ._version import __version__
 
@@ -27,22 +32,25 @@ def _find_configuration(source_dir, config_path):
     -------
     config : dict[str, Any]
     """
-    # Handle configuration
-    config = _config.default_config()
+    config = Config.from_toml(Config.DEFAULT_CONFIG_PATH)
+
     pyproject_toml = source_dir.parent / "pyproject.toml"
-    docstub_toml = source_dir.parent / "docstub.toml"
     if pyproject_toml.is_file():
         logger.info("using %s", pyproject_toml)
-        add_config = _config.load_config_file(pyproject_toml)
-        config = _config.merge_config(config, add_config)
+        add_config = Config.from_toml(pyproject_toml)
+        config = config.merge(add_config)
+
+    docstub_toml = source_dir.parent / "docstub.toml"
     if docstub_toml.is_file():
         logger.info("using %s", docstub_toml)
-        add_config = _config.load_config_file(docstub_toml)
-        config = _config.merge_config(config, add_config)
+        add_config = Config.from_toml(docstub_toml)
+        config = config.merge(add_config)
+
     if config_path:
         logger.info("using %s", config_path)
-        add_config = _config.load_config_file(config_path)
-        config = _config.merge_config(config, add_config)
+        add_config = Config.from_toml(config_path)
+        config = config.merge(add_config)
+
     return config
 
 
@@ -64,18 +72,18 @@ def main(source_dir, out_dir, config_path, verbose):
     source_dir = Path(source_dir)
     config = _find_configuration(source_dir, config_path)
 
-    # Build docname map
-    docnames = common_docnames()
+    # Build map of known imports
+    known_imports = common_known_imports()
     for source_path in walk_source(source_dir):
         logger.info("collecting types in %s", source_path)
-        docnames_in_source = DocNameCollector.collect(
+        known_imports_in_source = KnownImportCollector.collect(
             source_path, module_name=source_path.import_path
         )
-        docnames.update(docnames_in_source)
-    docnames.update(DocName.many_from_config(config["docnames"]))
+        known_imports.update(known_imports_in_source)
+    known_imports.update(KnownImport.many_from_config(config["known_imports"]))
 
     inspector = StaticInspector(
-        source_pkgs=[source_dir.parent.resolve()], docnames=docnames
+        source_pkgs=[source_dir.parent.resolve()], known_imports=known_imports
     )
     # and the stub transformer
     stub_transformer = Py2StubTransformer(inspector=inspector)

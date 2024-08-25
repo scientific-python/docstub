@@ -38,68 +38,71 @@ def _shared_leading_path(*paths):
 
 
 @dataclass(slots=True, frozen=True)
-class DocName:
-    """An atomic name (without ".") in a docstring type with import info."""
+class KnownImport:
+    """Import information associated with a single known type annotation.
 
-    use_name: str
+    Parameters
+    ----------
+    annotation_name : str
+        Name of the type annotation
+    import_name :
+        Dotted names after "import".
+    import_path :
+        Dotted names after "from".
+    import_alias :
+        Name (without ".") after "as".
+    """
+
+    annotation_name: str
     import_name: str = None
     import_path: str = None
     import_alias: str = None
     is_builtin: bool = False
 
     @classmethod
-    def one_from_config(cls, docname, *, info):
-        """Create one DocName from the configuration format.
+    def one_from_config(cls, name, *, info):
+        """Create one KnownImport from the configuration format.
 
         Parameters
         ----------
-        docname : str
-        info : dict[{"use", "from", "import", "as", "is_builtin"}, str]
+        name : str
+        info : dict[{"from", "import", "as", "is_builtin"}, str]
 
         Returns
         -------
-        docname : Self
+        TypeImport : Self
         """
-        use_name = docname
-        if "import" in info:
-            use_name = info["import"]
-        if "as" in info:
-            use_name = info["as"]
-        if "use" in info:
-            use_name = info["use"]
+        assert not (info.keys() - {"from", "import", "as", "is_builtin"})
 
-        import_name = docname
-        if "use" in info:
-            import_name = info["use"]
+        import_name = name
         if "import" in info:
             import_name = info["import"]
 
-        docname = cls(
-            use_name=use_name,
+        known_import = cls(
+            annotation_name=name,
             import_name=import_name,
             import_path=info.get("from"),
             import_alias=info.get("as"),
-            is_builtin=info.get("builtin", False),
+            is_builtin=info.get("is_builtin", False),
         )
-        return docname
+        return known_import
 
     @classmethod
     def many_from_config(cls, mapping):
-        """Create many DocNames from the configuration format.
+        """Create many KnownImports from the configuration format.
 
         Parameters
         ----------
-        mapping : dict[str, dict[{"use", "from", "import", "as", "is_builtin"}, str]]
+        mapping : dict[str, dict[{"from", "import", "as", "is_builtin"}, str]]
 
         Returns
         -------
-        docnames : dict[str, Self]
+        known_imports : dict[str, Self]
         """
-        docnames = {
-            docname: cls.one_from_config(docname, info=info)
-            for docname, info in mapping.items()
+        known_imports = {
+            name: cls.one_from_config(name, info=info) for name, info in mapping.items()
         }
-        return docnames
+        return known_imports
 
     def format_import(self, relative_to=None):
         if self.is_builtin:
@@ -125,19 +128,20 @@ class DocName:
     def has_import(self):
         return not self.is_builtin
 
-    def __repr__(self):
-        classname = type(self).__name__
-        if self.has_import:
-            info = f"{self.import_name}"
-            if self.import_path:
-                info = f"{self.import_path}.{info}"
-            if self.import_alias:
-                info = f"{info} as {self.import_alias}"
-            if self.use_name not in info:
-                info = f"{info}; {self.use_name}"
-        else:
-            info = f"{self.use_name} (builtin)"
-        return f"{classname}: {info}"
+    def __post_init__(self):
+        if "." in self.annotation_name:
+            raise ValueError("'.' in the annotation name aren't yet supported")
+
+        if self.import_alias and self.import_alias != self.annotation_name:
+            raise ValueError(
+                f"annotation name must match given import alias: "
+                f"{self.annotation_name} != {self.import_alias}"
+            )
+        elif self.import_name != self.annotation_name:
+            raise ValueError(
+                f"annotation name must match import name if no alias is given: "
+                f"{self.annotation_name} != {self.import_name}"
+            )
 
 
 @dataclass(slots=True, frozen=True)
@@ -157,81 +161,82 @@ def _is_type(value) -> bool:
     return is_type
 
 
-def _builtin_docnames():
-    """Return docnames for all builtins (in the current runtime).
+def _builtin_imports():
+    """Return known imports for all builtins (in the current runtime).
 
     Returns
     -------
-    docnames : dict[str, DocName]
+    known_imports : dict[str, KnownImport]
     """
     known_builtins = set(dir(builtins))
 
-    docnames = {}
+    known_imports = {}
     for name in known_builtins:
         if name.startswith("_"):
             continue
         value = getattr(builtins, name)
         if not _is_type(value):
             continue
-        docnames[name] = DocName(use_name=name, is_builtin=True)
+        known_imports[name] = KnownImport(annotation_name=name, is_builtin=True)
 
-    return docnames
+    return known_imports
 
 
-def _typing_docnames():
-    """Return docnames for public types in the `typing` module.
+def _typing_imports():
+    """Return known imports for public types in the `typing` module.
 
     Returns
     -------
-    docnames : dict[str, DocName]
+    known_imports : dict[str, KnownImport]
     """
-    docnames = {}
+    known_imports = {}
     for name in typing.__all__:
         if name.startswith("_"):
             continue
         value = getattr(typing, name)
         if not _is_type(value):
             continue
-        docnames[name] = DocName.one_from_config(name, info={"from": "typing"})
-    return docnames
+        known_imports[name] = KnownImport.one_from_config(name, info={"from": "typing"})
+    return known_imports
 
 
-def _collections_abc_docnames():
-    """Return docnames for public types in the `collections.abc` module.
+def _collections_abc_imports():
+    """Return known imports for public types in the `collections.abc` module.
 
     Returns
     -------
-    docnames : dict[str, DocName]
+    known_imports : dict[str, KnownImport]
     """
-    docnames = {}
+    known_imports = {}
     for name in collections.abc.__all__:
         if name.startswith("_"):
             continue
         value = getattr(collections.abc, name)
         if not _is_type(value):
             continue
-        docnames[name] = DocName.one_from_config(name, info={"from": "collections.abc"})
-    return docnames
+        known_imports[name] = KnownImport.one_from_config(
+            name, info={"from": "collections.abc"}
+        )
+    return known_imports
 
 
-def common_docnames():
-    """Return docnames for commonly supported types.
+def common_known_imports():
+    """Return known imports for commonly supported types.
 
     This includes builtin types, and types from the `typing` or
     `collections.abc` module.
 
     Returns
     -------
-    docnames : dict[str, DocName]
+    known_imports : dict[str, KnownImport]
     """
-    docnames = _builtin_docnames()
-    docnames |= _typing_docnames()
-    docnames |= _collections_abc_docnames()  # Overrides containers from typing
-    return docnames
+    known_imports = _builtin_imports()
+    known_imports |= _typing_imports()
+    known_imports |= _collections_abc_imports()  # Overrides containers from typing
+    return known_imports
 
 
-class DocNameCollector(cst.CSTVisitor):
-
+class KnownImportCollector(cst.CSTVisitor):
     @classmethod
     def collect(cls, file, module_name):
         file = Path(file)
@@ -241,22 +246,22 @@ class DocNameCollector(cst.CSTVisitor):
         tree = cst.parse_module(source)
         collector = cls(module_name=module_name)
         tree.visit(collector)
-        return collector.docnames
+        return collector.known_imports
 
     def __init__(self, *, module_name):
         self.module_name = module_name
         self._stack = []
-        self.docnames = {}
+        self.known_imports = {}
 
     def visit_ClassDef(self, node):
         self._stack.append(node.name.value)
 
         use_name = ".".join(self._stack[:1])
         qualname = f"{self.module_name}.{'.'.join(self._stack)}"
-        docname = DocName(
+        known_import = KnownImport(
             use_name=use_name, import_name=use_name, import_path=self.module_name
         )
-        self.docnames[qualname] = docname
+        self.known_imports[qualname] = known_import
 
         return True
 
@@ -280,8 +285,8 @@ class StaticInspector:
 
     Examples
     --------
-    >>> from docstub._analysis import StaticInspector, common_docnames
-    >>> inspector = StaticInspector(docnames=common_docnames())
+    >>> from docstub._analysis import StaticInspector, common_known_imports
+    >>> inspector = StaticInspector(known_imports=common_known_imports())
     >>> inspector.query("Any")
     """
 
@@ -289,22 +294,22 @@ class StaticInspector:
         self,
         *,
         source_pkgs=None,
-        docnames=None,
+        known_imports=None,
     ):
         """
         Parameters
         ----------
         source_pkgs: list[Path], optional
-        docnames: dict[str, DocName], optional
+        known_imports: dict[str, KnownImport], optional
         """
         if source_pkgs is None:
             source_pkgs = []
-        if docnames is None:
-            docnames = {}
+        if known_imports is None:
+            known_imports = {}
 
         self.current_source = None
         self.source_pkgs = source_pkgs
-        self._inspected = {"initial": docnames}
+        self._inspected = {"initial": known_imports}
 
     @staticmethod
     def _accumulate_module_name(qualname):
@@ -327,7 +332,7 @@ class StaticInspector:
                         yield file, module_name
 
     def inspect_module(self, file, module_name):
-        """Collect docnames from the given file.
+        """Collect known imports from the given file.
 
         Parameters
         ----------
@@ -335,15 +340,15 @@ class StaticInspector:
 
         Returns
         -------
-        collected : set[DocName]
+        collected : set[KnownImport]
         """
         if file in self._inspected:
             return self._inspected[file]
 
-        docnames = DocNameCollector.collect(file, module_name)
-        self._inspected[file] = docnames
-        self.docnames.update(docnames)
-        return docnames
+        known_imports = KnownImportCollector.collect(file, module_name)
+        self._inspected[file] = known_imports
+        self.known_imports.update(known_imports)
+        return known_imports
 
     def query(self, qualname):
         """
@@ -353,9 +358,9 @@ class StaticInspector:
 
         Returns
         -------
-        out : DocName | None
+        out : KnownImport | None
         """
-        out = self.docnames.get(qualname)
+        out = self.known_imports.get(qualname)
 
         *prefix, name = qualname.split(".")
         if not out and "~" in prefix:
@@ -364,7 +369,7 @@ class StaticInspector:
             pattern = re.compile(pattern + "$")
             matches = {
                 key: value
-                for key, value in self.docnames.items()
+                for key, value in self.known_imports.items()
                 if re.match(pattern, key)
             }
             if len(matches) > 1:
@@ -381,18 +386,18 @@ class StaticInspector:
 
         elif not out and self.current_source:
             try_qualname = f"{self.current_source.import_path}.{qualname}"
-            out = self.docnames.get(try_qualname)
+            out = self.known_imports.get(try_qualname)
 
         return out
 
     @property
-    def docnames(self):
-        current_docnames = {}
+    def known_imports(self):
+        current_known_imports = {}
 
-        for _, docnames in self._inspected.items():
-            current_docnames.update(docnames)
+        for _, known_imports in self._inspected.items():
+            current_known_imports.update(known_imports)
 
-        return current_docnames
+        return current_known_imports
 
     def __repr__(self):
         repr = f"{type(self).__name__}({self.source_pkgs})"
