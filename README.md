@@ -36,26 +36,10 @@ know how to import those unknown types.
 > docstub already knows about types in Python's `typing` or `collections.abc`
 > modules. That means you can just use types like `Literal` or `Sequence`.
 
-For now docstub's relies on users to declare unknown types[^static-analysis]
-in a `docstub.toml` or `pyproject.toml` like this:
-```toml
-[tool.docstub.docnames]
-np = { import = "numpy", as = "np" }
-```
-With this declaration, you can safely use things that are available in the
-`numpy` namespace. E.g. docstub will recognize that `np.uint8` requires
-`import numpy as np` and will include it in stub files if necessary.
-
-docstub uses the keys of the `docnames` map to match unknown names used in
-docstrings. So
-```toml
-[tool.docstub.docnames]
-func = { use = "Callable", from = "typing" }
-```
-will allow using `func` as a synonym for `Callable`.
-
-[^static-analysis]: Static and possibly runtime analysis to automatically find
-                    unknown types is on the roadmap.
+While docstub is smart enough to find some types via static analysis of
+definitions in the given source directory, it must be told about other types
+for now. To do so, refer to the syntax and comments in the
+`default_config.toml`.
 
 
 ## Contributing
