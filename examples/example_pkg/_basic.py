@@ -51,17 +51,20 @@ def func_literals(a1, a2="uno"):
     """
 
 
-def func_use_from_elsewhere(a1, a2):
+def func_use_from_elsewhere(a1, a2, a3, a4):
     """Check if types with full import names are matched.
 
     Parameters
     ----------
     a1 : example_pkg.CustomException
     a2 : ExampleClass
+    a3 : example_pkg.CustomException.NestedClass
+    a4 : ExampleClass.NestedClass
 
     Returns
     -------
     r1 : ~.CustomException
+    r2 : ~.NestedClass
     """
 
 
@@ -73,6 +76,16 @@ class ExampleClass:
     a1 : str
     a2 : float, default 0
     """
+
+    class NestedClass:
+
+        def method_in_nested_class(self, a1):
+            """
+
+            Parameters
+            ----------
+            a1 : complex
+            """
 
     def __init__(self, a1, a2=0):
         pass
@@ -138,7 +151,7 @@ class ExampleClass:
             New class.
         """
 
-    @classmethod()
+    @classmethod
     def method_returning_cls2(cls, config):
         """Using `Self` in context of classmethods is supported.
 
