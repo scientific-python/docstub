@@ -405,7 +405,7 @@ class StaticInspector:
             known_import is not None
             and annotation_name is not None
             and annotation_name != known_import.target
-            and annotation_name.startswith(known_import.target)
+            and not annotation_name.startswith(known_import.target)
         ):
             # Ensure that the annotation matches the import target
             annotation_name = annotation_name[
