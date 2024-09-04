@@ -1,6 +1,4 @@
-"""Transform types defined in docstrings to Python parsable types.
-
-"""
+"""Transform types defined in docstrings to Python parsable types."""
 
 import logging
 from dataclasses import dataclass, field
@@ -10,13 +8,20 @@ import lark
 import lark.visitors
 from numpydoc.docscrape import NumpyDocString
 
-from ._analysis import DocName
+from ._analysis import KnownImport
+from ._utils import accumulate_qualname
 
 logger = logging.getLogger(__name__)
 
 
 here = Path(__file__).parent
 grammar_path = here / "doctype.lark"
+
+
+with grammar_path.open() as file:
+    _grammar = file.read()
+
+_lark = lark.Lark(_grammar)
 
 
 def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token:
@@ -29,11 +34,11 @@ def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token:
 
 
 @dataclass(frozen=True, slots=True)
-class PyType:
-    """Python-ready type with attached import information."""
+class Annotation:
+    """Python-ready type annotation with attached import information."""
 
     value: str
-    imports: set[DocName] | frozenset[DocName] = field(default_factory=frozenset)
+    imports: frozenset[KnownImport] = field(default_factory=frozenset)
 
     def __post_init__(self):
         object.__setattr__(self, "imports", frozenset(self.imports))
@@ -42,53 +47,104 @@ class PyType:
         return self.value
 
     @classmethod
-    def from_concatenated(cls, pytypes):
-        """Concatenate multiple PyTypes in a tuple.
+    def as_return_tuple(cls, return_types):
+        """Concatenate multiple annotations and wrap in tuple if more than one.
 
         Useful to combine multiple returned types for a function into a single
-        PyType.
+        annotation.
 
         Parameters
         ----------
-        pytypes : Iterable[PyType]
+        return_types : Iterable[Annotation]
             The types to combine.
 
         Returns
         -------
-        concatenated : PyType
+        concatenated : Annotation
             The concatenated types.
         """
-        values = []
-        imports = set()
-        for p in pytypes:
-            values.append(p.value)
-            imports.update(p.imports)
+        values, imports = cls._aggregate_annotations(*return_types)
         value = " , ".join(values)
         if len(values) > 1:
             value = f"tuple[{value}]"
-        joined = cls(value=value, imports=imports)
-        return joined
+        concatenated = cls(value=value, imports=imports)
+        return concatenated
+
+    @classmethod
+    def as_yields_generator(cls, yield_types, receive_types=()):
+        """Create new iterator type from yield and receive types.
+
+        Parameters
+        ----------
+        yield_types : Iterable[Annotation]
+            The types to yield.
+        receive_types : Iterable[Annotation], optional
+            The types the generator receives.
+
+        Returns
+        -------
+        iterator : Annotation
+            The yielded and received types wrapped in a generator.
+        """
+        # TODO
+        raise NotImplementedError()
+
+    @staticmethod
+    def _aggregate_annotations(*types):
+        """Aggregate values and imports of given Annotations.
+
+        Parameters
+        ----------
+        types : Iterable[Annotation]
+
+        Returns
+        -------
+        values : list[str]
+        imports : set[~.KnownImport]
+        """
+        values = []
+        imports = set()
+        for p in types:
+            values.append(p.value)
+            imports.update(p.imports)
+        return values, imports
 
 
-class MatchedName(lark.Token):
-    pass
+ErrorFallbackAnnotation = Annotation(
+    value="ErrorFallback",
+    imports=frozenset(
+        (
+            KnownImport(
+                import_name="Any",
+                import_path="typing",
+                import_alias="ErrorFallback",
+            ),
+        )
+    ),
+)
+
+
+class KnownName(lark.Token):
+    """Wrapper token signaling that a type name was matched to a known import."""
 
 
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
-    """Transformer for docstring type descriptions (doctypes).
+    """Transformer for docstring type descriptions (doctypes)."""
 
-    Parameters
-    ----------
-    docnames : dict[str, DocName]
-        A dictionary mapping atomic names used in doctypes to information such
-        as where to import from or how to replace the name itself.
-    kwargs : dict[Any, Any]
-        Keyword arguments passed to the init of the parent class.
-    """
-
-    def __init__(self, *, docnames, **kwargs):
-        self.docnames = docnames
+    def __init__(self, *, inspector, replace_doctypes, **kwargs):
+        """
+        Parameters
+        ----------
+        inspector : ~.StaticInspector
+            A dictionary mapping atomic names used in doctypes to information such
+            as where to import from or how to replace the name itself.
+        replace_doctypes : dict[str, str]
+        kwargs : dict[Any, Any]
+            Keyword arguments passed to the init of the parent class.
+        """
+        self.inspector = inspector
+        self.replace_doctypes = replace_doctypes
         self._collected_imports = None
         super().__init__(**kwargs)
 
@@ -126,23 +182,25 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        pytype : PyType
+        annotation : Annotation
             The doctype formatted as a stub-file compatible string with
             necessary imports attached.
         """
         try:
             self._collected_imports = set()
             value = super().transform(tree=tree)
-            pytype = PyType(value=value, imports=frozenset(self._collected_imports))
-            return pytype
+            annotation = Annotation(
+                value=value, imports=frozenset(self._collected_imports)
+            )
+            return annotation
         finally:
             self._collected_imports = None
 
-    def doctype(self, tree):
+    def annotation(self, tree):
         out = " | ".join(tree.children)
         return out
 
-    def type_or(self, tree):
+    def types_or(self, tree):
         out = " | ".join(tree.children)
         return out
 
@@ -150,35 +208,45 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = "None"
         literal = [child for child in tree.children if child.type == "LITERAL"]
         assert len(literal) <= 1
-        if len(literal) == 1:
-            out = lark.Discard  # Should be covered by doctype
+        if literal:
+            out = lark.Discard  # Type should cover the default
         return out
 
     def extra_info(self, tree):
         logger.debug("dropping extra info")
         return lark.Discard
 
-    def qualname(self, tree):
-        matched = False
-        out = []
-        for i, child in enumerate(tree.children):
-            if i != 0 and not child.startswith("["):
-                out.append(".")
-            if isinstance(child, MatchedName):
-                matched = True
-            out.append(child)
-        out = "".join(out)
-        if matched is False:
-            logger.warning("unmatched name %r", out)
+    def sphinx_ref(self, tree):
+        qualname = _find_one_token(tree, name="QUALNAME")
+        return qualname
+
+    def container(self, tree):
+        _container, *_content = tree.children
+        _content = ", ".join(_content)
+        assert _content
+        out = f"{_container}[{_content}]"
         return out
 
-    def NAME(self, token):
-        new_token = self._match_n_record_name(token)
-        return new_token
+    def qualname(self, tree):
+        children = tree.children
+        _qualname = ".".join(children)
+
+        for partial_qualname in accumulate_qualname(_qualname):
+            replacement = self.replace_doctypes.get(partial_qualname)
+            if replacement:
+                _qualname = _qualname.replace(partial_qualname, replacement)
+                break
+
+        _qualname = self._find_import(_qualname)
+
+        _qualname = lark.Token(type="QUALNAME", value=_qualname)
+        return _qualname
 
     def ARRAY_NAME(self, token):
-        new_token = self._match_n_record_name(token)
-        new_token.type = "ARRAY_NAME"
+        assert "." not in token
+        new_token = self.replace_doctypes.get(str(token), str(token))
+        new_token = self._find_import(new_token)
+        new_token = lark.Token(type="ARRAY_NAME", value=new_token)
         return new_token
 
     def shape(self, tree):
@@ -192,14 +260,6 @@ class DoctypeTransformer(lark.visitors.Transformer):
             name = f"{name}[{', '.join(children)}]"
         return name
 
-    def container_of(self, tree):
-        assert len(tree.children) == 2
-        container_name, item_type = tree.children
-        if container_name == "tuple":
-            item_type += ", ..."
-        out = f"{container_name}[{item_type}]"
-        return out
-
     def contains(self, tree):
         out = ", ".join(tree.children)
         out = f"[{out}]"
@@ -208,104 +268,101 @@ class DoctypeTransformer(lark.visitors.Transformer):
     def literals(self, tree):
         out = " , ".join(tree.children)
         out = f"Literal[{out}]"
-        self._collected_imports.add(self.docnames["Literal"])
+        _, known_import = self.inspector.query("Literal")
+        self._collected_imports.add(known_import)
         return out
 
-    def _match_n_record_name(self, token):
+    def _find_import(self, qualname):
         """Match type names to known imports."""
-        assert "." not in token
-        if token in self.docnames:
-            docname = self.docnames[token]
-            token = MatchedName(token.type, value=docname.use_name)
-            if docname.has_import:
-                self._collected_imports.add(docname)
-        return token
+        try:
+            qualname, known_import = self.inspector.query(qualname)
+            if known_import:
+                if known_import.has_import:
+                    self._collected_imports.add(known_import)
+            else:
+                logger.warning(
+                    "unknown import for %r in %s",
+                    qualname,
+                    self.inspector.current_source,
+                )
+            return qualname
+        except Exception as error:
+            raise error
 
 
-with grammar_path.open() as file:
-    _grammar = file.read()
+class DocstringAnnotations:
+    def __init__(self, docstring, *, transformer):
+        self.docstring = docstring
+        self.np_docstring = NumpyDocString(docstring)
+        self.transformer = transformer
 
-_lark = lark.Lark(_grammar)
+    def _doctype_to_annotation(self, doctype):
+        """Convert a type description to a Python-ready type.
 
+        Parameters
+        ----------
+        doctype : str
+            The type description of a parameter or return value, as extracted from
+            a docstring.
+        inspector : docstub._analysis.StaticInspector
+        replace_doctypes : dict[str, str]
 
-def doc2pytype(doctype, *, docnames):
-    """Convert a type description to a Python-ready type.
+        Returns
+        -------
+        annotation : Annotation
+            The transformed type, ready to be inserted into a stub file, with
+            necessary imports attached.
+        """
+        try:
+            tree = _lark.parse(doctype)
+            annotation = self.transformer.transform(tree)
+            return annotation
+        except lark.visitors.VisitError as e:
+            logger.exception("couldn't parse doctype: %r", doctype, exc_info=e.orig_exc)
+            return ErrorFallbackAnnotation
+        except Exception:
+            logger.exception("couldn't parse doctype: %r", doctype)
+            return ErrorFallbackAnnotation
 
-    Parameters
-    ----------
-    doctype : str
-        The type description of a parameter or return value, as extracted from
-        a docstring.
-    docnames : dict[str, DocName]
-        A dictionary mapping atomic names used in doctypes to information such
-        as where to import from or how to replace the name itself.
+    @property
+    def parameters(self) -> dict[str, Annotation]:
+        def name_and_type(numpydoc_section):
+            name_type = {
+                param.name: param.type
+                for param in self.np_docstring[numpydoc_section]
+                if param.type
+            }
+            return name_type
 
-    Returns
-    -------
-    pytype : PyType
-        The transformed type, ready to be inserted into a stub file, with
-        necessary imports attached.
-    """
-    try:
-        transformer = DoctypeTransformer(docnames=docnames)
-        tree = _lark.parse(doctype)
-        pytype = transformer.transform(tree)
-        return pytype
-    except Exception:
-        logger.exception("couldn't parse docstring %r:", doctype)
-        return PyType(
-            value="Any", imports={DocName.from_cfg("Any", {"from": "typing"})}
-        )
+        params = name_and_type("Parameters")
+        other = name_and_type("Other Parameters")
 
+        duplicate_params = params.keys() & other.keys()
+        if duplicate_params:
+            raise ValueError(f"{duplicate_params=}")
+        params.update(other)
 
-class ReturnKey:
-    """Simple "singleton" key to access the return PyType in a dictionary.
+        annotations = {
+            name: self._doctype_to_annotation(type_) for name, type_ in params.items()
+        }
+        return annotations
 
-    See :func:`collect_pytypes` for more.
-    """
+    @property
+    def returns(self) -> Annotation | None:
+        out = [
+            self._doctype_to_annotation(param.type)
+            for param in self.np_docstring["Returns"]
+            if param.type
+        ]
+        out = Annotation.as_return_tuple(out) if out else None
+        return out
 
-
-ReturnKey = ReturnKey()
-
-
-def collect_pytypes(docstring, *, docnames):
-    """Collect PyTypes from a docstring.
-
-    Parameters
-    ----------
-    docstring : str
-        The docstring to collect from.
-    docnames : dict[str, DocName]
-        A dictionary mapping atomic names used in doctypes to information such
-        as where to import from or how to replace the name itself.
-
-    Returns
-    -------
-    pytypes : dict[str | Literal[ReturnKey], PyType]
-        The collected PyType for each parameter. If a return type is documented
-        it's saved under the special key :class:`ReturnKey`.
-    """
-    np_docstring = NumpyDocString(docstring)
-
-    params = {p.name: p for p in np_docstring["Parameters"]}
-    other = {p.name: p for p in np_docstring["Other Parameters"]}
-    duplicate_params = params.keys() & other.keys()
-    if duplicate_params:
-        raise ValueError(f"{duplicate_params=}")
-    params.update(other)
-
-    pytypes = {
-        name: doc2pytype(param.type, docnames=docnames)
-        for name, param in params.items()
-        if param.type
-    }
-
-    returns = [
-        doc2pytype(param.type, docnames=docnames)
-        for param in np_docstring["Returns"]
-        if param.type
-    ]
-    if returns:
-        pytypes[ReturnKey] = PyType.from_concatenated(returns)
-
-    return pytypes
+    @property
+    def yields(self) -> Annotation | None:
+        out = {
+            self._doctype_to_annotation(param.type)
+            for param in self.np_docstring["Yields"]
+            if param.type
+        }
+        out = Annotation.as_return_tuple(out) if out else None
+        return out

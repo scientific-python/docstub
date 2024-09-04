@@ -19,7 +19,7 @@ def func_ndarray(a1, a2, a3, a4=None):
     Parameters
     ----------
     a1 : ndarray
-    a2 : np.ndarray
+    a2 : np.NDArray
     a3 : (N, 3) ndarray of float
     a4 : ndarray of shape (1,) and dtype uint8
 

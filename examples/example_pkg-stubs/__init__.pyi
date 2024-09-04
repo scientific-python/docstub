@@ -1,8 +1,10 @@
 import _numpy as np_
-from _basic import func_comment, func_contains
+from _basic import func_contains
 
 __all__ = [
-    "func_comment",
     "func_contains",
     "np_",
 ]
+
+class CustomException(Exception):
+    pass

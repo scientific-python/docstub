@@ -1,30 +1,31 @@
-?start : doctype
+?start : annotation
 
-doctype : type_or ("," optional)? ("," extra_info)?
+annotation : (literals | types_or) ("," optional)? ("," extra_info)?
 
-type_or : type (("or" | "|") type)*
+literals : "{" literal ("," literal)* "}"
+
+types_or : type (("or" | "|") type)*
 
 ?type : qualname
-      | "{" literal ("," literal)* "}" -> literals
-      | container_of
+      | sphinx_ref
+      | container
       | shape_n_dtype
 
 optional : "optional"
-         | "default" ("=" | ":") literal
+         | "default" ("=" | ":")? literal
 
 extra_info : /[^\r\n]+/
 
+sphinx_ref : ":" (NAME ":")? NAME ":`" qualname "`"
+
+container: qualname "[" types_or ("," types_or)* "]"
+         | qualname "[" types_or "," PY_ELLIPSES "]"
+         | qualname "of" type
+         | qualname "of" "(" types_or ("," types_or)* ")"
+         | qualname "of" "{" types_or ":" types_or "}"
+
 // Name with leading dot separated path
-qualname : (NAME ".")* NAME contains?
-
-
-contains: "[" type_or ("," type_or)* "]"
-        | "[" type_or "," PY_ELLIPSES "]"
-
-
-// Container-of
-container_of : NAME "of" type_or
-
+qualname : (/~/ ".")? (NAME ".")* NAME
 
 // Array-like form with dtype or shape information
 shape_n_dtype : shape? ARRAY_NAME ("of" dtype)?
@@ -37,7 +38,7 @@ ARRAY_NAME : "array"
            | "ndarray"
            | "array-like"
            | "array_like"
-dtype : NAME
+dtype : qualname
 shape : "(" dim ",)"
       | "(" leading_optional? dim (("," dim | insert_optional))* ")"
       | NUMBER "-"? "D"

@@ -26,7 +26,7 @@ def func_empty(a1, a2, a3):
     """
 
 
-def func_contains(self, a1, a2, a3, a4):
+def func_contains(a1, a2, a3, a4, a5, a6, a7):
     """Dummy.
 
     Parameters
@@ -35,11 +35,9 @@ def func_contains(self, a1, a2, a3, a4):
     a2 : dict[str, Union[int, str]]
     a3 : Sequence[int | float]
     a4 : frozenset[bytes]
-
-    Returns
-    -------
-    r1 : tuple of int
-    r2 : list of int
+    a5 : tuple of int
+    a6 : list of (int, str)
+    a7 : dict of {str: int}
     """
 
 
@@ -53,16 +51,44 @@ def func_literals(a1, a2="uno"):
     """
 
 
-class ExampleClass:
-    # TODO also take into account class level docstring
+def func_use_from_elsewhere(a1, a2, a3, a4):
+    """Check if types with full import names are matched.
 
-    def __init__(self, a1, a2=None):
-        """
-        Parameters
-        ----------
-        a1 : int
-        a2 : float, optional
-        """
+    Parameters
+    ----------
+    a1 : example_pkg.CustomException
+    a2 : ExampleClass
+    a3 : example_pkg.CustomException.NestedClass
+    a4 : ExampleClass.NestedClass
+
+    Returns
+    -------
+    r1 : ~.CustomException
+    r2 : ~.NestedClass
+    """
+
+
+class ExampleClass:
+    """Dummy.
+
+    Parameters
+    ----------
+    a1 : str
+    a2 : float, default 0
+    """
+
+    class NestedClass:
+
+        def method_in_nested_class(self, a1):
+            """
+
+            Parameters
+            ----------
+            a1 : complex
+            """
+
+    def __init__(self, a1, a2=0):
+        pass
 
     def method(self, a1, a2):
         """Dummy.
@@ -101,8 +127,32 @@ class ExampleClass:
         """
         return str(self)
 
+    @some_property.setter
+    def some_property(self, value):
+        """Dummy
+
+        Parameters
+        ----------
+        value : str
+        """
+
     @classmethod
     def method_returning_cls(cls, config):
+        """Using `Self` in context of classmethods is supported.
+
+        Parameters
+        ----------
+        config : configparser.ConfigParser
+            Configuation.
+
+        Returns
+        -------
+        out : Self
+            New class.
+        """
+
+    @classmethod
+    def method_returning_cls2(cls, config):
         """Using `Self` in context of classmethods is supported.
 
         Parameters

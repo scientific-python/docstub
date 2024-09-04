@@ -5,14 +5,16 @@ extend_grammar = """
 
 """
 
-# A mapping of docnames to import information. Each item maps a docname on the
-# left side to a dictionary on the right side, which supports the following
-# fields:
-#     use : A string to replace the docname with, defaults to the docname.
-#     from : Indicate that the docname can be imported from this path.
-#     import : Import this object, defaults to the docname.
+# Import information for type annotations, declared ahead of time.
+#
+# Each item maps an annotation name on the left side to a dictionary on the
+# right side.
+#
+# Import information can be declared with the following fields:
+#     from : Indicate that the DocType can be imported from this path.
+#     import : Import this object, defaults to the DocType.
 #     as : Use this alias for the imported object
-#     is_builtin : Indicate that this docname doesn't need to be imported,
+#     is_builtin : Indicate that this DocType doesn't need to be imported,
 #         defaults to "false"
-[tool.docstub.docnames]
+[tool.docstub.known_imports]
 configparser = {import = "configparser"}
