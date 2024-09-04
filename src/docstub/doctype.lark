@@ -8,6 +8,7 @@ types_or : type (("or" | "|") type)*
 
 ?type : qualname
       | sphinx_ref
+      | container
       | shape_n_dtype
 
 optional : "optional"
@@ -17,14 +18,14 @@ extra_info : /[^\r\n]+/
 
 sphinx_ref : ":" (NAME ":")? NAME ":`" qualname "`"
 
-// Name with leading dot separated path
-qualname : (/~/ ".")? (NAME ".")* NAME contains?
+container: qualname "[" types_or ("," types_or)* "]"
+         | qualname "[" types_or "," PY_ELLIPSES "]"
+         | qualname "of" type
+         | qualname "of" "(" types_or ("," types_or)* ")"
+         | qualname "of" "{" types_or ":" types_or "}"
 
-contains: "[" types_or ("," types_or)* "]"
-        | "[" types_or "," PY_ELLIPSES "]"
-        | "of" type
-        | "of" "(" types_or ("," types_or)* ")"
-        | "of" "{" types_or ":" types_or "}"
+// Name with leading dot separated path
+qualname : (/~/ ".")? (NAME ".")* NAME
 
 // Array-like form with dtype or shape information
 shape_n_dtype : shape? ARRAY_NAME ("of" dtype)?

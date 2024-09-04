@@ -1,5 +1,5 @@
-import logging
 import dataclasses
+import logging
 from pathlib import Path
 from typing import ClassVar
 
@@ -18,9 +18,9 @@ class Config:
 
     extend_grammar: str = ""
     known_imports: dict[str, dict[str, str]] = dataclasses.field(default_factory=dict)
-    replace: dict[str, str] = dataclasses.field(default_factory=dict)
+    replace_doctypes: dict[str, str] = dataclasses.field(default_factory=dict)
 
-    _source: tuple[Path, ...] = tuple()
+    _source: tuple[Path, ...] = ()
 
     @classmethod
     def from_toml(cls, path: Path | str) -> "Config":
@@ -44,7 +44,7 @@ class Config:
         new = Config(
             extend_grammar=self.extend_grammar + other.extend_grammar,
             known_imports=self.known_imports | other.known_imports,
-            replace=self.replace | other.replace,
+            replace_doctypes=self.replace_doctypes | other.replace_doctypes,
             _source=self._source + other._source,
         )
         logger.debug("merged Config from %s", new._source)
@@ -58,8 +58,8 @@ class Config:
             raise TypeError("extended_grammar must be a string")
         if not isinstance(self.known_imports, dict):
             raise TypeError("known_imports must be a dict")
-        if not isinstance(self.replace, dict):
-            raise TypeError("replace must be a string")
+        if not isinstance(self.replace_doctypes, dict):
+            raise TypeError("replace_doctypes must be a string")
 
     def __repr__(self):
         sources = " | ".join(str(s) for s in self._source)

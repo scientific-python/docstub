@@ -2,7 +2,6 @@
 
 import builtins
 import collections.abc
-import itertools
 import logging
 import re
 import typing
@@ -10,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import libcst as cst
+
+from ._utils import accumulate_qualname
 
 logger = logging.getLogger(__name__)
 
@@ -43,21 +44,20 @@ class KnownImport:
 
     Parameters
     ----------
-    annotation_name : str
-        Name of the type annotation
     import_name :
         Dotted names after "import".
     import_path :
         Dotted names after "from".
     import_alias :
         Name (without ".") after "as".
+    builtin_name :
+        Names an object that's builtin and doesn't need an import.
     """
 
-    annotation_name: str
     import_name: str = None
     import_path: str = None
     import_alias: str = None
-    is_builtin: bool = False
+    builtin_name: str = None
 
     @classmethod
     def one_from_config(cls, name, *, info):
@@ -74,17 +74,23 @@ class KnownImport:
         """
         assert not (info.keys() - {"from", "import", "as", "is_builtin"})
 
-        import_name = name
-        if "import" in info:
-            import_name = info["import"]
+        if info.get("is_builtin"):
+            known_import = cls(builtin_name=name)
+        else:
+            import_name = name
+            if "import" in info:
+                import_name = info["import"]
 
-        known_import = cls(
-            annotation_name=name,
-            import_name=import_name,
-            import_path=info.get("from"),
-            import_alias=info.get("as"),
-            is_builtin=info.get("is_builtin", False),
-        )
+            known_import = cls(
+                import_name=import_name,
+                import_path=info.get("from"),
+                import_alias=info.get("as"),
+            )
+            if not name.startswith(known_import.target):
+                raise ValueError(
+                    f"{name!r} doesn't start with {known_import.target!r}",
+                )
+
         return known_import
 
     @classmethod
@@ -105,7 +111,7 @@ class KnownImport:
         return known_imports
 
     def format_import(self, relative_to=None):
-        if self.is_builtin:
+        if self.builtin_name:
             msg = "cannot import builtin"
             raise RuntimeError(msg)
         out = f"import {self.import_name}"
@@ -125,23 +131,43 @@ class KnownImport:
         return out
 
     @property
+    def target(self) -> str:
+        if self.import_alias:
+            out = self.import_alias
+        elif self.import_name:
+            out = self.import_name
+        elif self.builtin_name:
+            out = self.builtin_name
+        else:
+            raise RuntimeError("cannot determine import target")
+        return out
+
+    @property
     def has_import(self):
-        return not self.is_builtin
+        return self.builtin_name is None
 
     def __post_init__(self):
-        if "." in self.annotation_name:
-            raise ValueError("'.' in the annotation name aren't yet supported")
+        if self.builtin_name is not None:
+            if (
+                self.import_name is not None
+                or self.import_alias is not None
+                or self.import_path is not None
+            ):
+                raise ValueError("builtin cannot contain import information")
+        elif self.import_name is None:
+            raise ValueError("non bultin must at least define an `import_name`")
 
-        if self.import_alias and self.import_alias != self.annotation_name:
-            raise ValueError(
-                f"annotation name must match given import alias: "
-                f"{self.annotation_name} != {self.import_alias}"
-            )
-        elif self.import_name != self.annotation_name:
-            raise ValueError(
-                f"annotation name must match import name if no alias is given: "
-                f"{self.annotation_name} != {self.import_name}"
-            )
+    def __repr__(self):
+        if self.builtin_name:
+            info = f"{self.target} (builtin)"
+        else:
+            info = f"{self.format_import()!r}"
+        out = f"<{type(self).__name__} {info}>"
+        return out
+
+    def __str__(self):
+        out = self.format_import()
+        return out
 
 
 @dataclass(slots=True, frozen=True)
@@ -177,7 +203,7 @@ def _builtin_imports():
         value = getattr(builtins, name)
         if not _is_type(value):
             continue
-        known_imports[name] = KnownImport(annotation_name=name, is_builtin=True)
+        known_imports[name] = KnownImport(builtin_name=name)
 
     return known_imports
 
@@ -256,10 +282,12 @@ class KnownImportCollector(cst.CSTVisitor):
     def visit_ClassDef(self, node):
         self._stack.append(node.name.value)
 
-        use_name = ".".join(self._stack[:1])
+        class_name = ".".join(self._stack[:1])
         qualname = f"{self.module_name}.{'.'.join(self._stack)}"
+
         known_import = KnownImport(
-            use_name=use_name, import_name=use_name, import_path=self.module_name
+            import_name=class_name,
+            import_path=self.module_name,
         )
         self.known_imports[qualname] = known_import
 
@@ -288,6 +316,7 @@ class StaticInspector:
     >>> from docstub._analysis import StaticInspector, common_known_imports
     >>> inspector = StaticInspector(known_imports=common_known_imports())
     >>> inspector.query("Any")
+    ('Any', <KnownImport 'from typing import Any'>)
     """
 
     def __init__(
@@ -309,64 +338,32 @@ class StaticInspector:
 
         self.current_source = None
         self.source_pkgs = source_pkgs
-        self._inspected = {"initial": known_imports}
 
-    @staticmethod
-    def _accumulate_module_name(qualname):
-        fragments = qualname.split(".")
-        yield from itertools.accumulate(fragments, lambda x, y: f"{x}.{y}")
+        self.known_imports = known_imports
 
-    def _find_modules(self, qualname):
-        for source in self.source_pkgs:
-            for module_name in self._accumulate_module_name(qualname):
-                module_path = module_name.replace(".", "/")
-                # Return PYI files last, so their content overwrites
-                files = [
-                    source / f"{module_path}.py",
-                    source / f"{module_path}.pyi",
-                    source / f"{module_path}/__init__.py",
-                    source / f"{module_path}/__init__.pyi",
-                ]
-                for file in files:
-                    if file.is_file():
-                        yield file, module_name
-
-    def inspect_module(self, file, module_name):
-        """Collect known imports from the given file.
+    def query(self, search_name):
+        """Search for a known annotation name.
 
         Parameters
         ----------
-        file : Path
+        search_name : str
 
         Returns
         -------
-        collected : set[KnownImport]
+        annotation_name : str | None
+            If it was found, the name of the annotation that matches the `known_import`.
+        known_import : KnownImport | None
+            If it was found, import information matching the `annotation_name`.
         """
-        if file in self._inspected:
-            return self._inspected[file]
+        annotation_name = None
+        known_import = None
 
-        known_imports = KnownImportCollector.collect(file, module_name)
-        self._inspected[file] = known_imports
-        self.known_imports.update(known_imports)
-        return known_imports
-
-    def query(self, qualname):
-        """
-        Parameters
-        ----------
-        qualname : str
-
-        Returns
-        -------
-        out : KnownImport | None
-        """
-        out = self.known_imports.get(qualname)
-
-        *prefix, name = qualname.split(".")
-        if not out and "~" in prefix:
-            pattern = qualname.replace(".", r"\.")
+        if search_name.startswith("~."):
+            # Sphinx like matching with abbreviated name
+            pattern = search_name.replace(".", r"\.")
             pattern = pattern.replace("~", ".*")
             pattern = re.compile(pattern + "$")
+            # Might be slow, but works for now
             matches = {
                 key: value
                 for key, value in self.known_imports.items()
@@ -374,30 +371,48 @@ class StaticInspector:
             }
             if len(matches) > 1:
                 shortest_key = sorted(matches.keys(), key=lambda x: len(x))[0]
-                out = matches[shortest_key]
+                known_import = matches[shortest_key]
+                annotation_name = shortest_key
                 logger.warning(
-                    "%s matches multiple types %s, using %s",
-                    qualname,
+                    "%r in %s matches multiple types %r, using %r",
+                    search_name,
+                    self.current_source,
                     matches.keys(),
                     shortest_key,
                 )
             elif len(matches) == 1:
-                _, out = matches.popitem()
+                annotation_name, known_import = matches.popitem()
+            else:
+                logger.debug(
+                    "couldn't match %r in %s", search_name, self.current_source
+                )
 
-        elif not out and self.current_source:
-            try_qualname = f"{self.current_source.import_path}.{qualname}"
-            out = self.known_imports.get(try_qualname)
+        if known_import is None and self.current_source:
+            # Try scope of current module
+            try_qualname = f"{self.current_source.import_path}.{search_name}"
+            known_import = self.known_imports.get(try_qualname)
+            annotation_name = search_name
 
-        return out
+        if known_import is None:
+            # Try a subset of the qualname (first 'a.b.c', then 'a.b' and 'a')
+            for partial_qualname in reversed(accumulate_qualname(search_name)):
+                known_import = self.known_imports.get(partial_qualname)
+                if known_import:
+                    annotation_name = search_name
+                    break
 
-    @property
-    def known_imports(self):
-        current_known_imports = {}
+        if (
+            known_import is not None
+            and annotation_name is not None
+            and annotation_name != known_import.target
+            and annotation_name.startswith(known_import.target)
+        ):
+            # Ensure that the annotation matches the import target
+            annotation_name = annotation_name[
+                annotation_name.find(known_import.target) :
+            ]
 
-        for _, known_imports in self._inspected.items():
-            current_known_imports.update(known_imports)
-
-        return current_known_imports
+        return annotation_name, known_import
 
     def __repr__(self):
         repr = f"{type(self).__name__}({self.source_pkgs})"

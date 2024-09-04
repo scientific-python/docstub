@@ -1,6 +1,4 @@
-"""Transform Python source files to typed stub files.
-
-"""
+"""Transform Python source files to typed stub files."""
 
 import enum
 import logging
@@ -10,7 +8,7 @@ from pathlib import Path
 import libcst as cst
 import libcst.matchers as cstm
 
-from ._docstrings import collect_pytypes
+from ._docstrings import DocstringAnnotations, DoctypeTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -201,13 +199,18 @@ class Py2StubTransformer(cst.CSTTransformer):
     _Annotation_Any = cst.Annotation(cst.Name("Any"))
     _Annotation_None = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, *, inspector):
+    def __init__(self, *, inspector, replace_doctypes):
         """
         Parameters
         ----------
         inspector : ~._analysis.StaticInspector
+        replace_doctypes : dict[str, str]
         """
         self.inspector = inspector
+        self.replace_doctypes = replace_doctypes
+        self.transformer = DoctypeTransformer(
+            inspector=inspector, replace_doctypes=replace_doctypes
+        )
         # Relevant docstring for the current context
         self._scope_stack = None  # Entered module, class or function scopes
         self._pytypes_stack = None  # Collected pytypes for each stack
@@ -313,13 +316,13 @@ class Py2StubTransformer(cst.CSTTransformer):
             "returns": self._Annotation_None,
         }
 
-        pytypes = self._pytypes_stack.pop()
-        if pytypes and pytypes.returns:
-            assert pytypes.returns.value
+        ds_annotations = self._pytypes_stack.pop()
+        if ds_annotations and ds_annotations.returns:
+            assert ds_annotations.returns.value
             node_changes["returns"] = cst.Annotation(
-                cst.parse_expression(pytypes.returns.value)
+                cst.parse_expression(ds_annotations.returns.value)
             )
-            self._required_imports |= pytypes.returns.imports
+            self._required_imports |= ds_annotations.returns.imports
 
         updated_node = updated_node.with_changes(**node_changes)
         self._scope_stack.pop()
@@ -360,7 +363,8 @@ class Py2StubTransformer(cst.CSTTransformer):
         # Potentially use "Any" except for first param in (class)methods
         elif not is_self_or_cls and updated_node.annotation is None:
             node_changes["annotation"] = self._Annotation_Any
-            self._required_imports.add(self.inspector.query("Any"))
+            _, known_import = self.inspector.query("Any")
+            self._required_imports.add(known_import)
 
         if updated_node.default is not None:
             node_changes["default"] = cst.Ellipsis()
@@ -562,7 +566,10 @@ class Py2StubTransformer(cst.CSTTransformer):
         docstring = node.get_docstring()
         if docstring:
             try:
-                pytypes = collect_pytypes(docstring, inspector=self.inspector)
+                pytypes = DocstringAnnotations(
+                    docstring,
+                    transformer=self.transformer,
+                )
             except Exception as e:
                 logger.exception(
                     "error while parsing docstring of `%s`:\n\n%s",

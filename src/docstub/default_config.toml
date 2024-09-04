@@ -23,9 +23,10 @@ np = { import = "numpy", as = "np" }
 NDArray = { from = "numpy.typing" }
 ArrayLike = { from = "numpy.typing" }
 
-
-# Replace human-readable expressions with actual types.
-[tool.docstub.replace]
+# Specify human-friendly aliases that can be used instead of Python-parsable
+# annotations.
+# TODO rename to qualname_alias or something
+[tool.docstub.replace_doctypes]
 function = "Callable"
 func = "Callable"
 callable = "Callable"

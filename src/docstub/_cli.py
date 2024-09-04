@@ -4,13 +4,13 @@ from pathlib import Path
 
 import click
 
-from ._config import Config
 from ._analysis import (
     KnownImport,
     KnownImportCollector,
     StaticInspector,
     common_known_imports,
 )
+from ._config import Config
 from ._stubs import Py2StubTransformer, walk_source, walk_source_and_targets
 from ._version import __version__
 
@@ -80,13 +80,15 @@ def main(source_dir, out_dir, config_path, verbose):
             source_path, module_name=source_path.import_path
         )
         known_imports.update(known_imports_in_source)
-    known_imports.update(KnownImport.many_from_config(config["known_imports"]))
+    known_imports.update(KnownImport.many_from_config(config.known_imports))
 
     inspector = StaticInspector(
         source_pkgs=[source_dir.parent.resolve()], known_imports=known_imports
     )
     # and the stub transformer
-    stub_transformer = Py2StubTransformer(inspector=inspector)
+    stub_transformer = Py2StubTransformer(
+        inspector=inspector, replace_doctypes=config.replace_doctypes
+    )
 
     if not out_dir:
         out_dir = source_dir.parent
