@@ -1,15 +1,14 @@
 ?start : annotation
 
-annotation : (literals | types_or) ("," optional)? ("," extra_info)?
+annotation : types_or ("," optional)? ("," extra_info)?
 
-literals : "{" literal ("," literal)* "}"
-
-types_or : type (("or" | "|") type)*
+?types_or : type (("or" | "|") type)*
 
 ?type : qualname
       | sphinx_ref
       | container
       | shape_n_dtype
+      | literals
 
 optional : "optional"
          | "default" ("=" | ":")? literal
@@ -18,10 +17,9 @@ extra_info : /[^\r\n]+/
 
 sphinx_ref : ":" (NAME ":")? NAME ":`" qualname "`"
 
-container: qualname "[" types_or ("," types_or)* "]"
-         | qualname "[" types_or "," PY_ELLIPSES "]"
+container: qualname "[" types_or ("," types_or)* ("," PY_ELLIPSES)? "]"
          | qualname "of" type
-         | qualname "of" "(" types_or ("," types_or)* ")"
+         | qualname "of" "(" types_or ("," types_or)* ("," PY_ELLIPSES)? ")"
          | qualname "of" "{" types_or ":" types_or "}"
 
 // Name with leading dot separated path
@@ -42,14 +40,16 @@ dtype : qualname
 shape : "(" dim ",)"
       | "(" leading_optional? dim (("," dim | insert_optional))* ")"
       | NUMBER "-"? "D"
-leading_optional : "[" dim ("," dim)* ",]" -> optional
-insert_optional : "[," dim ("," dim)* "]" -> optional
+leading_optional : "[" dim ("," dim)* ",]"
+insert_optional : "[," dim ("," dim)* "]"
 ?dim : NUMBER
      | PY_ELLIPSES
      | NAME
 
 
 // Python
+literals : "{" literal ("," literal)* "}"
+
 literal : PY_ELLIPSES
         | STRING
         | NUMBER

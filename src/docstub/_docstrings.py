@@ -266,19 +266,21 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return out
 
     def literals(self, tree):
-        out = " , ".join(tree.children)
+        out = ", ".join(tree.children)
         out = f"Literal[{out}]"
         _, known_import = self.inspector.query("Literal")
-        self._collected_imports.add(known_import)
+        if known_import:
+            self._collected_imports.add(known_import)
         return out
 
     def _find_import(self, qualname):
         """Match type names to known imports."""
         try:
-            qualname, known_import = self.inspector.query(qualname)
-            if known_import:
-                if known_import.has_import:
-                    self._collected_imports.add(known_import)
+            annotation_name, known_import = self.inspector.query(qualname)
+            if known_import and known_import.has_import:
+                self._collected_imports.add(known_import)
+            if annotation_name:
+                qualname = annotation_name
             else:
                 logger.warning(
                     "unknown import for %r in %s",
