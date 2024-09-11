@@ -57,9 +57,19 @@ def _find_configuration(source_dir, config_path):
 @click.command()
 @click.version_option(__version__)
 @click.argument("source_dir", type=click.Path(exists=True, file_okay=False))
-@click.option("-o", "--out-dir", type=click.Path(file_okay=False))
-@click.option("--config", "config_path", type=click.Path(exists=True, dir_okay=False))
-@click.option("-v", "--verbose", count=True, help="Log more details")
+@click.option(
+    "-o",
+    "--out-dir",
+    type=click.Path(file_okay=False),
+    help="Set explicit output directory.",
+)
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, dir_okay=False),
+    help="Set explicitly configuration file.",
+)
+@click.option("-v", "--verbose", count=True, help="Log more details.")
 @click.help_option("-h", "--help")
 def main(source_dir, out_dir, config_path, verbose):
     verbose = min(2, max(0, verbose))  # Limit to range [0, 2]
