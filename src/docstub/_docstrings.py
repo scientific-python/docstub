@@ -1,9 +1,11 @@
 """Transform types defined in docstrings to Python parsable types."""
 
 import logging
+import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import click
 import lark
 import lark.visitors
 from numpydoc.docscrape import NumpyDocString
@@ -33,7 +35,7 @@ def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token:
     return tokens[0]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class Annotation:
     """Python-ready type annotation with attached import information."""
 
@@ -148,6 +150,30 @@ class DoctypeTransformer(lark.visitors.Transformer):
         self._collected_imports = None
         super().__init__(**kwargs)
 
+    def transform(self, doctype):
+        """Turn a type description in a docstring into a type annotation.
+
+        Parameters
+        ----------
+        doctype : str
+            The doctype to parse.
+
+        Returns
+        -------
+        annotation : Annotation
+            The parsed annotation.
+        """
+        try:
+            self._collected_imports = set()
+            tree = _lark.parse(doctype)
+            value = super().transform(tree=tree)
+            annotation = Annotation(
+                value=value, imports=frozenset(self._collected_imports)
+            )
+            return annotation
+        finally:
+            self._collected_imports = None
+
     def __default__(self, data, children, meta):
         """Unpack children of rule nodes by default.
 
@@ -171,30 +197,6 @@ class DoctypeTransformer(lark.visitors.Transformer):
         else:
             out = children
         return out
-
-    def transform(self, tree):
-        """
-
-        Parameters
-        ----------
-        tree : lark.Tree
-            The
-
-        Returns
-        -------
-        annotation : Annotation
-            The doctype formatted as a stub-file compatible string with
-            necessary imports attached.
-        """
-        try:
-            self._collected_imports = set()
-            value = super().transform(tree=tree)
-            annotation = Annotation(
-                value=value, imports=frozenset(self._collected_imports)
-            )
-            return annotation
-        finally:
-            self._collected_imports = None
 
     def annotation(self, tree):
         out = " | ".join(tree.children)
@@ -293,10 +295,20 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
 
 class DocstringAnnotations:
-    def __init__(self, docstring, *, transformer):
+    def __init__(self, docstring, *, transformer, source=None):
         self.docstring = docstring
         self.np_docstring = NumpyDocString(docstring)
         self.transformer = transformer
+        self.source = source
+
+    def _format_grammar_error(self, error, doctype):
+        msg = "doctype doesn't conform to grammar"
+        details = doctype
+        if hasattr(error, "get_context"):
+            details = error.get_context(doctype)
+        details = textwrap.indent(details, prefix="  ")
+        out = f"{click.style(self.source, bold=True)} {msg}\n{details}"
+        return out
 
     def _doctype_to_annotation(self, doctype):
         """Convert a type description to a Python-ready type.
@@ -316,14 +328,19 @@ class DocstringAnnotations:
             necessary imports attached.
         """
         try:
-            tree = _lark.parse(doctype)
-            annotation = self.transformer.transform(tree)
+            annotation = self.transformer.transform(doctype)
             return annotation
-        except lark.visitors.VisitError as e:
-            logger.exception("couldn't parse doctype: %r", doctype, exc_info=e.orig_exc)
+        except (lark.exceptions.LexError, lark.exceptions.ParseError) as error:
+            msg = self._format_grammar_error(error=error, doctype=doctype)
+            click.echo(msg)
             return ErrorFallbackAnnotation
-        except Exception:
-            logger.exception("couldn't parse doctype: %r", doctype)
+        except lark.visitors.VisitError as e:
+            logger.exception(
+                "unexpected error parsing doctype %r in %s, falling back to Any",
+                doctype,
+                self.source,
+                exc_info=e.orig_exc,
+            )
             return ErrorFallbackAnnotation
 
     @property

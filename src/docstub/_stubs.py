@@ -191,6 +191,8 @@ class Py2StubTransformer(cst.CSTTransformer):
     inspector : ~._analysis.StaticInspector
     """
 
+    METADATA_DEPENDENCIES = (cst.metadata.PositionProvider,)
+
     # Equivalent to ` ...`, to replace the body of callables with
     _body_replacement = cst.SimpleStatementSuite(
         leading_whitespace=cst.SimpleWhitespace(value=" "),
@@ -240,6 +242,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                 self.inspector.current_source = module_path
 
             source_tree = cst.parse_module(source)
+            source_tree = cst.metadata.MetadataWrapper(source_tree)
             stub_tree = source_tree.visit(self)
             stub = stub_tree.code
             stub = try_format_stub(stub)
@@ -262,7 +265,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         out : Literal[True]
         """
         self._scope_stack.append(_Scope(type=FuncType.CLASS, node=node))
-        pytypes = self._pytypes_from_node(node)
+        pytypes = self._annotations_from_node(node)
         self._pytypes_stack.append(pytypes)
         return True
 
@@ -295,7 +298,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         """
         func_type = self._function_type(node)
         self._scope_stack.append(_Scope(type=func_type, node=node))
-        pytypes = self._pytypes_from_node(node)
+        pytypes = self._annotations_from_node(node)
         self._pytypes_stack.append(pytypes)
         return True
 
@@ -436,7 +439,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         Literal[True]
         """
         self._scope_stack.append(_Scope(type=FuncType.MODULE, node=node))
-        pytypes = self._pytypes_from_node(node)
+        pytypes = self._annotations_from_node(node)
         self._pytypes_stack.append(pytypes)
         return True
 
@@ -551,7 +554,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                     break
         return func_type
 
-    def _pytypes_from_node(self, node):
+    def _annotations_from_node(self, node):
         """Extract types from function, class or module docstrings.
 
         Parameters
@@ -560,15 +563,16 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Returns
         -------
-        pytypes : dict[str, ~._docstrings.PyType]
+        annotations : DocstringAnnotations
         """
-        pytypes = None
+        annotations = None
         docstring = node.get_docstring()
         if docstring:
+            position = self.get_metadata(cst.metadata.PositionProvider, node).start
+            source = f"{self.inspector.current_source}:{position.line}"
             try:
-                pytypes = DocstringAnnotations(
-                    docstring,
-                    transformer=self.transformer,
+                annotations = DocstringAnnotations(
+                    docstring, transformer=self.transformer, source=source
                 )
             except Exception as e:
                 logger.exception(
@@ -576,4 +580,4 @@ class Py2StubTransformer(cst.CSTTransformer):
                     node.name.value,
                     e,
                 )
-        return pytypes
+        return annotations
