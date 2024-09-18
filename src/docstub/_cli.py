@@ -108,8 +108,8 @@ def main(source_dir, out_dir, config_path, verbose):
     )
 
     if not out_dir:
-        out_dir = source_dir.parent
-    out_dir = Path(out_dir) / (source_dir.name + "-stubs")
+        out_dir = source_dir.parent / (source_dir.name + "-stubs")
+    out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for source_path, stub_path in walk_source_and_targets(source_dir, out_dir):
