@@ -17,12 +17,11 @@ from ._version import __version__
 logger = logging.getLogger(__name__)
 
 
-def _find_configuration(source_dir, config_path):
-    """Find and load configuration from multiple possible sources.
+def _load_configuration(config_path=None):
+    """Load and merge configuration from CWD and optional files.
 
     Parameters
     ----------
-    source_dir : Path
     config_path : Path
 
     Returns
@@ -31,13 +30,13 @@ def _find_configuration(source_dir, config_path):
     """
     config = Config.from_toml(Config.DEFAULT_CONFIG_PATH)
 
-    pyproject_toml = source_dir.parent / "pyproject.toml"
+    pyproject_toml = Path.cwd() / "pyproject.toml"
     if pyproject_toml.is_file():
         logger.info("using %s", pyproject_toml)
         add_config = Config.from_toml(pyproject_toml)
         config = config.merge(add_config)
 
-    docstub_toml = source_dir.parent / "docstub.toml"
+    docstub_toml = Path.cwd() / "docstub.toml"
     if docstub_toml.is_file():
         logger.info("using %s", docstub_toml)
         add_config = Config.from_toml(docstub_toml)
@@ -87,7 +86,7 @@ def main(source_dir, out_dir, config_path, verbose):
     _setup_logging(verbose=verbose)
 
     source_dir = Path(source_dir)
-    config = _find_configuration(source_dir, config_path)
+    config = _load_configuration(config_path)
 
     # Build map of known imports
     known_imports = common_known_imports()
