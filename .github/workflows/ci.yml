@@ -72,9 +72,3 @@ jobs:
       - name: Generate docstub stubs
         run: |
           python -m docstub -v src/docstub
-
-      - name: Upload docstub stubs
-        uses: actions/upload-artifact@v4
-        with:
-          name: docstub-stubs
-          path: ./src/docstub-stubs
