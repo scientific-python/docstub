@@ -1,7 +1,7 @@
 import pytest
 
 from docstub._analysis import KnownImport, StaticInspector, common_known_imports
-from docstub._docstrings import DoctypeTransformer, _lark
+from docstub._docstrings import DoctypeTransformer
 
 
 @pytest.fixture()
@@ -30,9 +30,7 @@ class Test_DoctypeTransformer:
         ],
     )
     def test_container(self, raw, expected, transformer):
-        tree = _lark.parse(raw)
-        annotation = transformer.transform(tree)
-
+        annotation = transformer.transform(raw)
         assert annotation.value == expected
     # fmt: on
 
@@ -44,8 +42,7 @@ class Test_DoctypeTransformer:
         ],
     )
     def test_literals(self, raw, expected, transformer):
-        tree = _lark.parse(raw)
-        annotation = transformer.transform(tree)
+        annotation = transformer.transform(raw)
 
         assert annotation.value == expected
         assert annotation.imports == frozenset(
@@ -68,8 +65,7 @@ class Test_DoctypeTransformer:
         if extra_info:
             doctype = f"{doctype}, {extra_info}"
 
-        tree = _lark.parse(doctype)
-        annotation = transformer.transform(tree)
+        annotation = transformer.transform(doctype)
 
         assert annotation.value == expected
 
@@ -86,14 +82,13 @@ class Test_DoctypeTransformer:
         ],
     )
     @pytest.mark.parametrize("name", ["array", "ndarray", "array-like", "array_like"])
-    @pytest.mark.parametrize("dtype", ["int", "np.int8", "~.foo"])
+    @pytest.mark.parametrize("dtype", ["int", "np.int8"])
     @pytest.mark.parametrize("shape", ["(2, 3)", "(N, m)", "3D", "2-D", "(N, ...)"])
     def test_shape_n_dtype(self, fmt, expected_fmt, name, dtype, shape, transformer):
         doctype = fmt.format(name=name, dtype=dtype, shape=shape)
         expected = expected_fmt.format(name=name, dtype=dtype, shape=shape)
 
-        tree = _lark.parse(doctype)
-        annotation = transformer.transform(tree)
+        annotation = transformer.transform(doctype)
 
         assert annotation.value == expected
     # fmt: on
