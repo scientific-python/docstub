@@ -91,5 +91,7 @@ ignore = [
 
 
 [tool.docstub.docnames]
+[tool.coverage]
+run.source = ["src/docstub"]
 cst = {import = "libcst", as="cst"}
 lark = {import = "lark"}

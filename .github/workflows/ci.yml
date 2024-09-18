@@ -60,18 +60,14 @@ jobs:
 
       - name: Run pytest
         run: >-
-          python -m pytest -ra --cov --cov-report=xml --cov-report=term
-          --durations=20
+          python -m pytest --showlocals -ra --cov --cov-report=term
 
-      - name: Upload coverage report
-        uses: codecov/codecov-action@v4.5.0
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+      # TODO upload coverage statistics, and fail on decrease?
 
       - name: Compare example stubs
         run: |
-          python -m docstub -v example/example_pkg
-          git diff --exit-code example/
+          python -m docstub -v examples/example_pkg
+          git diff --exit-code examples/
 
       - name: Generate docstub stubs
         run: |
