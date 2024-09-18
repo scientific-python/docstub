@@ -66,7 +66,7 @@ jobs:
 
       - name: Compare example stubs
         run: |
-          python -m docstub -v examples/example_pkg
+          python -m docstub -v --config=examples/docstub.toml examples/example_pkg
           git diff --exit-code examples/ && echo "Stubs for example_pkg did not change"
 
       - name: Generate docstub stubs
