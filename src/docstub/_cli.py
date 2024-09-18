@@ -17,9 +17,6 @@ from ._version import __version__
 logger = logging.getLogger(__name__)
 
 
-_VERBOSITY_LEVEL = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
-
-
 def _find_configuration(source_dir, config_path):
     """Find and load configuration from multiple possible sources.
 
@@ -54,6 +51,21 @@ def _find_configuration(source_dir, config_path):
     return config
 
 
+def _setup_logging(*, verbose):
+    _VERBOSITY_LEVEL = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
+    verbose = min(2, max(0, verbose))  # Limit to range [0, 2]
+
+    format_ = "%(levelname)s: %(message)s"
+    if verbose >= 2:
+        format_ += " py_source=%(filename)s#L%(lineno)d::%(funcName)s"
+
+    logging.basicConfig(
+        level=_VERBOSITY_LEVEL[verbose],
+        format=format_,
+        stream=sys.stderr,
+    )
+
+
 @click.command()
 @click.version_option(__version__)
 @click.argument("source_dir", type=click.Path(exists=True, file_okay=False))
@@ -72,12 +84,7 @@ def _find_configuration(source_dir, config_path):
 @click.option("-v", "--verbose", count=True, help="Log more details.")
 @click.help_option("-h", "--help")
 def main(source_dir, out_dir, config_path, verbose):
-    verbose = min(2, max(0, verbose))  # Limit to range [0, 2]
-    logging.basicConfig(
-        level=_VERBOSITY_LEVEL[verbose],
-        format="%(levelname)s: %(filename)s#L%(lineno)d::%(funcName)s: %(message)s",
-        stream=sys.stderr,
-    )
+    _setup_logging(verbose=verbose)
 
     source_dir = Path(source_dir)
     config = _find_configuration(source_dir, config_path)
