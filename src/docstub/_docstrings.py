@@ -153,6 +153,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         self._collected_imports = None
         super().__init__(**kwargs)
 
+        self.stats = {"grammar_errors": 0}
+
     def transform(self, doctype):
         """Turn a type description in a docstring into a type annotation.
 
@@ -174,6 +176,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 value=value, imports=frozenset(self._collected_imports)
             )
             return annotation
+        except (lark.exceptions.LexError, lark.exceptions.ParseError):
+            self.stats["grammar_errors"] += 1
+            raise
         finally:
             self._collected_imports = None
 

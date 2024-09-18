@@ -132,3 +132,19 @@ def main(source_dir, out_dir, config_path, verbose):
         with stub_path.open("w") as fo:
             logger.info("wrote %s", stub_path)
             fo.write(stub_content)
+
+    # Report basic statistics
+    successful_queries = inspector.stats["successful_queries"]
+    click.secho(f"{successful_queries} matched annotations", fg="green")
+
+    grammar_errors = stub_transformer.transformer.stats["grammar_errors"]
+    if grammar_errors:
+        click.secho(f"{grammar_errors} grammar violations", fg="red")
+
+    unknown_doctypes = inspector.stats["unknown_doctypes"]
+    if unknown_doctypes:
+        click.secho(f"{len(unknown_doctypes)} unknown doctypes:", fg="red")
+        click.echo("  " + "\n  ".join(set(unknown_doctypes)))
+
+    if unknown_doctypes or grammar_errors:
+        sys.exit(1)

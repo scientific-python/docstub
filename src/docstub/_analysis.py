@@ -341,6 +341,11 @@ class StaticInspector:
 
         self.known_imports = known_imports
 
+        self.stats = {
+            "successful_queries": 0,
+            "unknown_doctypes": [],
+        }
+
     def query(self, search_name):
         """Search for a known annotation name.
 
@@ -413,6 +418,11 @@ class StaticInspector:
             annotation_name = annotation_name[
                 annotation_name.find(known_import.target) :
             ]
+
+        if annotation_name is not None:
+            self.stats["successful_queries"] += 1
+        else:
+            self.stats["unknown_doctypes"].append(search_name)
 
         return annotation_name, known_import
 
