@@ -44,7 +44,7 @@ dev = [
 ]
 test = [
   "pytest >=5.0.0",
-  "coverage >=7.5.0",
+  "pytest-cov >= 5.0.0",
 ]
 
 [project.urls]
@@ -90,6 +90,9 @@ ignore = [
 ]
 
 
-[tool.docstub.docnames]
+[tool.coverage]
+run.source = ["docstub"]
+
+[tool.docstub.known_imports]
 cst = {import = "libcst", as="cst"}
 lark = {import = "lark"}

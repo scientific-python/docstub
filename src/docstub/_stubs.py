@@ -572,7 +572,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Returns
         -------
-        annotations : DocstringAnnotations
+        annotations : ~.DocstringAnnotations
         """
         annotations = None
         docstring = node.get_docstring()

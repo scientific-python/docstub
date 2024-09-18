@@ -20,9 +20,10 @@ pip install 'docstub [optional] @ git+https://github.com/scientific-python/docst
 ## Usage & configuration
 
 ```shell
-docstub example/example_pkg/
+cd examples/
+docstub example_pkg/
 ```
-will create stub files for `example_pkg/` in `example/example_pkg-stubs/`.
+will create stub files for `example_pkg/` in `examples/example_pkg-stubs/`.
 For now, refer to `docstub --help` for more.
 
 
