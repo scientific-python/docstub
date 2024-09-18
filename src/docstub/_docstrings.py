@@ -3,6 +3,7 @@
 import logging
 import textwrap
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 
 import click
@@ -343,7 +344,7 @@ class DocstringAnnotations:
             )
             return ErrorFallbackAnnotation
 
-    @property
+    @cached_property
     def parameters(self) -> dict[str, Annotation]:
         def name_and_type(numpydoc_section):
             name_type = {
@@ -366,7 +367,7 @@ class DocstringAnnotations:
         }
         return annotations
 
-    @property
+    @cached_property
     def returns(self) -> Annotation | None:
         out = [
             self._doctype_to_annotation(param.type)
@@ -376,7 +377,7 @@ class DocstringAnnotations:
         out = Annotation.as_return_tuple(out) if out else None
         return out
 
-    @property
+    @cached_property
     def yields(self) -> Annotation | None:
         out = {
             self._doctype_to_annotation(param.type)
