@@ -149,7 +149,7 @@ def try_format_stub(stub: str) -> str:
     return stub
 
 
-class FuncType(enum.Enum):
+class FuncType(enum.StrEnum):
     MODULE = enum.auto()
     CLASS = enum.auto()
     FUNC = enum.auto()
@@ -526,7 +526,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Parameters
         ----------
-        imports : set[~.DocName]
+        imports : set[~.KnownImport]
         current_module : str, optional
 
         Returns

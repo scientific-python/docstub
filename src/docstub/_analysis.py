@@ -155,7 +155,7 @@ class KnownImport:
             ):
                 raise ValueError("builtin cannot contain import information")
         elif self.import_name is None:
-            raise ValueError("non bultin must at least define an `import_name`")
+            raise ValueError("non builtin must at least define an `import_name`")
 
     def __repr__(self):
         if self.builtin_name:

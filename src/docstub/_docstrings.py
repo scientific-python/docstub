@@ -45,6 +45,8 @@ class Annotation:
 
     def __post_init__(self):
         object.__setattr__(self, "imports", frozenset(self.imports))
+        if "~" in self.value:
+            raise ValueError(f"unexpected '~' in annotation value: {self.value}")
 
     def __str__(self) -> str:
         return self.value
