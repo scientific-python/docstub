@@ -575,13 +575,29 @@ class Py2StubTransformer(cst.CSTTransformer):
         annotations : ~.DocstringAnnotations
         """
         annotations = None
-        docstring = node.get_docstring()
+
+        docstring = node.get_docstring(clean=False)
         if docstring:
-            position = self.get_metadata(cst.metadata.PositionProvider, node).start
-            source = f"{self.inspector.current_source}:{position.line}"
+
+            # Workaround to find the exact postion of a docstring
+            # by using its node
+            string_nodes = cst.matchers.findall(
+                node, cst.matchers.SimpleString() | cst.matchers.ConcatenatedString()
+            )
+            docstring_nodes = [
+                node for node in string_nodes if node.evaluated_value == docstring
+            ]
+            assert len(docstring_nodes) == 1
+            position = self.get_metadata(
+                cst.metadata.PositionProvider, docstring_nodes[0]
+            ).start
+
             try:
                 annotations = DocstringAnnotations(
-                    docstring, transformer=self.transformer, source=source
+                    docstring,
+                    transformer=self.transformer,
+                    source_path=self.inspector.current_source,
+                    source_line=position.line,
                 )
             except Exception as e:
                 logger.exception(

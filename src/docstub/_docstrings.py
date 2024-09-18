@@ -4,6 +4,7 @@ import logging
 import textwrap
 from dataclasses import dataclass, field
 from functools import cached_property
+from itertools import chain
 from pathlib import Path
 
 import click
@@ -303,22 +304,24 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
 
 class DocstringAnnotations:
-    def __init__(self, docstring, *, transformer, source=None):
+    def __init__(self, docstring, *, transformer, source_path=None, source_line=None):
         self.docstring = docstring
         self.np_docstring = NumpyDocString(docstring)
         self.transformer = transformer
-        self.source = source
+        self.source_path = source_path
+        self.source_line = source_line
 
-    def _format_grammar_error(self, error, doctype):
+    def _format_grammar_error(self, error, doctype, ds_line):
         msg = "doctype doesn't conform to grammar"
+        source = f"{self.source_path}:{self.source_line + ds_line}"
         details = doctype
         if hasattr(error, "get_context"):
             details = error.get_context(doctype)
         details = textwrap.indent(details, prefix="  ")
-        out = f"{click.style(self.source, bold=True)} {msg}\n{details}"
+        out = f"{click.style(source, bold=True)} {msg}\n{details}"
         return out
 
-    def _doctype_to_annotation(self, doctype):
+    def _doctype_to_annotation(self, doctype, ds_line=0):
         """Convert a type description to a Python-ready type.
 
         Parameters
@@ -326,8 +329,8 @@ class DocstringAnnotations:
         doctype : str
             The type description of a parameter or return value, as extracted from
             a docstring.
-        inspector : docstub._analysis.StaticInspector
-        replace_doctypes : dict[str, str]
+        ds_line : int, optional
+            The line number relative to the docstring.
 
         Returns
         -------
@@ -335,11 +338,14 @@ class DocstringAnnotations:
             The transformed type, ready to be inserted into a stub file, with
             necessary imports attached.
         """
+
         try:
             annotation = self.transformer.transform(doctype)
             return annotation
         except (lark.exceptions.LexError, lark.exceptions.ParseError) as error:
-            msg = self._format_grammar_error(error=error, doctype=doctype)
+            msg = self._format_grammar_error(
+                error=error, doctype=doctype, ds_line=ds_line
+            )
             click.echo(msg)
             return ErrorFallbackAnnotation
         except lark.visitors.VisitError as e:
@@ -353,43 +359,77 @@ class DocstringAnnotations:
 
     @cached_property
     def parameters(self) -> dict[str, Annotation]:
-        def name_and_type(numpydoc_section):
-            name_type = {
-                param.name: param.type
-                for param in self.np_docstring[numpydoc_section]
-                if param.type
-            }
-            return name_type
+        all_params = chain(
+            self.np_docstring["Parameters"], self.np_docstring["Other Parameters"]
+        )
+        annotated_params = {}
+        for param in all_params:
+            if not param.type:
+                continue
 
-        params = name_and_type("Parameters")
-        other = name_and_type("Other Parameters")
+            ds_line = 0
+            for i, line in enumerate(self.docstring.split("\n")):
+                if param.name in line and param.type in line:
+                    ds_line = i
+                    break
 
-        duplicate_params = params.keys() & other.keys()
-        if duplicate_params:
-            raise ValueError(f"{duplicate_params=}")
-        params.update(other)
+            if param.name in annotated_params:
+                logger.warning("duplicate parameter name %r, ignoring", param.name)
+                continue
 
-        annotations = {
-            name: self._doctype_to_annotation(type_) for name, type_ in params.items()
-        }
-        return annotations
+            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
+            annotated_params[param.name] = annotation
+
+        return annotated_params
 
     @cached_property
     def returns(self) -> Annotation | None:
-        out = [
-            self._doctype_to_annotation(param.type)
-            for param in self.np_docstring["Returns"]
-            if param.type
-        ]
-        out = Annotation.as_return_tuple(out) if out else None
+        annotated_params = {}
+        for param in self.np_docstring["Returns"]:
+            if not param.type:
+                continue
+
+            ds_line = 0
+            for i, line in enumerate(self.docstring.split("\n")):
+                if param.name in line and param.type in line:
+                    ds_line = i
+                    break
+
+            if param.name in annotated_params:
+                logger.warning("duplicate parameter name %r, ignoring", param.name)
+                continue
+
+            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
+            annotated_params[param.name] = annotation
+
+        if annotated_params:
+            out = Annotation.as_return_tuple(annotated_params.values())
+        else:
+            out = None
         return out
 
     @cached_property
     def yields(self) -> Annotation | None:
-        out = {
-            self._doctype_to_annotation(param.type)
-            for param in self.np_docstring["Yields"]
-            if param.type
-        }
-        out = Annotation.as_return_tuple(out) if out else None
+        annotated_params = {}
+        for param in self.np_docstring["Yields"]:
+            if not param.type:
+                continue
+
+            ds_line = 0
+            for i, line in enumerate(self.docstring.split("\n")):
+                if param.name in line and param.type in line:
+                    ds_line = i
+                    break
+
+            if param.name in annotated_params:
+                logger.warning("duplicate parameter name %r, ignoring", param.name)
+                continue
+
+            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
+            annotated_params[param.name] = annotation
+
+        if annotated_params:
+            out = Annotation.as_return_tuple(annotated_params.values())
+        else:
+            out = None
         return out
