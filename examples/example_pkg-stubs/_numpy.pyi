@@ -1,3 +1,4 @@
+# Generated with docstub. Manual edits will be overwritten!
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 

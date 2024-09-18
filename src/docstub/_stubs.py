@@ -193,6 +193,12 @@ class Py2StubTransformer(cst.CSTTransformer):
 
     METADATA_DEPENDENCIES = (cst.metadata.PositionProvider,)
 
+    _docstub_generated_comment = cst.EmptyLine(
+        comment=cst.Comment(
+            "# Generated with docstub. Manual edits will be overwritten!"
+        ),
+    )
+
     # Equivalent to ` ...`, to replace the body of callables with
     _body_replacement = cst.SimpleStatementSuite(
         leading_whitespace=cst.SimpleWhitespace(value=" "),
@@ -462,7 +468,10 @@ class Py2StubTransformer(cst.CSTTransformer):
         import_nodes = self._parse_imports(
             required_imports, current_module=current_module
         )
-        updated_node = updated_node.with_changes(body=import_nodes + updated_node.body)
+        updated_node = updated_node.with_changes(
+            header=[self._docstub_generated_comment],
+            body=import_nodes + updated_node.body,
+        )
         self._scope_stack.pop()
         self._pytypes_stack.pop()
         return updated_node

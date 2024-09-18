@@ -1,3 +1,5 @@
+# Generated with docstub. Manual edits will be overwritten!
+
 import _numpy as np_
 from _basic import func_contains
 
