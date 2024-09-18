@@ -362,12 +362,12 @@ class StaticInspector:
             # Sphinx like matching with abbreviated name
             pattern = search_name.replace(".", r"\.")
             pattern = pattern.replace("~", ".*")
-            pattern = re.compile(pattern + "$")
+            regex = re.compile(pattern + "$")
             # Might be slow, but works for now
             matches = {
                 key: value
                 for key, value in self.known_imports.items()
-                if re.match(pattern, key)
+                if regex.match(key)
             }
             if len(matches) > 1:
                 shortest_key = sorted(matches.keys(), key=lambda x: len(x))[0]
@@ -383,6 +383,7 @@ class StaticInspector:
             elif len(matches) == 1:
                 annotation_name, known_import = matches.popitem()
             else:
+                search_name = search_name[2:]
                 logger.debug(
                     "couldn't match %r in %s", search_name, self.current_source
                 )
@@ -391,7 +392,8 @@ class StaticInspector:
             # Try scope of current module
             try_qualname = f"{self.current_source.import_path}.{search_name}"
             known_import = self.known_imports.get(try_qualname)
-            annotation_name = search_name
+            if known_import:
+                annotation_name = search_name
 
         if known_import is None:
             # Try a subset of the qualname (first 'a.b.c', then 'a.b' and 'a')
