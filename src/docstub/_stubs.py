@@ -183,6 +183,40 @@ class _Scope:
         return out
 
 
+def _get_docstring_node(node):
+    """Extract the node with the docstring from a definition.
+
+    Unfortunately, libcst's builtin `get_docstring` returns the value of the
+    docstring itself and not the wrapping node. In order to extract the
+    position of the docstring we need the node itself.
+
+    Parameters
+    ----------
+    node : cst.FunctionDef | cst.ClassDef | cst.Module
+
+    Returns
+    -------
+    docstring_node :  cst.SimpleString | cst.ConcatenatedString | None
+        The node of the docstring if found.
+    """
+    docstring_node = None
+
+    docstring = node.get_docstring(clean=False)
+    if docstring:
+        # Workaround to find the exact postion of a docstring
+        # by using its node
+        string_nodes = cstm.findall(
+            node, cstm.SimpleString() | cstm.ConcatenatedString()
+        )
+        matching_nodes = [
+            node for node in string_nodes if node.evaluated_value == docstring
+        ]
+        assert len(matching_nodes) == 1
+        docstring_node = matching_nodes[0]
+
+    return docstring_node
+
+
 class Py2StubTransformer(cst.CSTTransformer):
     """Transform syntax tree of a Python file into the tree of a stub file.
 
@@ -576,25 +610,15 @@ class Py2StubTransformer(cst.CSTTransformer):
         """
         annotations = None
 
-        docstring = node.get_docstring(clean=False)
-        if docstring:
-
-            # Workaround to find the exact postion of a docstring
-            # by using its node
-            string_nodes = cst.matchers.findall(
-                node, cst.matchers.SimpleString() | cst.matchers.ConcatenatedString()
-            )
-            docstring_nodes = [
-                node for node in string_nodes if node.evaluated_value == docstring
-            ]
-            assert len(docstring_nodes) == 1
+        docstring_node = _get_docstring_node(node)
+        if docstring_node:
             position = self.get_metadata(
-                cst.metadata.PositionProvider, docstring_nodes[0]
+                cst.metadata.PositionProvider, docstring_node
             ).start
 
             try:
                 annotations = DocstringAnnotations(
-                    docstring,
+                    docstring_node.evaluated_value,
                     transformer=self.transformer,
                     source_path=self.inspector.current_source,
                     source_line=position.line,
