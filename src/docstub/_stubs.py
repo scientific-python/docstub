@@ -9,6 +9,7 @@ import libcst as cst
 import libcst.matchers as cstm
 
 from ._docstrings import DocstringAnnotations, DoctypeTransformer
+from ._utils import ContextFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -616,12 +617,14 @@ class Py2StubTransformer(cst.CSTTransformer):
                 cst.metadata.PositionProvider, docstring_node
             ).start
 
+            ctx = ContextFormatter(
+                path=Path(self.inspector.current_source), line=position.line
+            )
             try:
                 annotations = DocstringAnnotations(
                     docstring_node.evaluated_value,
                     transformer=self.transformer,
-                    source_path=self.inspector.current_source,
-                    source_line=position.line,
+                    ctx=ctx,
                 )
             except Exception as e:
                 logger.exception(

@@ -1,5 +1,6 @@
 ?start : annotation
 
+// ----------------------------------------------------------------------------
 annotation : types_or ("," optional)? ("," extra_info)?
 
 ?types_or : type (("or" | "|") type)*
@@ -18,24 +19,28 @@ extra_info : /[^\r\n]+/
 sphinx_ref : ":" (NAME ":")? NAME ":`" qualname "`"
 
 container: qualname "[" types_or ("," types_or)* ("," PY_ELLIPSES)? "]"
-         | qualname "of" type
+         | qualname "of" type   // TODO allow plural somehow, e.g. "list of int(s)"?
          | qualname "of" "(" types_or ("," types_or)* ("," PY_ELLIPSES)? ")"
          | qualname "of" "{" types_or ":" types_or "}"
 
 // Name with leading dot separated path
 qualname : (/~/ ".")? (NAME ".")* NAME
 
+
+// ----------------------------------------------------------------------------
 // Array-like form with dtype or shape information
-shape_n_dtype : shape? ARRAY_NAME ("of" dtype)?
-              | shape? ARRAY_NAME "of" dtype
-              | shape dtype ARRAY_NAME
-              | dtype ARRAY_NAME
-              | ARRAY_NAME "of shape" shape ("and dtype" dtype)?
-              | ARRAY_NAME "of dtype" dtype ("and shape" shape)?
-ARRAY_NAME : "array"
-           | "ndarray"
-           | "array-like"
-           | "array_like"
+
+shape_n_dtype : shape? array_name ("of" dtype)?
+              | shape? array_name "of" dtype
+              | shape dtype array_name
+              | dtype array_name
+              | array_name "of shape" shape ("and dtype" dtype)?
+              | array_name "of dtype" dtype ("and shape" shape)?
+// Use rule and terminal to capture the array name and its context
+// TODO figure out way not to leak implementation here
+array_name : ARRAY_NAME
+ARRAY_NAME : "array" | "ndarray" | "array-like" | "array_like"
+
 dtype : qualname
 shape : "(" dim ",)"
       | "(" leading_optional? dim (("," dim | insert_optional))* ")"
@@ -47,6 +52,7 @@ insert_optional : "[," dim ("," dim)* "]"
      | NAME
 
 
+// ----------------------------------------------------------------------------
 // Python
 literals : "{" literal ("," literal)* "}"
 
@@ -59,6 +65,8 @@ PY_ELLIPSES : "..."
 
 NAME: /[^\W\d][\w-]*/
 
+
+// ----------------------------------------------------------------------------
 // imports
 %import python (STRING)
 %import common (NEWLINE, NUMBER, LETTER, TEXT, WS)
