@@ -626,6 +626,8 @@ class Py2StubTransformer(cst.CSTTransformer):
                     transformer=self.transformer,
                     ctx=ctx,
                 )
+            except (SystemExit, KeyboardInterrupt):
+                raise
             except Exception as e:
                 logger.exception(
                     "error while parsing docstring of `%s`:\n\n%s",
