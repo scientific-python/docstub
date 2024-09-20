@@ -59,7 +59,7 @@ write_to = "src/docstub/_version.py"
 
 
 [tool.ruff]
-src = ["src"]
+src = ["src", "tests"]
 
 [tool.ruff.lint]
 extend-select = [
@@ -87,6 +87,14 @@ ignore = [
   "ISC001",   # Conflicts with formatter
   "RET504",   # Assignment before `return` statement facilitates debugging
   "PTH123",   # Using builtin open() instead of Path.open() is fine
+]
+
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+testpaths = [
+    "src",
+    "tests",
 ]
 
 
