@@ -10,6 +10,16 @@ import click
 def accumulate_qualname(qualname, *, start_right=False):
     """Return possible partial names from a fully qualified one.
 
+    Parameters
+    ----------
+    qualname : str
+        A fully qualified name, possibliy delimited by ".".
+    start_right : bool, optional
+        By default, dot-delimited names in `qualname` are accumulated by starting with
+        the first name and then appending following names successively. If true instead,
+        the accumulation happens in reverse order: the last name is prepended with
+        previous names successively.
+
     Examples
     --------
     >>> accumulate_qualname("a.b.c")
