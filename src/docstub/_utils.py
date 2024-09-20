@@ -39,8 +39,17 @@ def escape_qualname(name):
     Returns
     -------
     qualname : str
+
+    Examples
+    --------
+    >>> escape_qualname("np.int8")
+    'np_int8'
+    >>> escape_qualname("array-like")
+    'array_like'
+    >>> escape_qualname("# comment (with braces)")
+    '_comment_with_braces_'
     """
-    qualname = re.sub(r"\W|^(?=\d)", "_", name)
+    qualname = re.sub(r"\W+|^(?=\d)", "_", name)
     return qualname
 
 
