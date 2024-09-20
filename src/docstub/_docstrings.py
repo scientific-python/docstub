@@ -117,13 +117,12 @@ class Annotation:
 
 
 GrammarErrorFallback = Annotation(
-    value="_GrammarError_",
+    value="Any",
     imports=frozenset(
         (
             KnownImport(
                 import_name="Any",
                 import_path="typing",
-                import_alias="_GrammarError_",
             ),
         )
     ),
@@ -181,7 +180,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         annotation : Annotation
             The parsed annotation.
-        unknown_qualnames : set[tuple[str, int, int]]
+        unknown_qualnames : list[tuple[str, int, int]]
             A set containing tuples. Each tuple contains a qualname, its start and its
             end index relative to the given `doctype`.
         """
