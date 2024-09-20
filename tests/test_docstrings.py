@@ -1,12 +1,13 @@
 import pytest
 
+from docstub._analysis import KnownImport
 from docstub._docstrings import DoctypeTransformer
 
 
 class Test_DoctypeTransformer:
     # fmt: off
     @pytest.mark.parametrize(
-        ("raw", "expected"),
+        ("doctype", "expected"),
         [
             ("list[float]", "list[float]"),
             ("dict[str, Union[int, str]]", "dict[str, Union[int, str]]"),
@@ -21,26 +22,26 @@ class Test_DoctypeTransformer:
             ("dict of {str: int}", "dict[str, int]"),
         ],
     )
-    def test_container(self, raw, expected):
+    def test_container(self, doctype, expected):
         transformer = DoctypeTransformer()
-        annotation, _ = transformer.doctype_to_annotation(raw)
+        annotation, _ = transformer.doctype_to_annotation(doctype)
         assert annotation.value == expected
     # fmt: on
 
     @pytest.mark.parametrize(
-        ("raw", "expected"),
+        ("doctype", "expected"),
         [
             ("{'a', 1, None, False}", "Literal['a', 1, None, False]"),
             ("dict[{'a', 'b'}, int]", "dict[Literal['a', 'b'], int]"),
         ],
     )
-    def test_literals(self, raw, expected):
+    def test_literals(self, doctype, expected):
         transformer = DoctypeTransformer()
-        annotation, _ = transformer.doctype_to_annotation(raw)
+        annotation, _ = transformer.doctype_to_annotation(doctype)
         assert annotation.value == expected
 
     @pytest.mark.parametrize(
-        ("raw", "expected"),
+        ("doctype", "expected"),
         [
             ("int, optional", "int | None"),
             # None isn't appended, since the type should cover the default
@@ -50,8 +51,7 @@ class Test_DoctypeTransformer:
         ],
     )
     @pytest.mark.parametrize("extra_info", [None, "int", ", extra, info"])
-    def test_optional_extra_info(self, raw, expected, extra_info):
-        doctype = raw
+    def test_optional_extra_info(self, doctype, expected, extra_info):
         if extra_info:
             doctype = f"{doctype}, {extra_info}"
         transformer = DoctypeTransformer()
@@ -88,3 +88,34 @@ class Test_DoctypeTransformer:
 
         assert annotation.value == expected
     # fmt: on
+
+    def test_unknown_name(self):
+        # Simple unknown name is aliased to typing.Any
+        transformer = DoctypeTransformer()
+        annotation, unknown_names = transformer.doctype_to_annotation("a")
+        assert annotation.value == "a"
+        assert annotation.imports == {
+            KnownImport(import_name="Any", import_path="typing", import_alias="a")
+        }
+        assert unknown_names == [("a", 0, 1)]
+
+    def test_unknown_qualname(self):
+        # Unknown qualified name is escaped and aliased to typing.Any as well
+        transformer = DoctypeTransformer()
+        annotation, unknown_names = transformer.doctype_to_annotation("a.b")
+        assert annotation.value == "a_b"
+        assert annotation.imports == {
+            KnownImport(import_name="Any", import_path="typing", import_alias="a_b")
+        }
+        assert unknown_names == [("a.b", 0, 3)]
+
+    def test_multiple_unknown_names(self):
+        # Multiple names are aliased to typing.Any
+        transformer = DoctypeTransformer()
+        annotation, unknown_names = transformer.doctype_to_annotation("a.b of c")
+        assert annotation.value == "a_b[c]"
+        assert annotation.imports == {
+            KnownImport(import_name="Any", import_path="typing", import_alias="a_b"),
+            KnownImport(import_name="Any", import_path="typing", import_alias="c"),
+        }
+        assert unknown_names == [("a.b", 0, 3), ("c", 7, 8)]
