@@ -30,8 +30,9 @@ class Test_DoctypeTransformer:
         ],
     )
     def test_container(self, raw, expected, transformer):
-        annotation = transformer.transform(raw)
+        annotation, unknown_names = transformer.doctype_to_annotation(raw)
         assert annotation.value == expected
+        assert len(unknown_names) == 0
     # fmt: on
 
     @pytest.mark.parametrize(
@@ -42,9 +43,10 @@ class Test_DoctypeTransformer:
         ],
     )
     def test_literals(self, raw, expected, transformer):
-        annotation = transformer.transform(raw)
+        annotation, unknown_names = transformer.doctype_to_annotation(raw)
 
         assert annotation.value == expected
+        assert len(unknown_names) == 0
         assert annotation.imports == frozenset(
             {KnownImport(import_path="typing", import_name="Literal")}
         )
@@ -65,9 +67,10 @@ class Test_DoctypeTransformer:
         if extra_info:
             doctype = f"{doctype}, {extra_info}"
 
-        annotation = transformer.transform(doctype)
+        annotation, unknown_names = transformer.doctype_to_annotation(doctype)
 
         assert annotation.value == expected
+        assert len(unknown_names) == 0
 
     # fmt: off
     @pytest.mark.parametrize(
@@ -85,10 +88,17 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize("dtype", ["int", "np.int8"])
     @pytest.mark.parametrize("shape", ["(2, 3)", "(N, m)", "3D", "2-D", "(N, ...)"])
     def test_shape_n_dtype(self, fmt, expected_fmt, name, dtype, shape, transformer):
-        doctype = fmt.format(name=name, dtype=dtype, shape=shape)
-        expected = expected_fmt.format(name=name, dtype=dtype, shape=shape)
 
-        annotation = transformer.transform(doctype)
+        def escape(name):
+            return name.replace("-", "_").replace(".", "_")
+
+        doctype = fmt.format(name=name, dtype=dtype, shape=shape)
+        expected = expected_fmt.format(
+            name=escape(name), dtype=escape(dtype), shape=shape
+        )
+
+        annotation, unknown_names = transformer.doctype_to_annotation(doctype)
 
         assert annotation.value == expected
+        assert len(unknown_names) >= 1
     # fmt: on
