@@ -132,19 +132,33 @@ GrammarErrorFallback = Annotation(
 
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
-    """Transformer for docstring type descriptions (doctypes)."""
+    """Transformer for docstring type descriptions (doctypes).
 
-    def __init__(self, *, inspector, replace_doctypes, **kwargs):
+    Examples
+    --------
+    >>> transformer = DoctypeTransformer()
+    >>> annotation, unknown_names = transformer.doctype_to_annotation("tuple of int")
+    >>> annotation.value
+    'tuple[int]'
+    >>> unknown_names
+    [('tuple', 0, 5), ('int', 9, 12)]
+    """
+
+    def __init__(self, *, inspector=None, replace_doctypes=None, **kwargs):
         """
         Parameters
         ----------
         inspector : ~.StaticInspector
             A dictionary mapping atomic names used in doctypes to information such
             as where to import from or how to replace the name itself.
-        replace_doctypes : dict[str, str]
-        kwargs : dict[Any, Any]
+        replace_doctypes : dict[str, str], optional
+            Replacements for human-friendly aliases.
+        kwargs : dict[Any, Any], optional
             Keyword arguments passed to the init of the parent class.
         """
+        if replace_doctypes is None:
+            replace_doctypes = {}
+
         self.inspector = inspector
         self.replace_doctypes = replace_doctypes
 
@@ -173,7 +187,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         try:
             self._collected_imports = set()
-            self._unknown_qualnames = set()
+            self._unknown_qualnames = []
             tree = _lark.parse(doctype)
             value = super().transform(tree=tree)
             annotation = Annotation(
@@ -281,21 +295,28 @@ class DoctypeTransformer(lark.visitors.Transformer):
     def literals(self, tree):
         out = ", ".join(tree.children)
         out = f"Literal[{out}]"
-        _, known_import = self.inspector.query("Literal")
-        if known_import:
-            self._collected_imports.add(known_import)
+        if self.inspector is not None:
+            _, known_import = self.inspector.query("Literal")
+            if known_import:
+                self._collected_imports.add(known_import)
         return out
 
     def _find_import(self, qualname, meta):
         """Match type names to known imports."""
-        annotation_name, known_import = self.inspector.query(qualname)
+        if self.inspector is not None:
+            annotation_name, known_import = self.inspector.query(qualname)
+        else:
+            annotation_name = None
+            known_import = None
+
         if known_import and known_import.has_import:
             self._collected_imports.add(known_import)
+
         if annotation_name:
             qualname = annotation_name
         else:
             # Unknown qualname, alias to `Any` and make visible
-            self._unknown_qualnames.add((qualname, meta.start_pos, meta.end_pos))
+            self._unknown_qualnames.append((qualname, meta.start_pos, meta.end_pos))
             qualname = escape_qualname(qualname)
             any_alias = KnownImport(
                 import_name="Any",

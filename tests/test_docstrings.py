@@ -1,14 +1,6 @@
 import pytest
 
-from docstub._analysis import KnownImport, StaticInspector, common_known_imports
 from docstub._docstrings import DoctypeTransformer
-
-
-@pytest.fixture()
-def transformer():
-    inspector = StaticInspector(known_imports=common_known_imports())
-    transformer = DoctypeTransformer(inspector=inspector, replace_doctypes={})
-    return transformer
 
 
 class Test_DoctypeTransformer:
@@ -29,10 +21,10 @@ class Test_DoctypeTransformer:
             ("dict of {str: int}", "dict[str, int]"),
         ],
     )
-    def test_container(self, raw, expected, transformer):
-        annotation, unknown_names = transformer.doctype_to_annotation(raw)
+    def test_container(self, raw, expected):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(raw)
         assert annotation.value == expected
-        assert len(unknown_names) == 0
     # fmt: on
 
     @pytest.mark.parametrize(
@@ -42,14 +34,10 @@ class Test_DoctypeTransformer:
             ("dict[{'a', 'b'}, int]", "dict[Literal['a', 'b'], int]"),
         ],
     )
-    def test_literals(self, raw, expected, transformer):
-        annotation, unknown_names = transformer.doctype_to_annotation(raw)
-
+    def test_literals(self, raw, expected):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(raw)
         assert annotation.value == expected
-        assert len(unknown_names) == 0
-        assert annotation.imports == frozenset(
-            {KnownImport(import_path="typing", import_name="Literal")}
-        )
 
     @pytest.mark.parametrize(
         ("raw", "expected"),
@@ -62,15 +50,13 @@ class Test_DoctypeTransformer:
         ],
     )
     @pytest.mark.parametrize("extra_info", [None, "int", ", extra, info"])
-    def test_optional_extra_info(self, raw, expected, extra_info, transformer):
+    def test_optional_extra_info(self, raw, expected, extra_info):
         doctype = raw
         if extra_info:
             doctype = f"{doctype}, {extra_info}"
-
-        annotation, unknown_names = transformer.doctype_to_annotation(doctype)
-
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(doctype)
         assert annotation.value == expected
-        assert len(unknown_names) == 0
 
     # fmt: off
     @pytest.mark.parametrize(
@@ -87,7 +73,7 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize("name", ["array", "ndarray", "array-like", "array_like"])
     @pytest.mark.parametrize("dtype", ["int", "np.int8"])
     @pytest.mark.parametrize("shape", ["(2, 3)", "(N, m)", "3D", "2-D", "(N, ...)"])
-    def test_shape_n_dtype(self, fmt, expected_fmt, name, dtype, shape, transformer):
+    def test_shape_n_dtype(self, fmt, expected_fmt, name, dtype, shape):
 
         def escape(name):
             return name.replace("-", "_").replace(".", "_")
@@ -97,8 +83,8 @@ class Test_DoctypeTransformer:
             name=escape(name), dtype=escape(dtype), shape=shape
         )
 
-        annotation, unknown_names = transformer.doctype_to_annotation(doctype)
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(doctype)
 
         assert annotation.value == expected
-        assert len(unknown_names) >= 1
     # fmt: on

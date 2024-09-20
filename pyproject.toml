@@ -87,6 +87,7 @@ ignore = [
   "ISC001",   # Conflicts with formatter
   "RET504",   # Assignment before `return` statement facilitates debugging
   "PTH123",   # Using builtin open() instead of Path.open() is fine
+  "SIM108",   # Terniary operator is always more readable
 ]
 
 
