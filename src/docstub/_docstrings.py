@@ -154,7 +154,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         self.stats = {"grammar_errors": 0}
 
-    def transform(self, doctype):
+    def doctype_to_annotation(self, doctype):
         """Turn a type description in a docstring into a type annotation.
 
         Parameters
@@ -335,7 +335,9 @@ class DocstringAnnotations:
         ctx = self._ctx.with_line(offset=ds_line)
 
         try:
-            annotation, unknown_qualnames = self.transformer.transform(doctype)
+            annotation, unknown_qualnames = self.transformer.doctype_to_annotation(
+                doctype
+            )
 
         except (lark.exceptions.LexError, lark.exceptions.ParseError) as error:
             details = None
