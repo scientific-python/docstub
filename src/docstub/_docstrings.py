@@ -7,6 +7,7 @@ from functools import cached_property
 from itertools import chain
 from pathlib import Path
 
+import click
 import lark
 import lark.visitors
 from numpydoc.docscrape import NumpyDocString
@@ -343,7 +344,8 @@ class DocstringAnnotations:
             details = None
             if hasattr(error, "get_context"):
                 details = error.get_context(doctype)
-            ctx.print_message("doctype doesn't conform to grammar", details=details)
+                details = details.replace("^", click.style("^", fg="red", bold=True))
+            ctx.print_message("invalid syntax in doctype", details=details)
             return GrammarErrorFallback
 
         except lark.visitors.VisitError as e:
@@ -355,7 +357,8 @@ class DocstringAnnotations:
         else:
             for name, start_col, stop_col in unknown_qualnames:
                 width = stop_col - start_col
-                details = f"{doctype}\n{' ' * start_col}{'^' * width}\n"
+                error_underline = click.style("^" * width, fg="red", bold=True)
+                details = f"{doctype}\n{' ' * start_col}{error_underline}\n"
                 ctx.print_message(f"unknown name in doctype: {name!r}", details=details)
             return annotation
 
