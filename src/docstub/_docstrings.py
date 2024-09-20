@@ -296,7 +296,6 @@ class DoctypeTransformer(lark.visitors.Transformer):
             # Unknown qualname, alias to `Any` and make visible
             self._unknown_qualnames.add((qualname, meta.start_pos, meta.end_pos))
             qualname = escape_qualname(qualname)
-            qualname = f"_UnknownName_{qualname}_"
             any_alias = KnownImport(
                 import_name="Any",
                 import_path="typing",
@@ -314,7 +313,6 @@ class DocstringAnnotations:
 
         if ctx is None:
             ctx = ContextFormatter()
-
         self._ctx: ContextFormatter = ctx
 
     def _doctype_to_annotation(self, doctype, ds_line=0):
