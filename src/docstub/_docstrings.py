@@ -353,10 +353,10 @@ class DocstringAnnotations:
             return GrammarErrorFallback
 
         else:
-            for _, start_col, stop_col in unknown_qualnames:
+            for name, start_col, stop_col in unknown_qualnames:
                 width = stop_col - start_col
                 details = f"{doctype}\n{' ' * start_col}{'^' * width}\n"
-                ctx.print_message("unknown name in doctype", details=details)
+                ctx.print_message(f"unknown name in doctype: {name!r}", details=details)
             return annotation
 
     @cached_property
