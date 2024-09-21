@@ -1,7 +1,9 @@
+from textwrap import dedent
+
 import pytest
 
 from docstub._analysis import KnownImport
-from docstub._docstrings import DoctypeTransformer
+from docstub._docstrings import DocstringAnnotations, DoctypeTransformer
 
 
 class Test_DoctypeTransformer:
@@ -119,3 +121,82 @@ class Test_DoctypeTransformer:
             KnownImport(import_name="Any", import_path="typing", import_alias="c"),
         }
         assert unknown_names == [("a.b", 0, 3), ("c", 7, 8)]
+
+
+class Test_DocstringAnnotations:
+
+    def test_empty_docstring(self):
+        docstring = dedent("""No sections in this docstring.""")
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.parameters == {}
+        assert annotations.returns is None
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("bool", "bool"),
+            ("str, extra information", "str"),
+            ("list of int, optional", "list[int] | None"),
+        ],
+    )
+    def test_parameters(self, doctype, expected):
+        docstring = dedent(
+            f"""
+        Parameters
+        ----------
+        a : {doctype}
+        b :
+        """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert len(annotations.parameters) == 1
+        assert annotations.parameters["a"].value == expected
+
+    @pytest.mark.parametrize(
+        ("doctypes", "expected"),
+        [
+            (["bool", "int | None"], "tuple[bool, int | None]"),
+            (["tuple of int", "tuple[int, ...]"], "tuple[tuple[int], tuple[int, ...]]"),
+        ],
+    )
+    def test_returns(self, doctypes, expected):
+        docstring = dedent(
+            """
+        Returns
+        -------
+        a : {}
+        b : {}
+        """
+        ).format(*doctypes)
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns.value == expected
+
+    def test_duplicate_parameters(self, caplog):
+        docstring = dedent(
+            """
+        Parameters
+        ----------
+        a : int
+        a : str
+        """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert len(annotations.parameters) == 1
+        assert annotations.parameters["a"].value == "int"
+
+    def test_duplicate_returns(self, caplog):
+        docstring = dedent(
+            """
+        Returns
+        -------
+        a : int
+        a : str
+        """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns.value == "int"
