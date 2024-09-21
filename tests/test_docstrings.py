@@ -88,6 +88,20 @@ class Test_DoctypeTransformer:
         annotation, _ = transformer.doctype_to_annotation(doctype)
         assert annotation.value == expected
 
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("`Generator`", "Generator"),
+            (":class:`Generator`", "Generator"),
+            (":py:class:`Generator`", "Generator"),
+            ("list[:py:class:`Generator`]", "list[Generator]"),
+        ],
+    )
+    def test_sphinx_ref(self, doctype, expected):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(doctype)
+        assert annotation.value == expected
+
     # fmt: off
     @pytest.mark.parametrize(
         ("fmt", "expected_fmt"),

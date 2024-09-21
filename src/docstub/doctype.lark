@@ -16,7 +16,7 @@ optional : "optional"
 
 extra_info : /[^\r\n]+/
 
-sphinx_ref : ":" (NAME ":")? NAME ":`" qualname "`"
+sphinx_ref : (":" (NAME ":")? NAME ":")? "`" qualname "`"
 
 container: qualname "[" types_or ("," types_or)* ("," PY_ELLIPSES)? "]"
          | qualname "of" type   // TODO allow plural somehow, e.g. "list of int(s)"?
