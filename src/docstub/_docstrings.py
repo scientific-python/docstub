@@ -1,9 +1,10 @@
 """Transform types defined in docstrings to Python parsable types."""
 
 import logging
-import textwrap
+import traceback
 from dataclasses import dataclass, field
 from functools import cached_property
+from itertools import chain
 from pathlib import Path
 
 import click
@@ -12,7 +13,7 @@ import lark.visitors
 from numpydoc.docscrape import NumpyDocString
 
 from ._analysis import KnownImport
-from ._utils import accumulate_qualname
+from ._utils import ContextFormatter, accumulate_qualname, escape_qualname
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ grammar_path = here / "doctype.lark"
 with grammar_path.open() as file:
     _grammar = file.read()
 
-_lark = lark.Lark(_grammar)
+_lark = lark.Lark(_grammar, propagate_positions=True)
 
 
 def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token:
@@ -69,7 +70,7 @@ class Annotation:
             The concatenated types.
         """
         values, imports = cls._aggregate_annotations(*return_types)
-        value = " , ".join(values)
+        value = ", ".join(values)
         if len(values) > 1:
             value = f"tuple[{value}]"
         concatenated = cls(value=value, imports=imports)
@@ -115,47 +116,59 @@ class Annotation:
         return values, imports
 
 
-ErrorFallbackAnnotation = Annotation(
-    value="ErrorFallback",
+GrammarErrorFallback = Annotation(
+    value="Any",
     imports=frozenset(
         (
             KnownImport(
                 import_name="Any",
                 import_path="typing",
-                import_alias="ErrorFallback",
             ),
         )
     ),
 )
 
 
-class KnownName(lark.Token):
-    """Wrapper token signaling that a type name was matched to a known import."""
-
-
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
-    """Transformer for docstring type descriptions (doctypes)."""
+    """Transformer for docstring type descriptions (doctypes).
 
-    def __init__(self, *, inspector, replace_doctypes, **kwargs):
+    Examples
+    --------
+    >>> transformer = DoctypeTransformer()
+    >>> annotation, unknown_names = transformer.doctype_to_annotation("tuple of int")
+    >>> annotation.value
+    'tuple[int]'
+    >>> unknown_names
+    [('tuple', 0, 5), ('int', 9, 12)]
+    """
+
+    def __init__(self, *, inspector=None, replace_doctypes=None, **kwargs):
         """
         Parameters
         ----------
         inspector : ~.StaticInspector
             A dictionary mapping atomic names used in doctypes to information such
             as where to import from or how to replace the name itself.
-        replace_doctypes : dict[str, str]
-        kwargs : dict[Any, Any]
+        replace_doctypes : dict[str, str], optional
+            Replacements for human-friendly aliases.
+        kwargs : dict[Any, Any], optional
             Keyword arguments passed to the init of the parent class.
         """
+        if replace_doctypes is None:
+            replace_doctypes = {}
+
         self.inspector = inspector
         self.replace_doctypes = replace_doctypes
+
         self._collected_imports = None
+        self._unknown_qualnames = None
+
         super().__init__(**kwargs)
 
         self.stats = {"grammar_errors": 0}
 
-    def transform(self, doctype):
+    def doctype_to_annotation(self, doctype):
         """Turn a type description in a docstring into a type annotation.
 
         Parameters
@@ -167,20 +180,25 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         annotation : Annotation
             The parsed annotation.
+        unknown_qualnames : list[tuple[str, int, int]]
+            A set containing tuples. Each tuple contains a qualname, its start and its
+            end index relative to the given `doctype`.
         """
         try:
             self._collected_imports = set()
+            self._unknown_qualnames = []
             tree = _lark.parse(doctype)
             value = super().transform(tree=tree)
             annotation = Annotation(
                 value=value, imports=frozenset(self._collected_imports)
             )
-            return annotation
+            return annotation, self._unknown_qualnames
         except (lark.exceptions.LexError, lark.exceptions.ParseError):
             self.stats["grammar_errors"] += 1
             raise
         finally:
             self._collected_imports = None
+            self._unknown_qualnames = None
 
     def __default__(self, data, children, meta):
         """Unpack children of rule nodes by default.
@@ -247,17 +265,15 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 _qualname = _qualname.replace(partial_qualname, replacement)
                 break
 
-        _qualname = self._find_import(_qualname)
+        _qualname = self._find_import(_qualname, meta=tree.meta)
 
         _qualname = lark.Token(type="QUALNAME", value=_qualname)
         return _qualname
 
-    def ARRAY_NAME(self, token):
-        assert "." not in token
-        new_token = self.replace_doctypes.get(str(token), str(token))
-        new_token = self._find_import(new_token)
-        new_token = lark.Token(type="ARRAY_NAME", value=new_token)
-        return new_token
+    def array_name(self, tree):
+        qualname = self.qualname(tree)
+        qualname = lark.Token("ARRAY_NAME", str(qualname))
+        return qualname
 
     def shape(self, tree):
         logger.debug("dropping shape information")
@@ -278,47 +294,71 @@ class DoctypeTransformer(lark.visitors.Transformer):
     def literals(self, tree):
         out = ", ".join(tree.children)
         out = f"Literal[{out}]"
-        _, known_import = self.inspector.query("Literal")
-        if known_import:
-            self._collected_imports.add(known_import)
+        if self.inspector is not None:
+            _, known_import = self.inspector.query("Literal")
+            if known_import:
+                self._collected_imports.add(known_import)
         return out
 
-    def _find_import(self, qualname):
+    def _find_import(self, qualname, meta):
         """Match type names to known imports."""
-        try:
+        if self.inspector is not None:
             annotation_name, known_import = self.inspector.query(qualname)
-            if known_import and known_import.has_import:
-                self._collected_imports.add(known_import)
-            if annotation_name:
-                qualname = annotation_name
-            else:
-                logger.warning(
-                    "unknown import for %r in %s",
-                    qualname,
-                    self.inspector.current_source,
-                )
-            return qualname
-        except Exception as error:
-            raise error
+        else:
+            annotation_name = None
+            known_import = None
+
+        if known_import and known_import.has_import:
+            self._collected_imports.add(known_import)
+
+        if annotation_name:
+            qualname = annotation_name
+        else:
+            # Unknown qualname, alias to `Any` and make visible
+            self._unknown_qualnames.append((qualname, meta.start_pos, meta.end_pos))
+            qualname = escape_qualname(qualname)
+            any_alias = KnownImport(
+                import_name="Any",
+                import_path="typing",
+                import_alias=qualname,
+            )
+            self._collected_imports.add(any_alias)
+        return qualname
 
 
 class DocstringAnnotations:
-    def __init__(self, docstring, *, transformer, source=None):
+    """Collect annotations in a given docstring.
+
+    Examples
+    --------
+    >>> docstring = '''
+    ... Parameters
+    ... ----------
+    ... a : tuple of int
+    ... b : some invalid syntax
+    ... c : unkown.symbol
+    ... '''
+    >>> transformer = DoctypeTransformer()
+    >>> annotations = DocstringAnnotations(docstring, transformer=transformer)
+    >>> annotations.parameters.keys()
+    dict_keys(['a', 'b', 'c'])
+    """
+
+    def __init__(self, docstring, *, transformer, ctx=None):
+        """
+        Parameters
+        ----------
+        docstring : str
+        transformer : DoctypeTransformer
+        ctx : ~.ContextFormatter, optional
+        """
         self.docstring = docstring
         self.np_docstring = NumpyDocString(docstring)
         self.transformer = transformer
-        self.source = source
 
-    def _format_grammar_error(self, error, doctype):
-        msg = "doctype doesn't conform to grammar"
-        details = doctype
-        if hasattr(error, "get_context"):
-            details = error.get_context(doctype)
-        details = textwrap.indent(details, prefix="  ")
-        out = f"{click.style(self.source, bold=True)} {msg}\n{details}"
-        return out
+        self._ctx: ContextFormatter = ctx
 
-    def _doctype_to_annotation(self, doctype):
+    def _doctype_to_annotation(self, doctype, ds_line=0):
         """Convert a type description to a Python-ready type.
 
         Parameters
@@ -326,8 +366,8 @@ class DocstringAnnotations:
         doctype : str
             The type description of a parameter or return value, as extracted from
             a docstring.
-        inspector : docstub._analysis.StaticInspector
-        replace_doctypes : dict[str, str]
+        ds_line : int, optional
+            The line number relative to the docstring.
 
         Returns
         -------
@@ -335,61 +375,92 @@ class DocstringAnnotations:
             The transformed type, ready to be inserted into a stub file, with
             necessary imports attached.
         """
+        if self._ctx is not None:
+            ctx = self._ctx.with_line(offset=ds_line)
+        else:
+            ctx = None
+
         try:
-            annotation = self.transformer.transform(doctype)
-            return annotation
-        except (lark.exceptions.LexError, lark.exceptions.ParseError) as error:
-            msg = self._format_grammar_error(error=error, doctype=doctype)
-            click.echo(msg)
-            return ErrorFallbackAnnotation
-        except lark.visitors.VisitError as e:
-            logger.exception(
-                "unexpected error parsing doctype %r in %s, falling back to Any",
-                doctype,
-                self.source,
-                exc_info=e.orig_exc,
+            annotation, unknown_qualnames = self.transformer.doctype_to_annotation(
+                doctype
             )
-            return ErrorFallbackAnnotation
+
+        except (lark.exceptions.LexError, lark.exceptions.ParseError) as error:
+            details = None
+            if hasattr(error, "get_context"):
+                details = error.get_context(doctype)
+                details = details.replace("^", click.style("^", fg="red", bold=True))
+            if ctx:
+                ctx.print_message("invalid syntax in doctype", details=details)
+            return GrammarErrorFallback
+
+        except lark.visitors.VisitError as e:
+            tb = "\n".join(traceback.format_exception(e.orig_exc))
+            details = f"doctype: {doctype!r}\n\n{tb}"
+            if ctx:
+                ctx.print_message(
+                    "unexpected error while parsing doctype", details=details
+                )
+            return GrammarErrorFallback
+
+        else:
+            for name, start_col, stop_col in unknown_qualnames:
+                width = stop_col - start_col
+                error_underline = click.style("^" * width, fg="red", bold=True)
+                details = f"{doctype}\n{' ' * start_col}{error_underline}\n"
+                if ctx:
+                    ctx.print_message(
+                        f"unknown name in doctype: {name!r}", details=details
+                    )
+            return annotation
 
     @cached_property
     def parameters(self) -> dict[str, Annotation]:
-        def name_and_type(numpydoc_section):
-            name_type = {
-                param.name: param.type
-                for param in self.np_docstring[numpydoc_section]
-                if param.type
-            }
-            return name_type
+        all_params = chain(
+            self.np_docstring["Parameters"], self.np_docstring["Other Parameters"]
+        )
+        annotated_params = {}
+        for param in all_params:
+            if not param.type:
+                continue
 
-        params = name_and_type("Parameters")
-        other = name_and_type("Other Parameters")
+            ds_line = 0
+            for i, line in enumerate(self.docstring.split("\n")):
+                if param.name in line and param.type in line:
+                    ds_line = i
+                    break
 
-        duplicate_params = params.keys() & other.keys()
-        if duplicate_params:
-            raise ValueError(f"{duplicate_params=}")
-        params.update(other)
+            if param.name in annotated_params:
+                logger.warning("duplicate parameter name %r, ignoring", param.name)
+                continue
 
-        annotations = {
-            name: self._doctype_to_annotation(type_) for name, type_ in params.items()
-        }
-        return annotations
+            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
+            annotated_params[param.name] = annotation
+
+        return annotated_params
 
     @cached_property
     def returns(self) -> Annotation | None:
-        out = [
-            self._doctype_to_annotation(param.type)
-            for param in self.np_docstring["Returns"]
-            if param.type
-        ]
-        out = Annotation.as_return_tuple(out) if out else None
-        return out
+        annotated_params = {}
+        for param in self.np_docstring["Returns"]:
+            # NumPyDoc always requires a doctype for returns,
+            assert param.type
 
-    @cached_property
-    def yields(self) -> Annotation | None:
-        out = {
-            self._doctype_to_annotation(param.type)
-            for param in self.np_docstring["Yields"]
-            if param.type
-        }
-        out = Annotation.as_return_tuple(out) if out else None
+            ds_line = 0
+            for i, line in enumerate(self.docstring.split("\n")):
+                if param.name in line and param.type in line:
+                    ds_line = i
+                    break
+
+            if param.name in annotated_params:
+                logger.warning("duplicate parameter name %r, ignoring", param.name)
+                continue
+
+            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
+            annotated_params[param.name] = annotation
+
+        if annotated_params:
+            out = Annotation.as_return_tuple(annotated_params.values())
+        else:
+            out = None
         return out

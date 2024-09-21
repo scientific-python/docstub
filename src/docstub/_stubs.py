@@ -9,6 +9,7 @@ import libcst as cst
 import libcst.matchers as cstm
 
 from ._docstrings import DocstringAnnotations, DoctypeTransformer
+from ._utils import ContextFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +182,40 @@ class _Scope:
     def is_class_init(self):
         out = self.is_method and self.node.name.value == "__init__"
         return out
+
+
+def _get_docstring_node(node):
+    """Extract the node with the docstring from a definition.
+
+    Unfortunately, libcst's builtin `get_docstring` returns the value of the
+    docstring itself and not the wrapping node. In order to extract the
+    position of the docstring we need the node itself.
+
+    Parameters
+    ----------
+    node : cst.FunctionDef | cst.ClassDef | cst.Module
+
+    Returns
+    -------
+    docstring_node :  cst.SimpleString | cst.ConcatenatedString | None
+        The node of the docstring if found.
+    """
+    docstring_node = None
+
+    docstring = node.get_docstring(clean=False)
+    if docstring:
+        # Workaround to find the exact postion of a docstring
+        # by using its node
+        string_nodes = cstm.findall(
+            node, cstm.SimpleString() | cstm.ConcatenatedString()
+        )
+        matching_nodes = [
+            node for node in string_nodes if node.evaluated_value == docstring
+        ]
+        assert len(matching_nodes) == 1
+        docstring_node = matching_nodes[0]
+
+    return docstring_node
 
 
 class Py2StubTransformer(cst.CSTTransformer):
@@ -575,14 +610,24 @@ class Py2StubTransformer(cst.CSTTransformer):
         annotations : ~.DocstringAnnotations
         """
         annotations = None
-        docstring = node.get_docstring()
-        if docstring:
-            position = self.get_metadata(cst.metadata.PositionProvider, node).start
-            source = f"{self.inspector.current_source}:{position.line}"
+
+        docstring_node = _get_docstring_node(node)
+        if docstring_node:
+            position = self.get_metadata(
+                cst.metadata.PositionProvider, docstring_node
+            ).start
+
+            ctx = ContextFormatter(
+                path=Path(self.inspector.current_source), line=position.line
+            )
             try:
                 annotations = DocstringAnnotations(
-                    docstring, transformer=self.transformer, source=source
+                    docstring_node.evaluated_value,
+                    transformer=self.transformer,
+                    ctx=ctx,
                 )
+            except (SystemExit, KeyboardInterrupt):
+                raise
             except Exception as e:
                 logger.exception(
                     "error while parsing docstring of `%s`:\n\n%s",
