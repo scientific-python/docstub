@@ -81,11 +81,14 @@ class ContextFormatter:
     >>> from pathlib import Path
     >>> ctx = ContextFormatter(path=Path("file/with/problems.py"))
     >>> ctx.format_message("Message")
-    '...problems.py: Message'
+    'file...problems.py: Message'
     >>> ctx.with_line(3).format_message("Message with line info")
-    '...problems.py:3: Message with line info'
-    >>> ctx.with_line(3).with_column(2).format_message("Message with column info")
-    '...problems.py:3:2: Message with column info'
+    'file...problems.py:3: Message with line info'
+    >>> ctx.with_line(3).with_column(2).print_message("Message with column info")
+    file...problems.py:3:2: Message with column info
+    >>> ctx.print_message("Summary", details="More details")
+    file...problems.py: Summary
+        More details
     """
 
     path: Path = None
