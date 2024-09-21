@@ -3,7 +3,35 @@ from textwrap import dedent
 import pytest
 
 from docstub._analysis import KnownImport
-from docstub._docstrings import DocstringAnnotations, DoctypeTransformer
+from docstub._docstrings import Annotation, DocstringAnnotations, DoctypeTransformer
+
+
+class Test_Annotation:
+    def test_str(self):
+        annotation = Annotation(
+            value="Path",
+            imports=frozenset({KnownImport(import_name="Path", import_path="pathlib")}),
+        )
+        assert str(annotation) == annotation.value
+
+    def test_as_return_tuple(self):
+        path_anno = Annotation(
+            value="Path",
+            imports=frozenset({KnownImport(import_name="Path", import_path="pathlib")}),
+        )
+        sequence_anno = Annotation(
+            value="Sequence",
+            imports=frozenset(
+                {KnownImport(import_name="Sequence", import_path="typing")}
+            ),
+        )
+        return_annotation = Annotation.as_return_tuple([path_anno, sequence_anno])
+        assert return_annotation.value == "tuple[Path, Sequence]"
+        assert return_annotation.imports == path_anno.imports | sequence_anno.imports
+
+    def test_unexpected_value(self):
+        with pytest.raises(ValueError, match="unexpected '~' in annotation value"):
+            Annotation(value="~.foo")
 
 
 class Test_DoctypeTransformer:
