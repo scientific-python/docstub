@@ -3,11 +3,10 @@ from textwrap import dedent
 import libcst as cst
 import libcst.matchers as cstm
 
-from docstub._stubs import _get_docstring_node
+from docstub._stubs import Py2StubTransformer, _get_docstring_node
 
 
 class Test_get_docstring_node:
-
     def test_func(self):
         docstring = dedent(
             '''
@@ -72,3 +71,27 @@ class Test_get_docstring_node:
         docstring_node = _get_docstring_node(func_def)
 
         assert docstring_node is None
+
+
+class Test_Py2StubTransformer:
+
+    def test_default_None(self):
+        # Appending `| None` if a doctype is marked as "optional"
+        # is only correct if the default is actually None
+        # Ref: https://github.com/scientific-python/docstub/issues/13
+        source = dedent(
+            '''
+        def foo(a=None, b=1):
+            """
+            Parameters
+            ----------
+            a : int, optional
+            b : int, optional
+            """
+        '''
+        )
+        expected = "def foo(a: int | None = ..., b: int = ...) -> None: ..."
+
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected in result

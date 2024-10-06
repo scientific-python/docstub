@@ -48,6 +48,9 @@ class Annotation:
         object.__setattr__(self, "imports", frozenset(self.imports))
         if "~" in self.value:
             raise ValueError(f"unexpected '~' in annotation value: {self.value}")
+        for import_ in self.imports:
+            if not isinstance(import_, KnownImport):
+                raise TypeError(f"unexpected type {type(import_)} in `imports`")
 
     def __str__(self) -> str:
         return self.value
@@ -95,6 +98,22 @@ class Annotation:
         # TODO
         raise NotImplementedError()
 
+    def as_optional(self):
+        """Return optional version of this annotation by appending `| None`.
+
+        Returns
+        -------
+        optional : Annotation
+
+        Examples
+        --------
+        >>> Annotation(value="int").as_optional()
+        Annotation(value='int | None', imports=frozenset())
+        """
+        value = f"{self.value} | None"
+        optional = type(self)(value=value, imports=self.imports)
+        return optional
+
     @staticmethod
     def _aggregate_annotations(*types):
         """Aggregate values and imports of given Annotations.
@@ -118,14 +137,7 @@ class Annotation:
 
 GrammarErrorFallback = Annotation(
     value="Any",
-    imports=frozenset(
-        (
-            KnownImport(
-                import_name="Any",
-                import_path="typing",
-            ),
-        )
-    ),
+    imports=frozenset((KnownImport(import_path="typing", import_name="Any"),)),
 )
 
 
@@ -233,12 +245,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return out
 
     def optional(self, tree):
-        out = "None"
-        literal = [child for child in tree.children if child.type == "LITERAL"]
-        assert len(literal) <= 1
-        if literal:
-            out = lark.Discard  # Type should cover the default
-        return out
+        logger.debug("dropping optional / default info")
+        return lark.Discard
 
     def extra_info(self, tree):
         logger.debug("dropping extra info")

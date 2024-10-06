@@ -10,7 +10,7 @@ from pathlib import Path
 
 import libcst as cst
 
-from ._utils import accumulate_qualname
+from ._utils import accumulate_qualname, module_name_from_path
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +42,21 @@ def _shared_leading_path(*paths):
 class KnownImport:
     """Import information associated with a single known type annotation.
 
-    Parameters
+    Attributes
     ----------
-    import_name :
-        Dotted names after "import".
-    import_path :
+    import_path : str, optional
         Dotted names after "from".
-    import_alias :
+    import_name : str, optional
+        Dotted names after "import".
+    import_alias : str, optional
         Name (without ".") after "as".
-    builtin_name :
+    builtin_name : str, optional
         Names an object that's builtin and doesn't need an import.
+
+    Examples
+    --------
+    >>> KnownImport(import_path="numpy", import_name="uint8", import_alias="ui8")
+    <KnownImport 'from numpy import uint8 as ui8'>
     """
 
     import_name: str = None
@@ -170,14 +175,6 @@ class KnownImport:
         return out
 
 
-@dataclass(slots=True, frozen=True)
-class InspectionContext:
-    """Currently inspected module and other information."""
-
-    file_path: Path
-    in_package_path: str
-
-
 def _is_type(value) -> bool:
     """Check if value is a type."""
     # Checking for isinstance(..., type) isn't enough, some types such as
@@ -262,45 +259,57 @@ def common_known_imports():
     return known_imports
 
 
-class KnownImportCollector(cst.CSTVisitor):
+class TypeCollector(cst.CSTVisitor):
     @classmethod
-    def collect(cls, file, module_name):
+    def collect(cls, file):
+        """Collect importable type annotations in given file.
+
+        Parameters
+        ----------
+        file : Path
+
+        Returns
+        -------
+        collected : dict[str, KnownImport]
+        """
         file = Path(file)
         with file.open("r") as fo:
             source = fo.read()
 
         tree = cst.parse_module(source)
-        collector = cls(module_name=module_name)
+        collector = cls(module_name=module_name_from_path(file))
         tree.visit(collector)
         return collector.known_imports
 
     def __init__(self, *, module_name):
+        """Initialize type collector.
+
+        Parameters
+        ----------
+        module_name : str
+        """
         self.module_name = module_name
         self._stack = []
         self.known_imports = {}
 
-    def visit_ClassDef(self, node):
+    def visit_ClassDef(self, node: cst.ClassDef) -> bool:
         self._stack.append(node.name.value)
 
         class_name = ".".join(self._stack[:1])
         qualname = f"{self.module_name}.{'.'.join(self._stack)}"
-
-        known_import = KnownImport(
-            import_name=class_name,
-            import_path=self.module_name,
-        )
+        known_import = KnownImport(import_path=self.module_name, import_name=class_name)
         self.known_imports[qualname] = known_import
 
         return True
 
-    def leave_ClassDef(self, original_node):
+    def leave_ClassDef(self, original_node: cst.ClassDef) -> None:
         self._stack.pop()
 
-    def visit_FunctionDef(self, node):
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> bool:
         self._stack.append(node.name.value)
         return True
 
-    def leave_FunctionDef(self, original_node):
+    def leave_FunctionDef(self, original_node: cst.FunctionDef) -> None:
         self._stack.pop()
 
 
@@ -395,7 +404,8 @@ class StaticInspector:
 
         if known_import is None and self.current_source:
             # Try scope of current module
-            try_qualname = f"{self.current_source.import_path}.{search_name}"
+            module_name = module_name_from_path(self.current_source)
+            try_qualname = f"{module_name}.{search_name}"
             known_import = self.known_imports.get(try_qualname)
             if known_import:
                 annotation_name = search_name

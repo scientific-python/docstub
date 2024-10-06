@@ -3,51 +3,15 @@
 import enum
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 import libcst as cst
 import libcst.matchers as cstm
 
+from ._analysis import KnownImport
 from ._docstrings import DocstringAnnotations, DoctypeTransformer
-from ._utils import ContextFormatter
+from ._utils import ContextFormatter, module_name_from_path
 
 logger = logging.getLogger(__name__)
-
-
-class PackageFile(Path):
-    """File in a Python package."""
-
-    def __init__(self, *args, package_root):
-        """
-        Parameters
-        ----------
-        args : tuple[Any, ...]
-        package_root : Path
-        """
-        self.package_root = package_root
-        super().__init__(*args)
-        if self.is_dir():
-            raise ValueError("mustn't be a directory")
-        if not self.is_relative_to(self.package_root):
-            raise ValueError("path must be relative to package_root")
-
-    @property
-    def import_path(self):
-        """
-        Returns
-        -------
-        str
-        """
-        relative_to_root = self.relative_to(self.package_root)
-        parts = relative_to_root.with_suffix("").parts
-        parts = (self.package_root.name, *parts)
-        if parts[-1] == "__init__":
-            parts = parts[:-1]
-        import_name = ".".join(parts)
-        return import_name
-
-    def with_segments(self, *args):
-        return Path(*args)
 
 
 def _is_python_package(path):
@@ -71,17 +35,11 @@ def walk_source(root_dir):
     ----------
     root_dir : Path
         Root directory of a Python package.
-    target_dir : Path
-        Root directory in which a matching stub package will be created.
 
     Yields
     ------
-    source_path : PackageFile
+    source_path : Path
         Either a Python file or a stub file that takes precedence.
-
-    Notes
-    -----
-    Files starting with "test_" are skipped entirely for now.
     """
     queue = [root_dir]
     while queue:
@@ -102,8 +60,7 @@ def walk_source(root_dir):
         if suffix == ".py" and path.with_suffix(".pyi").exists():
             continue  # Stub file already exists and takes precedence
 
-        python_file = PackageFile(path, package_root=root_dir)
-        yield python_file
+        yield path
 
 
 def walk_source_and_targets(root_dir, target_dir):
@@ -118,9 +75,9 @@ def walk_source_and_targets(root_dir, target_dir):
 
     Returns
     -------
-    source_path : PackageFile
+    source_path : Path
         Either a Python file or a stub file that takes precedence.
-    stub_path : PackageFile
+    stub_path : Path
         Target stub file.
 
     Notes
@@ -129,7 +86,6 @@ def walk_source_and_targets(root_dir, target_dir):
     """
     for source_path in walk_source(root_dir):
         stub_path = target_dir / source_path.with_suffix(".pyi").relative_to(root_dir)
-        stub_path = PackageFile(stub_path, package_root=target_dir)
         yield source_path, stub_path
 
 
@@ -242,7 +198,7 @@ class Py2StubTransformer(cst.CSTTransformer):
     _Annotation_Any = cst.Annotation(cst.Name("Any"))
     _Annotation_None = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, *, inspector, replace_doctypes):
+    def __init__(self, *, inspector=None, replace_doctypes=None):
         """
         Parameters
         ----------
@@ -260,13 +216,25 @@ class Py2StubTransformer(cst.CSTTransformer):
         self._required_imports = None  # Collect imports for used types
         self._current_module = None
 
+        self._current_source = None  # Use via property `current_source`
+
+    @property
+    def current_source(self):
+        return self._current_source
+
+    @current_source.setter
+    def current_source(self, value):
+        self._current_source = value
+        if self.inspector is not None:
+            self.inspector.current_source = value
+
     def python_to_stub(self, source, *, module_path=None):
         """Convert Python source code to stub-file ready code.
 
         Parameters
         ----------
         source  : str
-        module_path : PackageFile, optional
+        module_path : Path, optional
             The location of the source that is transformed into a stub file.
             If given, used to enhance logging & error messages with more
             context information.
@@ -279,8 +247,7 @@ class Py2StubTransformer(cst.CSTTransformer):
             self._scope_stack = []
             self._pytypes_stack = []
             self._required_imports = set()
-            if module_path:
-                self.inspector.current_source = module_path
+            self.current_source = module_path
 
             source_tree = cst.parse_module(source)
             source_tree = cst.metadata.MetadataWrapper(source_tree)
@@ -292,7 +259,7 @@ class Py2StubTransformer(cst.CSTTransformer):
             self._scope_stack = None
             self._pytypes_stack = None
             self._required_imports = None
-            self.inspector.current_source = None
+            self.current_source = None
 
     def visit_ClassDef(self, node):
         """Collect pytypes from class docstring and add scope to stack.
@@ -391,14 +358,21 @@ class Py2StubTransformer(cst.CSTTransformer):
         is_self_or_cls = (
             scope.node.params.children[0] is original_node and scope.has_self_or_cls
         )
+        defaults_to_none = cstm.matches(updated_node.default, cstm.Name(value="None"))
+
+        if updated_node.default is not None:
+            node_changes["default"] = cst.Ellipsis()
 
         name = original_node.name.value
         pytypes = self._pytypes_stack[-1]
         if not pytypes and scope.is_class_init:
             pytypes = self._pytypes_stack[-2]
+
         if pytypes:
             pytype = pytypes.parameters.get(name)
             if pytype:
+                if defaults_to_none:
+                    pytype = pytype.as_optional()
                 annotation = cst.Annotation(cst.parse_expression(pytype.value))
                 node_changes["annotation"] = annotation
                 if pytype.imports:
@@ -407,11 +381,8 @@ class Py2StubTransformer(cst.CSTTransformer):
         # Potentially use "Any" except for first param in (class)methods
         elif not is_self_or_cls and updated_node.annotation is None:
             node_changes["annotation"] = self._Annotation_Any
-            _, known_import = self.inspector.query("Any")
-            self._required_imports.add(known_import)
-
-        if updated_node.default is not None:
-            node_changes["default"] = cst.Ellipsis()
+            import_ = KnownImport(import_path="typing", import_name="Any")
+            self._required_imports.add(import_)
 
         if node_changes:
             updated_node = updated_node.with_changes(**node_changes)
@@ -496,10 +467,15 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.Module
         """
-        current_module = self.inspector.current_source.import_path
-        required_imports = [
-            imp for imp in self._required_imports if imp.import_path != current_module
-        ]
+        required_imports = self._required_imports.copy()
+        current_module = None
+        if self.current_source:
+            current_module = module_name_from_path(self.current_source)
+            required_imports = [
+                imp
+                for imp in self._required_imports
+                if imp.import_path != current_module
+            ]
         import_nodes = self._parse_imports(
             required_imports, current_module=current_module
         )
@@ -617,9 +593,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                 cst.metadata.PositionProvider, docstring_node
             ).start
 
-            ctx = ContextFormatter(
-                path=Path(self.inspector.current_source), line=position.line
-            )
+            ctx = ContextFormatter(path=self.current_source, line=position.line)
             try:
                 annotations = DocstringAnnotations(
                     docstring_node.evaluated_value,
