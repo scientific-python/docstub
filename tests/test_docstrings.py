@@ -73,11 +73,13 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
-            ("int, optional", "int | None"),
-            # None isn't appended, since the type should cover the default
-            ("int, default 1", "int"),
+            ("int, optional", "int"),
+            ("int | None, optional", "int | None"),
+            ("int, default -1", "int"),
             ("int, default = 1", "int"),
-            ("int, default: 1", "int"),
+            ("int, default: 0", "int"),
+            ("float, default: 1.0", "float"),
+            ("{'a', 'b'}, default : 'a'", "Literal['a', 'b']"),
         ],
     )
     @pytest.mark.parametrize("extra_info", [None, "int", ", extra, info"])
@@ -166,7 +168,6 @@ class Test_DoctypeTransformer:
 
 
 class Test_DocstringAnnotations:
-
     def test_empty_docstring(self):
         docstring = dedent("""No sections in this docstring.""")
         transformer = DoctypeTransformer()
@@ -179,7 +180,7 @@ class Test_DocstringAnnotations:
         [
             ("bool", "bool"),
             ("str, extra information", "str"),
-            ("list of int, optional", "list[int] | None"),
+            ("list of int, optional", "list[int]"),
         ],
     )
     def test_parameters(self, doctype, expected):

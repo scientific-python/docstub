@@ -49,7 +49,7 @@ leading_optional : "[" dim ("," dim)* ",]"
 insert_optional : "[," dim ("," dim)* "]"
 ?dim : NUMBER
      | PY_ELLIPSES
-     | NAME
+     | NAME ("=" NUMBER)?
 
 
 // ----------------------------------------------------------------------------

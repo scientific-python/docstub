@@ -6,8 +6,8 @@ import click
 
 from ._analysis import (
     KnownImport,
-    KnownImportCollector,
     StaticInspector,
+    TypeCollector,
     common_known_imports,
 )
 from ._config import Config
@@ -92,9 +92,7 @@ def main(source_dir, out_dir, config_path, verbose):
     known_imports = common_known_imports()
     for source_path in walk_source(source_dir):
         logger.info("collecting types in %s", source_path)
-        known_imports_in_source = KnownImportCollector.collect(
-            source_path, module_name=source_path.import_path
-        )
+        known_imports_in_source = TypeCollector.collect(source_path)
         known_imports.update(known_imports_in_source)
     known_imports.update(KnownImport.many_from_config(config.known_imports))
 

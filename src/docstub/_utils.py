@@ -1,6 +1,7 @@
 import dataclasses
 import itertools
 import re
+from functools import lru_cache
 from pathlib import Path
 from textwrap import indent
 
@@ -61,6 +62,47 @@ def escape_qualname(name):
     """
     qualname = re.sub(r"\W+|^(?=\d)", "_", name)
     return qualname
+
+
+@lru_cache(maxsize=10)
+def module_name_from_path(path):
+    """Find the full name of a module within its package from its file path.
+
+    Parameters
+    ----------
+    path : Path
+
+    Returns
+    -------
+    name : str
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> module_name_from_path(Path(__file__))
+    'docstub._utils'
+    >>> import docstub
+    >>> module_name_from_path(Path(docstub.__file__))
+    'docstub'
+    """
+    if not path.is_file():
+        raise FileNotFoundError(f"`path` is not an existing file: {path!r}")
+
+    name_parts = []
+    if path.name != "__init__.py":
+        name_parts.insert(0, path.stem)
+
+    directory = path.parent
+    while True:
+        is_in_package = (directory / "__init__.py").is_file()
+        if is_in_package:
+            name_parts.insert(0, directory.name)
+            directory = directory.parent
+        else:
+            break
+
+    name = ".".join(name_parts)
+    return name
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -191,3 +233,8 @@ class ContextFormatter:
         """
         msg = self.format_message(short, details=details, ansi_styles=True)
         click.echo(msg)
+
+    def __post_init__(self):
+        if self.path is not None and not isinstance(self.path, Path):
+            msg = f"expected `path` to be of type `Path`, got {type(self.path)!r}"
+            raise TypeError(msg)
