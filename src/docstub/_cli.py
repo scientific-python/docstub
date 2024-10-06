@@ -12,6 +12,7 @@ from ._analysis import (
 )
 from ._config import Config
 from ._stubs import Py2StubTransformer, walk_source, walk_source_and_targets
+from ._utils import FileCache
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
@@ -90,9 +91,17 @@ def main(source_dir, out_dir, config_path, verbose):
 
     # Build map of known imports
     known_imports = common_known_imports()
+
+    collect_cached_types = FileCache(
+        cached_func=TypeCollector.collect,
+        serializer=TypeCollector.ImportSerializer(),
+        cache_dir=Path.cwd() / ".docstub_cache",
+        name="collected_types",
+    )
+
     for source_path in walk_source(source_dir):
         logger.info("collecting types in %s", source_path)
-        known_imports_in_source = TypeCollector.collect(source_path)
+        known_imports_in_source = collect_cached_types(source_path)
         known_imports.update(known_imports_in_source)
     known_imports.update(KnownImport.many_from_config(config.known_imports))
 

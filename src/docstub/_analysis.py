@@ -2,15 +2,16 @@
 
 import builtins
 import collections.abc
+import json
 import logging
 import re
 import typing
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import libcst as cst
 
-from ._utils import accumulate_qualname, module_name_from_path
+from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +261,25 @@ def common_known_imports():
 
 
 class TypeCollector(cst.CSTVisitor):
+
+    class ImportSerializer:
+        """Implements the FileCacheIO protocol to cache `TypeCollector.collect`"""
+
+        def hash(self, path: Path) -> str:
+            key = pyfile_checksum(path)
+            return key
+
+        def serialize(self, path: Path, data: dict[str, KnownImport]) -> None:
+            raw_data = {qualname: asdict(imp) for qualname, imp in data.items()}
+            with open(path, "w") as fp:
+                json.dump(raw_data, fp)
+
+        def deserialize(self, path: Path) -> dict[str, KnownImport]:
+            with open(path) as fp:
+                raw_data = json.load(fp)
+            data = {qualname: KnownImport(**kw) for qualname, kw in raw_data.items()}
+            return data
+
     @classmethod
     def collect(cls, file):
         """Collect importable type annotations in given file.

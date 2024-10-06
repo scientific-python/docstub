@@ -1,9 +1,11 @@
 import dataclasses
 import itertools
 import re
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from pathlib import Path
 from textwrap import indent
+from typing import Protocol
+from zlib import crc32
 
 import click
 
@@ -103,6 +105,55 @@ def module_name_from_path(path):
 
     name = ".".join(name_parts)
     return name
+
+
+def pyfile_checksum(path):
+    """Compute a unique key for a Python file.
+
+    The key takes into account the given `path`, the relative position if the
+    file is part of a Python package and the file's content.
+
+    Parameters
+    ----------
+    path : Path
+
+    Returns
+    -------
+    key : str
+    """
+    module_name = module_name_from_path(path).encode()
+    absolute_path = str(path.resolve()).encode()
+    with open(path, "rb") as fp:
+        content = fp.read()
+    key = crc32(content + module_name + absolute_path)
+    return key
+
+
+def create_cachedir(path):
+    """Create a cache directory
+
+    Parameters
+    ----------
+    path : Path
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    cachdir_tag_path = path / "CACHEDIR.TAG"
+    cachdir_tag_content = (
+        "Signature: 8a477f597d28d172789f06886806bc55\n"
+        "# This file is a cache directory tag automatically created by docstub.\n"
+        "# For information about cache directory tags see https://bford.info/cachedir/\n"
+    )
+    if not cachdir_tag_path.is_file():
+        with open(cachdir_tag_path, "w") as fp:
+            fp.write(cachdir_tag_content)
+
+    gitignore_path = path / ".gitignore"
+    gitignore_content = (
+        "# This file is a cache directory tag automatically created by docstub.\n" "*\n"
+    )
+    if not gitignore_path.is_file():
+        with open(gitignore_path, "w") as fp:
+            fp.write(gitignore_content)
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -238,3 +289,47 @@ class ContextFormatter:
         if self.path is not None and not isinstance(self.path, Path):
             msg = f"expected `path` to be of type `Path`, got {type(self.path)!r}"
             raise TypeError(msg)
+
+
+class FileCacheIO[T](Protocol):
+    """Defines an interface to serialize and deserialize data in `FileCache`."""
+
+    def hash(self, *args, **kwargs) -> str: ...
+    def serialize(self, path: Path, data: T) -> None: ...
+    def deserialize(self, path: Path) -> T: ...
+
+
+class FileCache:
+    """Cache results from a function call on disk."""
+
+    def __init__(self, *, cached_func, serializer, cache_dir, name):
+        """
+        Parameters
+        ----------
+        cached_func : callable
+        serializer : FileCacheIO
+            An interface that
+        cache_dir : Path, optional
+        """
+        self.cached_func = cached_func
+        self.serializer = serializer
+        self._cache_dir = cache_dir
+        self.name = name
+
+    @cached_property
+    def named_cache_dir(self):
+        cache_dir = self._cache_dir
+        create_cachedir(cache_dir)
+        _named_cache_dir = cache_dir / self.name
+        _named_cache_dir.mkdir(parents=True, exist_ok=True)
+        return _named_cache_dir
+
+    def __call__(self, *args, **kwargs):
+        key = self.serializer.hash(*args, **kwargs)
+        entry_path = self.named_cache_dir / f"{key}"
+        if entry_path.is_file():
+            entry = self.serializer.deserialize(entry_path)
+        else:
+            entry = self.cached_func(*args, **kwargs)
+            self.serializer.serialize(entry_path, entry)
+        return entry
