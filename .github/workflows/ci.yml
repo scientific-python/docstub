@@ -17,7 +17,7 @@ env:
   FORCE_COLOR: 3
 
 jobs:
-  pre-commit:
+  lint:
     name: pre-commit
     runs-on: ubuntu-latest
     steps:
@@ -31,10 +31,9 @@ jobs:
         with:
           extra_args: --hook-stage manual --all-files
 
-  checks:
+  test:
     name: Test ${{ matrix.runs-on.short }}-py${{ matrix.python-version }}
     runs-on: ${{ matrix.runs-on.name }}
-    needs: [pre-commit]
     strategy:
       fail-fast: false
       matrix:
