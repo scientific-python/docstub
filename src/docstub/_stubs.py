@@ -175,11 +175,15 @@ def _get_docstring_node(node):
 
 
 class Py2StubTransformer(cst.CSTTransformer):
-    """Transform syntax tree of a Python file into the tree of a stub file.
+    """Transform syntax tree of a Python file into the tree of a stub file [1]_.
 
     Attributes
     ----------
     types_db : ~.TypesDatabase
+
+    References
+    ----------
+    .. [1] Stub file specification https://typing.readthedocs.io/en/latest/spec/distributing.html#stub-files
     """
 
     METADATA_DEPENDENCIES = (cst.metadata.PositionProvider,)

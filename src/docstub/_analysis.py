@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import libcst as cst
+import libcst.matchers as cstm
 
 from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
 
@@ -327,23 +328,47 @@ class TypeCollector(cst.CSTVisitor):
 
     def visit_ClassDef(self, node: cst.ClassDef) -> bool:
         self._stack.append(node.name.value)
-
-        class_name = ".".join(self._stack[:1])
-        qualname = f"{self.module_name}.{'.'.join(self._stack)}"
-        known_import = KnownImport(import_path=self.module_name, import_name=class_name)
-        self.known_imports[qualname] = known_import
-
+        self._collect_type_annotation(self._stack)
         return True
 
     def leave_ClassDef(self, original_node: cst.ClassDef) -> None:
         self._stack.pop()
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> bool:
-        self._stack.append(node.name.value)
-        return True
+        return False
 
-    def leave_FunctionDef(self, original_node: cst.FunctionDef) -> None:
-        self._stack.pop()
+    def visit_TypeAlias(self, node: cst.TypeAlias) -> bool:
+        """Collect type alias with 3.12 syntax."""
+        stack = [*self._stack, node.name.value]
+        self._collect_type_annotation(stack)
+        return False
+
+    def visit_AnnAssign(self, node: cst.AnnAssign) -> bool:
+        """Collect type alias annotated with `TypeAlias`."""
+        is_type_alias = cstm.matches(
+            node,
+            cstm.AnnAssign(
+                annotation=cstm.Annotation(annotation=cstm.Name(value="TypeAlias"))
+            ),
+        )
+        if is_type_alias and node.value is not None:
+            names = cstm.findall(node.target, cstm.Name())
+            assert len(names) == 1
+            stack = [*self._stack, names[0].value]
+            self._collect_type_annotation(stack)
+        return False
+
+    def _collect_type_annotation(self, stack):
+        """Collect an importable type annotation.
+
+        Parameters
+        ----------
+        stack : Iterable[str]
+            A list of names that form the path to the collected type.
+        """
+        qualname = ".".join([self.module_name, *stack])
+        known_import = KnownImport(import_path=self.module_name, import_name=stack[0])
+        self.known_imports[qualname] = known_import
 
 
 class TypesDatabase:
