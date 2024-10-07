@@ -12,9 +12,9 @@ from ._analysis import (
     TypeCollector,
     common_known_imports,
 )
+from ._cache import FileCache
 from ._config import Config
 from ._stubs import Py2StubTransformer, walk_source, walk_source_and_targets
-from ._utils import FileCache
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
