@@ -271,21 +271,24 @@ class TypeCollector(cst.CSTVisitor):
     """
 
     class ImportSerializer:
-        """Implements the `FuncSerializer` protocol to cache calls to `collect`."""
+        """Implements the `FuncSerializer` protocol to cache `TypeCollector.collect`."""
 
         suffix = ".json"
         encoding = "utf-8"
 
         def hash_args(self, path: Path) -> str:
+            """Compute a unique hash from the path passed to `TypeCollector.collect`."""
             key = pyfile_checksum(path)
             return key
 
         def serialize(self, data: dict[str, KnownImport]) -> bytes:
+            """Serialize results from `TypeCollector.collect`."""
             primitives = {qualname: asdict(imp) for qualname, imp in data.items()}
-            raw = json.dumps(primitives).encode(self.encoding)
+            raw = json.dumps(primitives, separators=(",", ":")).encode(self.encoding)
             return raw
 
         def deserialize(self, raw: bytes) -> dict[str, KnownImport]:
+            """Deserialize results from `TypeCollector.collect`."""
             primitives = json.loads(raw.decode(self.encoding))
             data = {qualname: KnownImport(**kw) for qualname, kw in primitives.items()}
             return data
