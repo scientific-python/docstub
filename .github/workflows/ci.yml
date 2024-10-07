@@ -32,18 +32,17 @@ jobs:
           extra_args: --hook-stage manual --all-files
 
   checks:
-    name: Test on ${{ matrix.runs-on }} Python ${{ matrix.python-version }}
-    runs-on: ${{ matrix.runs-on }}
+    name: Test ${{ matrix.runs-on.short }}-py${{ matrix.python-version }}
+    runs-on: ${{ matrix.runs-on.name }}
     needs: [pre-commit]
     strategy:
       fail-fast: false
       matrix:
-        runs-on: [ubuntu-latest, windows-latest, macos-14]
+        runs-on:
+          - { short: linux, name: ubuntu-latest }
+          - { short: win, name: windows-latest }
+          - { short: macos, name: macos-14 }
         python-version: ["3.12"]
-
-        include:
-          - runs-on: ubuntu-latest
-            python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v4
