@@ -1,9 +1,9 @@
 import pytest
 
-from docstub._analysis import KnownImport, StaticInspector
+from docstub._analysis import KnownImport, TypesDatabase
 
 
-class Test_StaticInspector:
+class Test_TypesDatabase:
     known_imports = {  # noqa: RUF012
         "dict": KnownImport(builtin_name="dict"),
         "np": KnownImport(import_name="numpy", import_alias="np"),
@@ -48,9 +48,9 @@ class Test_StaticInspector:
         ]
     )
     def test_query(self, name, exp_annotation, exp_import_line):
-        inspector = StaticInspector(known_imports=self.known_imports.copy())
+        db = TypesDatabase(known_imports=self.known_imports.copy())
 
-        annotation, known_import = inspector.query(name)
+        annotation, known_import = db.query(name)
 
         if exp_annotation is None and exp_import_line is None:
             assert exp_annotation is annotation

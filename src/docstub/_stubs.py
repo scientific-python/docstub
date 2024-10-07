@@ -179,7 +179,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
     Attributes
     ----------
-    inspector : ~._analysis.StaticInspector
+    types_db : ~.TypesDatabase
     """
 
     METADATA_DEPENDENCIES = (cst.metadata.PositionProvider,)
@@ -198,17 +198,17 @@ class Py2StubTransformer(cst.CSTTransformer):
     _Annotation_Any = cst.Annotation(cst.Name("Any"))
     _Annotation_None = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, *, inspector=None, replace_doctypes=None):
+    def __init__(self, *, types_db=None, replace_doctypes=None):
         """
         Parameters
         ----------
-        inspector : ~._analysis.StaticInspector
+        types_db : ~.TypesDatabase
         replace_doctypes : dict[str, str]
         """
-        self.inspector = inspector
+        self.types_db = types_db
         self.replace_doctypes = replace_doctypes
         self.transformer = DoctypeTransformer(
-            inspector=inspector, replace_doctypes=replace_doctypes
+            types_db=types_db, replace_doctypes=replace_doctypes
         )
         # Relevant docstring for the current context
         self._scope_stack = None  # Entered module, class or function scopes
@@ -225,8 +225,8 @@ class Py2StubTransformer(cst.CSTTransformer):
     @current_source.setter
     def current_source(self, value):
         self._current_source = value
-        if self.inspector is not None:
-            self.inspector.current_source = value
+        if self.types_db is not None:
+            self.types_db.current_source = value
 
     def python_to_stub(self, source, *, module_path=None):
         """Convert Python source code to stub-file ready code.

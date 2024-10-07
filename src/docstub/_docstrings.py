@@ -155,13 +155,12 @@ class DoctypeTransformer(lark.visitors.Transformer):
     [('tuple', 0, 5), ('int', 9, 12)]
     """
 
-    def __init__(self, *, inspector=None, replace_doctypes=None, **kwargs):
+    def __init__(self, *, types_db=None, replace_doctypes=None, **kwargs):
         """
         Parameters
         ----------
-        inspector : ~.StaticInspector
-            A dictionary mapping atomic names used in doctypes to information such
-            as where to import from or how to replace the name itself.
+        types_db : ~.TypesDatabase
+            A static database of collected types usable as an annotation.
         replace_doctypes : dict[str, str], optional
             Replacements for human-friendly aliases.
         kwargs : dict[Any, Any], optional
@@ -170,7 +169,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         if replace_doctypes is None:
             replace_doctypes = {}
 
-        self.inspector = inspector
+        self.types_db = types_db
         self.replace_doctypes = replace_doctypes
 
         self._collected_imports = None
@@ -302,16 +301,16 @@ class DoctypeTransformer(lark.visitors.Transformer):
     def literals(self, tree):
         out = ", ".join(tree.children)
         out = f"Literal[{out}]"
-        if self.inspector is not None:
-            _, known_import = self.inspector.query("Literal")
+        if self.types_db is not None:
+            _, known_import = self.types_db.query("Literal")
             if known_import:
                 self._collected_imports.add(known_import)
         return out
 
     def _find_import(self, qualname, meta):
         """Match type names to known imports."""
-        if self.inspector is not None:
-            annotation_name, known_import = self.inspector.query(qualname)
+        if self.types_db is not None:
+            annotation_name, known_import = self.types_db.query(qualname)
         else:
             annotation_name = None
             known_import = None

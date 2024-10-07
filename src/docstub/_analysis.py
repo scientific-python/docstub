@@ -346,8 +346,8 @@ class TypeCollector(cst.CSTVisitor):
         self._stack.pop()
 
 
-class StaticInspector:
-    """Static analysis of Python packages.
+class TypesDatabase:
+    """A static database of collected types usable as an annotation.
 
     Attributes
     ----------
@@ -355,9 +355,9 @@ class StaticInspector:
 
     Examples
     --------
-    >>> from docstub._analysis import StaticInspector, common_known_imports
-    >>> inspector = StaticInspector(known_imports=common_known_imports())
-    >>> inspector.query("Any")
+    >>> from docstub._analysis import TypesDatabase, common_known_imports
+    >>> db = TypesDatabase(known_imports=common_known_imports())
+    >>> db.query("Any")
     ('Any', <KnownImport 'from typing import Any'>)
     """
 

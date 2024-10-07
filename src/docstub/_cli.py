@@ -8,8 +8,8 @@ import click
 
 from ._analysis import (
     KnownImport,
-    StaticInspector,
     TypeCollector,
+    TypesDatabase,
     common_known_imports,
 )
 from ._cache import FileCache
@@ -145,12 +145,12 @@ def main(source_dir, out_dir, config_path, verbose):
     config = _load_configuration(config_path)
     known_imports = _build_import_map(config, source_dir)
 
-    inspector = StaticInspector(
+    types_db = TypesDatabase(
         source_pkgs=[source_dir.parent.resolve()], known_imports=known_imports
     )
     # and the stub transformer
     stub_transformer = Py2StubTransformer(
-        inspector=inspector, replace_doctypes=config.replace_doctypes
+        types_db=types_db, replace_doctypes=config.replace_doctypes
     )
 
     if not out_dir:
@@ -182,14 +182,14 @@ def main(source_dir, out_dir, config_path, verbose):
             fo.write(stub_content)
 
     # Report basic statistics
-    successful_queries = inspector.stats["successful_queries"]
+    successful_queries = types_db.stats["successful_queries"]
     click.secho(f"{successful_queries} matched annotations", fg="green")
 
     grammar_errors = stub_transformer.transformer.stats["grammar_errors"]
     if grammar_errors:
         click.secho(f"{grammar_errors} grammar violations", fg="red")
 
-    unknown_doctypes = inspector.stats["unknown_doctypes"]
+    unknown_doctypes = types_db.stats["unknown_doctypes"]
     if unknown_doctypes:
         click.secho(f"{len(unknown_doctypes)} unknown doctypes:", fg="red")
         click.echo("  " + "\n  ".join(set(unknown_doctypes)))
