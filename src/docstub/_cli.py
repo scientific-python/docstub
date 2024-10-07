@@ -86,7 +86,7 @@ def _build_import_map(config, source_dir):
         func=TypeCollector.collect,
         serializer=TypeCollector.ImportSerializer(),
         cache_dir=Path.cwd() / ".docstub_cache",
-        name="collected_types",
+        name=f"{__version__}/collected_types",
     )
     for source_path in walk_source(source_dir):
         logger.info("collecting types in %s", source_path)
