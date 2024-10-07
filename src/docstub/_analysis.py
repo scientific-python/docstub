@@ -261,23 +261,33 @@ def common_known_imports():
 
 
 class TypeCollector(cst.CSTVisitor):
+    """Collect types from a given Python file.
+
+    Examples
+    --------
+    >>> types = TypeCollector.collect(__file__)
+    >>> types[f"{__name__}.TypeCollector"]
+    <KnownImport 'from docstub._analysis import TypeCollector'>
+    """
 
     class ImportSerializer:
-        """Implements the FileCacheIO protocol to cache `TypeCollector.collect`"""
+        """Implements the `FuncSerializer` protocol to cache calls to `collect`."""
 
-        def hash(self, path: Path) -> str:
+        suffix = ".json"
+        encoding = "utf-8"
+
+        def hash_args(self, path: Path) -> str:
             key = pyfile_checksum(path)
             return key
 
-        def serialize(self, path: Path, data: dict[str, KnownImport]) -> None:
-            raw_data = {qualname: asdict(imp) for qualname, imp in data.items()}
-            with open(path, "w") as fp:
-                json.dump(raw_data, fp)
+        def serialize(self, data: dict[str, KnownImport]) -> bytes:
+            primitives = {qualname: asdict(imp) for qualname, imp in data.items()}
+            raw = json.dumps(primitives).encode(self.encoding)
+            return raw
 
-        def deserialize(self, path: Path) -> dict[str, KnownImport]:
-            with open(path) as fp:
-                raw_data = json.load(fp)
-            data = {qualname: KnownImport(**kw) for qualname, kw in raw_data.items()}
+        def deserialize(self, raw: bytes) -> dict[str, KnownImport]:
+            primitives = json.loads(raw.decode(self.encoding))
+            data = {qualname: KnownImport(**kw) for qualname, kw in primitives.items()}
             return data
 
     @classmethod

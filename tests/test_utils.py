@@ -89,16 +89,16 @@ class Test_FileCache:
     def test_basic(self, tmp_path):
 
         class Serializer:
-            def hash(self, arg):
+            suffix = ".txt"
+
+            def hash_args(self, arg):
                 return str(hash(arg))
 
-            def serialize(self, path, data):
-                with path.open("x") as fp:
-                    fp.write(str(data))
+            def serialize(self, data):
+                return str(data).encode()
 
-            def deserialize(self, path):
-                with path.open("r") as fp:
-                    return int(fp.read())
+            def deserialize(self, raw):
+                return int(raw.decode())
 
         counter = defaultdict(lambda: 0)
 
@@ -107,14 +107,15 @@ class Test_FileCache:
             return x * x
 
         cached_square = _utils.FileCache(
-            cached_func=square, serializer=Serializer(), cache_dir=tmp_path, name="test"
+            func=square, serializer=Serializer(), cache_dir=tmp_path, name="test"
         )
 
         assert cached_square(3) == 9
         assert counter[3] == 1
 
         # Result was cached
-        cached_file = tmp_path / "test" / str(Serializer().hash(3))
+        entry_name = f"{Serializer().hash_args(3)!s}{Serializer.suffix}"
+        cached_file = tmp_path / "test" / entry_name
         assert cached_file.is_file()
 
         # With the square(3) cached, the counter no longer increases
@@ -123,14 +124,14 @@ class Test_FileCache:
 
         # Using another FileCache will use the existing cache
         cached_square_2 = _utils.FileCache(
-            cached_func=square, serializer=Serializer(), cache_dir=tmp_path, name="test"
+            func=square, serializer=Serializer(), cache_dir=tmp_path, name="test"
         )
         assert cached_square_2(3) == 9
         assert counter[3] == 1
 
         # But using another FileCache with a different name will not hit existing cache
         cached_square_3 = _utils.FileCache(
-            cached_func=square,
+            func=square,
             serializer=Serializer(),
             cache_dir=tmp_path,
             name="test2",

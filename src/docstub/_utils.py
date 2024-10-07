@@ -291,27 +291,39 @@ class ContextFormatter:
             raise TypeError(msg)
 
 
-class FileCacheIO[T](Protocol):
-    """Defines an interface to serialize and deserialize data in `FileCache`."""
+class FuncSerializer[T](Protocol):
+    """Defines an interface to serialize and deserialize results of a function."""
 
-    def hash(self, *args, **kwargs) -> str: ...
-    def serialize(self, path: Path, data: T) -> None: ...
-    def deserialize(self, path: Path) -> T: ...
+    suffix: str
+
+    def hash_args(self, *args, **kwargs) -> str: ...
+    def serialize(self, data: T) -> bytes: ...
+    def deserialize(self, raw: bytes) -> T: ...
 
 
 class FileCache:
-    """Cache results from a function call on disk."""
+    """Cache results from a function call as a files on disk.
 
-    def __init__(self, *, cached_func, serializer, cache_dir, name):
+    This class can cache results of a function to the disk. A unique key is
+    generated from the arguments to the function, and the result is cached
+    inside a file named after this key.
+    """
+
+    def __init__(self, *, func, serializer, cache_dir, name):
         """
         Parameters
         ----------
-        cached_func : callable
-        serializer : FileCacheIO
-            An interface that
-        cache_dir : Path, optional
+        func : callable
+            The function whose output shall be cached.
+        serializer : FuncSerializer
+            An interface that matches the given `func`. It must implement the
+            `FileCachIO` protocol.
+        cache_dir : Path
+            The directory of the cache.
+        name : str
+            A unique name to separate parallel caches inside `cache_dir`.
         """
-        self.cached_func = cached_func
+        self.func = func
         self.serializer = serializer
         self._cache_dir = cache_dir
         self.name = name
@@ -325,11 +337,15 @@ class FileCache:
         return _named_cache_dir
 
     def __call__(self, *args, **kwargs):
-        key = self.serializer.hash(*args, **kwargs)
-        entry_path = self.named_cache_dir / f"{key}"
+        key = self.serializer.hash_args(*args, **kwargs)
+        entry_path = self.named_cache_dir / f"{key}{self.serializer.suffix}"
         if entry_path.is_file():
-            entry = self.serializer.deserialize(entry_path)
+            with entry_path.open("rb") as fp:
+                raw = fp.read()
+            data = self.serializer.deserialize(raw)
         else:
-            entry = self.cached_func(*args, **kwargs)
-            self.serializer.serialize(entry_path, entry)
-        return entry
+            data = self.func(*args, **kwargs)
+            raw = self.serializer.serialize(data)
+            with entry_path.open("xb") as fp:
+                fp.write(raw)
+        return data
