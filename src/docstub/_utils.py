@@ -4,6 +4,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from textwrap import indent
+from zlib import crc32
 
 import click
 
@@ -103,6 +104,28 @@ def module_name_from_path(path):
 
     name = ".".join(name_parts)
     return name
+
+
+def pyfile_checksum(path):
+    """Compute a unique key for a Python file.
+
+    The key takes into account the given `path`, the relative position if the
+    file is part of a Python package and the file's content.
+
+    Parameters
+    ----------
+    path : Path
+
+    Returns
+    -------
+    key : str
+    """
+    module_name = module_name_from_path(path).encode()
+    absolute_path = str(path.resolve()).encode()
+    with open(path, "rb") as fp:
+        content = fp.read()
+    key = crc32(content + module_name + absolute_path)
+    return key
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)

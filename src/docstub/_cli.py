@@ -1,5 +1,7 @@
 import logging
 import sys
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import click
@@ -10,6 +12,7 @@ from ._analysis import (
     TypeCollector,
     common_known_imports,
 )
+from ._cache import FileCache
 from ._config import Config
 from ._stubs import Py2StubTransformer, walk_source, walk_source_and_targets
 from ._version import __version__
@@ -26,7 +29,7 @@ def _load_configuration(config_path=None):
 
     Returns
     -------
-    config : dict[str, Any]
+    config : ~.Config
     """
     config = Config.from_toml(Config.DEFAULT_CONFIG_PATH)
 
@@ -65,6 +68,58 @@ def _setup_logging(*, verbose):
     )
 
 
+def _build_import_map(config, source_dir):
+    """Build a map of known imports.
+
+    Parameters
+    ----------
+    config : ~.Config
+    source_dir : Path
+
+    Returns
+    -------
+    imports : dict[str, ~.KnownImport]
+    """
+    known_imports = common_known_imports()
+
+    collect_cached_types = FileCache(
+        func=TypeCollector.collect,
+        serializer=TypeCollector.ImportSerializer(),
+        cache_dir=Path.cwd() / ".docstub_cache",
+        name=f"{__version__}/collected_types",
+    )
+    for source_path in walk_source(source_dir):
+        logger.info("collecting types in %s", source_path)
+        known_imports_in_source = collect_cached_types(source_path)
+        known_imports.update(known_imports_in_source)
+
+    known_imports.update(KnownImport.many_from_config(config.known_imports))
+
+    return known_imports
+
+
+@contextmanager
+def report_execution_time():
+    start = time.time()
+    try:
+        yield
+    finally:
+        stop = time.time()
+        total_seconds = stop - start
+
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        formated_duration = f"{seconds:.3f} s"
+        if minutes:
+            formated_duration = f"{minutes} min {formated_duration}"
+        if hours:
+            formated_duration = f"{hours} h {formated_duration}"
+
+        click.echo()
+        click.echo(f"Finished in {formated_duration}")
+
+
 @click.command()
 @click.version_option(__version__)
 @click.argument("source_dir", type=click.Path(exists=True, file_okay=False))
@@ -82,19 +137,13 @@ def _setup_logging(*, verbose):
 )
 @click.option("-v", "--verbose", count=True, help="Log more details.")
 @click.help_option("-h", "--help")
+@report_execution_time()
 def main(source_dir, out_dir, config_path, verbose):
     _setup_logging(verbose=verbose)
 
     source_dir = Path(source_dir)
     config = _load_configuration(config_path)
-
-    # Build map of known imports
-    known_imports = common_known_imports()
-    for source_path in walk_source(source_dir):
-        logger.info("collecting types in %s", source_path)
-        known_imports_in_source = TypeCollector.collect(source_path)
-        known_imports.update(known_imports_in_source)
-    known_imports.update(KnownImport.many_from_config(config.known_imports))
+    known_imports = _build_import_map(config, source_dir)
 
     inspector = StaticInspector(
         source_pkgs=[source_dir.parent.resolve()], known_imports=known_imports

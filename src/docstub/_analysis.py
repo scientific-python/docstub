@@ -2,15 +2,16 @@
 
 import builtins
 import collections.abc
+import json
 import logging
 import re
 import typing
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import libcst as cst
 
-from ._utils import accumulate_qualname, module_name_from_path
+from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +261,38 @@ def common_known_imports():
 
 
 class TypeCollector(cst.CSTVisitor):
+    """Collect types from a given Python file.
+
+    Examples
+    --------
+    >>> types = TypeCollector.collect(__file__)
+    >>> types[f"{__name__}.TypeCollector"]
+    <KnownImport 'from docstub._analysis import TypeCollector'>
+    """
+
+    class ImportSerializer:
+        """Implements the `FuncSerializer` protocol to cache `TypeCollector.collect`."""
+
+        suffix = ".json"
+        encoding = "utf-8"
+
+        def hash_args(self, path: Path) -> str:
+            """Compute a unique hash from the path passed to `TypeCollector.collect`."""
+            key = pyfile_checksum(path)
+            return key
+
+        def serialize(self, data: dict[str, KnownImport]) -> bytes:
+            """Serialize results from `TypeCollector.collect`."""
+            primitives = {qualname: asdict(imp) for qualname, imp in data.items()}
+            raw = json.dumps(primitives, separators=(",", ":")).encode(self.encoding)
+            return raw
+
+        def deserialize(self, raw: bytes) -> dict[str, KnownImport]:
+            """Deserialize results from `TypeCollector.collect`."""
+            primitives = json.loads(raw.decode(self.encoding))
+            data = {qualname: KnownImport(**kw) for qualname, kw in primitives.items()}
+            return data
+
     @classmethod
     def collect(cls, file):
         """Collect importable type annotations in given file.
