@@ -7,6 +7,7 @@ import logging
 import re
 import typing
 from dataclasses import asdict, dataclass
+from functools import cache
 from pathlib import Path
 
 import libcst as cst
@@ -65,6 +66,18 @@ class KnownImport:
     import_path: str = None
     import_alias: str = None
     builtin_name: str = None
+
+    @classmethod
+    @cache
+    def Any(cls):
+        """Create `KnownImport` corresponding to ``from typing import Any``.
+
+        Returns
+        -------
+        any : Self
+        """
+        out = cls(import_path="typing", import_name="Any")
+        return out
 
     @classmethod
     def one_from_config(cls, name, *, info):

@@ -6,7 +6,7 @@ from typing import Any, Literal, Self, Union
 
 from . import CustomException
 
-logger = ...
+logger: Any = ...
 
 __all__ = [
     "func_empty",

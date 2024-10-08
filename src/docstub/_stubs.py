@@ -232,7 +232,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         if self.types_db is not None:
             self.types_db.current_source = value
 
-    def python_to_stub(self, source, *, module_path=None):
+    def python_to_stub(self, source, *, module_path=None, try_format=True):
         """Convert Python source code to stub-file ready code.
 
         Parameters
@@ -242,6 +242,9 @@ class Py2StubTransformer(cst.CSTTransformer):
             The location of the source that is transformed into a stub file.
             If given, used to enhance logging & error messages with more
             context information.
+        try_format : bool, optional
+            Try to format the output, if the appropriate dependencies are
+            installed.
 
         Returns
         -------
@@ -257,7 +260,8 @@ class Py2StubTransformer(cst.CSTTransformer):
             source_tree = cst.metadata.MetadataWrapper(source_tree)
             stub_tree = source_tree.visit(self)
             stub = stub_tree.code
-            stub = try_format_stub(stub)
+            if try_format is True:
+                stub = try_format_stub(stub)
             return stub
         finally:
             self._scope_stack = None
@@ -421,7 +425,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         return cst.RemovalSentinel.REMOVE
 
     def leave_Assign(self, original_node, updated_node):
-        """Drop value of assign statements from stub files.
+        """Handle assignment statements without annotations.
 
         Parameters
         ----------
@@ -430,17 +434,61 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Returns
         -------
-        updated_node : cst.Assign
+        updated_node : cst.Assign or cst.FlattenSentinel
         """
-        targets = cstm.findall(updated_node, cstm.AssignTarget())
-        names_are__all__ = [
-            name
-            for target in targets
-            for name in cstm.findall(target, cst.Name(value="__all__"))
+        target_names = [
+            name.value
+            for target in updated_node.targets
+            for name in cstm.findall(target, cstm.Name())
         ]
-        if not names_are__all__:
-            # TODO replace with AnnAssign if possible / figure out assign type?
-            updated_node = updated_node.with_changes(value=self._body_replacement)
+        if "__all__" in target_names:
+            logger.warning(
+                "found `__all__` in assignment with multiple targets, not modifying it"
+            )
+            return updated_node
+
+        assert len(original_node.targets) > 0
+        if len(target_names) == 1:
+            # Replace with annotated assignment
+            updated_node = self._replace_assign_with_annotated(
+                updated_node.targets[0].target
+            )
+
+        else:
+            # Unpack assignment with multiple targets into multple annotated ones
+            # e.g. `x, y = (1, 2)` -> `x: Any = ...; y: Any = ...`
+            unpacked = []
+            for name in target_names:
+                is_last = name == target_names[-1]
+                sub_node = self._replace_assign_with_annotated(
+                    cst.Name(name), trailing_semicolon=not is_last
+                )
+                unpacked.append(sub_node)
+            updated_node = cst.FlattenSentinel(unpacked)
+
+        return updated_node
+
+    def leave_AnnAssign(self, original_node, updated_node):
+        """Handle annotated assignment statements.
+
+        Replace values of annotated assignments with ``...``, except when
+        the assignment target is `__all__` or the annotation is `TypeAlias`.
+
+        Parameters
+        ----------
+        original_node : cst.AnnAssign
+        updated_node : cst.AnnAssign
+
+        Returns
+        -------
+        updated_node : cst.AnnAssign
+        """
+        is_type_alias = cstm.matches(
+            updated_node.annotation, cstm.Annotation(cstm.Name("TypeAlias"))
+        )
+        is__all__ = cstm.matches(updated_node.target, cstm.Name("__all__"))
+        if updated_node.value is not None and not is_type_alias and not is__all__:
+            updated_node = updated_node.with_changes(value=cst.Ellipsis())
         return updated_node
 
     def visit_Module(self, node):
@@ -613,3 +661,19 @@ class Py2StubTransformer(cst.CSTTransformer):
                     e,
                 )
         return annotations
+
+    def _replace_assign_with_annotated(self, target, *, trailing_semicolon=False):
+        """Create an annotated assign."""
+        semicolon = (
+            cst.Semicolon(whitespace_after=cst.SimpleWhitespace(" "))
+            if trailing_semicolon
+            else cst.MaybeSentinel.DEFAULT
+        )
+        node = cst.AnnAssign(
+            target=target,
+            annotation=self._Annotation_Any,
+            value=cst.Ellipsis(),
+            semicolon=semicolon,
+        )
+        self._required_imports.add(KnownImport.Any())
+        return node

@@ -135,10 +135,7 @@ class Annotation:
         return values, imports
 
 
-GrammarErrorFallback = Annotation(
-    value="Any",
-    imports=frozenset((KnownImport(import_path="typing", import_name="Any"),)),
-)
+GrammarErrorFallback = Annotation(value="Any", imports=frozenset([KnownImport.Any()]))
 
 
 @lark.visitors.v_args(tree=True)
