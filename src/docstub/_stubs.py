@@ -175,6 +175,37 @@ def _get_docstring_node(node):
     return docstring_node
 
 
+def _log_error_with_line_context(func):
+    """Log unexpected errors in Py2StubTransformer` with line context.
+
+    Parameters
+    ----------
+    func : callable
+        A `leave_*` method of `Py2StubTransformer`.
+
+    Returns
+    -------
+    wrapped : callable
+    """
+
+    @wraps(func)
+    def wrapped(self: "Py2StubTransformer", original_node, updated_node):
+        try:
+            return func(self, original_node, updated_node)
+        except (SystemError, KeyboardInterrupt):
+            raise
+        except Exception:
+            position = self.get_metadata(
+                cst.metadata.PositionProvider, original_node
+            ).start
+            logger.exception(
+                "unexpected exception at %s:%s", self.current_source, position.line
+            )
+            return updated_node
+
+    return wrapped
+
+
 class Py2StubTransformer(cst.CSTTransformer):
     """Transform syntax tree of a Python file into the tree of a stub file [1]_.
 
@@ -349,6 +380,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         self._scope_stack.pop()
         return updated_node
 
+    @_log_error_with_line_context
     def leave_Param(self, original_node, updated_node):
         """Add type annotation to parameter.
 
@@ -426,6 +458,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         """
         return cst.RemovalSentinel.REMOVE
 
+    @_log_error_with_line_context
     def leave_Assign(self, original_node, updated_node):
         """Handle assignment statements without annotations.
 
@@ -444,9 +477,10 @@ class Py2StubTransformer(cst.CSTTransformer):
             for name in cstm.findall(target, cstm.Name())
         ]
         if "__all__" in target_names:
-            logger.warning(
-                "found `__all__` in assignment with multiple targets, not modifying it"
-            )
+            if len(target_names) > 1:
+                logger.warning(
+                    "found `__all__` in assignment with multiple targets, not modifying it"
+                )
             return updated_node
 
         assert len(original_node.targets) > 0
@@ -468,6 +502,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         return updated_node
 
+    @_log_error_with_line_context
     def leave_AnnAssign(self, original_node, updated_node):
         """Handle annotated assignment statements.
 
