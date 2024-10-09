@@ -13,7 +13,7 @@ import lark.visitors
 from numpydoc.docscrape import NumpyDocString
 
 from ._analysis import KnownImport
-from ._utils import ContextFormatter, accumulate_qualname, escape_qualname
+from ._utils import ContextFormatter, DocstubError, accumulate_qualname, escape_qualname
 
 logger = logging.getLogger(__name__)
 
@@ -140,9 +140,23 @@ FallbackAnnotation = Annotation(
 )
 
 
+class QualnameIsKeyword(DocstubError):
+    """Raised when a qualname is a blacklisted Python keyword."""
+
+
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
     """Transformer for docstring type descriptions (doctypes).
+
+    Attributes
+    ----------
+    blacklisted_qualnames : frozenset[str]
+        All Python keywords [1]_ are blacklisted from use in qualnames except for ``True``
+        ``False`` and ``None``.
+
+    References
+    ----------
+    .. [1] https://docs.python.org/3/reference/lexical_analysis.html#keywords
 
     Examples
     --------
@@ -153,6 +167,43 @@ class DoctypeTransformer(lark.visitors.Transformer):
     >>> unknown_names
     [('tuple', 0, 5), ('int', 9, 12)]
     """
+
+    blacklisted_qualnames = frozenset(
+        {
+            "await",
+            "else",
+            "import",
+            "pass",
+            "break",
+            "except",
+            "in",
+            "raise",
+            "class",
+            "finally",
+            "is",
+            "return",
+            "and",
+            "continue",
+            "for",
+            "lambda",
+            "try",
+            "as",
+            "def",
+            "from",
+            "nonlocal",
+            "while",
+            "assert",
+            "del",
+            "global",
+            "not",
+            "with",
+            "async",
+            "elif",
+            "if",
+            "or",
+            "yield",
+        }
+    )
 
     def __init__(self, *, types_db=None, replace_doctypes=None, **kwargs):
         """
@@ -203,7 +254,11 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 value=value, imports=frozenset(self._collected_imports)
             )
             return annotation, self._unknown_qualnames
-        except (lark.exceptions.LexError, lark.exceptions.ParseError):
+        except (
+            lark.exceptions.LexError,
+            lark.exceptions.ParseError,
+            QualnameIsKeyword,
+        ):
             self.stats["grammar_errors"] += 1
             raise
         finally:
@@ -272,6 +327,13 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 break
 
         _qualname = self._find_import(_qualname, meta=tree.meta)
+
+        if _qualname in self.blacklisted_qualnames:
+            msg = (
+                f"qualname {_qualname!r} in docstring type description "
+                "is a reserved Python keyword and not allowed"
+            )
+            raise QualnameIsKeyword(msg)
 
         _qualname = lark.Token(type="QUALNAME", value=_qualname)
         return _qualname

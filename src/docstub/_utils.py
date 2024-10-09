@@ -261,3 +261,7 @@ class ContextFormatter:
         if self.path is not None and not isinstance(self.path, Path):
             msg = f"expected `path` to be of type `Path`, got {type(self.path)!r}"
             raise TypeError(msg)
+
+
+class DocstubError(Exception):
+    """An error raised by docstub."""
