@@ -1,3 +1,4 @@
+import re
 from textwrap import dedent
 
 import libcst as cst
@@ -74,6 +75,43 @@ class Test_get_docstring_node:
         assert docstring_node is None
 
 
+MODULE_ATTRIBUTE_TEMPLATE = '''\
+"""Module docstring.
+
+Attributes
+----------
+{doctype}
+"""
+
+{assign}
+'''
+
+CLASS_ATTRIBUTE_TEMPLATE = '''\
+class TopLevel:
+    """Class docstring.
+
+    Attributes
+    ----------
+    {doctype}
+    """
+
+    {assign}
+'''
+
+NESTED_CLASS_ATTRIBUTE_TEMPLATE = '''\
+class TopLevel:
+    class Nested:
+        """Class docstring.
+
+        Attributes
+        ----------
+        {doctype}
+        """
+
+        {assign}
+'''
+
+
 class Test_Py2StubTransformer:
 
     def test_default_None(self):
@@ -117,16 +155,64 @@ class Test_Py2StubTransformer:
         ],
     )
     @pytest.mark.parametrize("scope", ["module", "class", "nested class"])
-    def test_attributes_no_docstring(self, assign, expected, scope):
-        src = assign
-        if scope == "class":
-            src = f"class TopLevel:\n    {assign}"""
-        if scope == "nested class":
-            src = f"class TopLevel:\n    class Nested:\n        {assign}"""
+    def test_attributes_no_doctype(self, assign, expected, scope):
+        if scope == "module":
+            src = MODULE_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype="")
+        elif scope == "class":
+            src = CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype="")
+        elif scope == "nested class":
+            src = NESTED_CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype="")
 
         transformer = Py2StubTransformer()
         result = transformer.python_to_stub(src, try_format=False)
-        assert expected in result
+
+        # Find exactly one occurrence of `expected`
+        pattern = f"^ *({re.escape(expected)})$"
+        matches = re.findall(pattern, result, flags=re.MULTILINE)
+        assert [matches] == [[expected]], result
+
+        # Docstrings are stripped
+        assert "'''" not in result
+        assert '"""' not in result
+        if "Any" in result:
+            assert "from typing import Any" in result
+    # fmt: on
+
+    # fmt: off
+    @pytest.mark.parametrize(
+        ("assign", "doctype", "expected"),
+        [
+            ("plain = 3",       "plain : int",  "plain: int"),
+            ("plain = None",    "plain : int",  "plain: int"),
+            ("x, y = (1, 2)",   "x : int",      "x: int; y: Incomplete"),
+            # Replace pre-existing annotations
+            ("annotated: float = 1.0", "annotated : int", "annotated: int"),
+            # Type aliases are untouched
+            ("alias: TypeAlias = int", "alias: str",      "alias: TypeAlias = int"),
+            ("type alias = int",       "alias: str",      "type alias = int"),
+        ],
+    )
+    # @pytest.mark.parametrize("scope", ["module", "class", "nested class"])
+    @pytest.mark.parametrize("scope", ["module"])
+    def test_attributes_with_doctype(self, assign, doctype, expected, scope):
+        if scope == "module":
+            src = MODULE_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype=doctype)
+        elif scope == "class":
+            src = CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype=doctype)
+        elif scope == "nested class":
+            src = NESTED_CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype=doctype)
+
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(src, try_format=False)
+
+        # Find exactly one occurrence of `expected`
+        pattern = f"^ *({re.escape(expected)})$"
+        matches = re.findall(pattern, result, flags=re.MULTILINE)
+        assert [matches] == [[expected]], result
+
+        # Docstrings are stripped
+        assert "'''" not in result
+        assert '"""' not in result
         if "Any" in result:
             assert "from typing import Any" in result
     # fmt: on

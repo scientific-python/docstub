@@ -339,9 +339,10 @@ class Py2StubTransformer(cst.CSTTransformer):
         ds_annotations = self._pytypes_stack.pop()
         if ds_annotations and ds_annotations.returns:
             assert ds_annotations.returns.value
-            node_changes["returns"] = cst.Annotation(
+            annotation = cst.Annotation(
                 cst.parse_expression(ds_annotations.returns.value)
             )
+            node_changes["returns"] = annotation
             self._required_imports |= ds_annotations.returns.imports
 
         updated_node = updated_node.with_changes(**node_changes)
@@ -451,18 +452,16 @@ class Py2StubTransformer(cst.CSTTransformer):
         assert len(original_node.targets) > 0
         if len(target_names) == 1:
             # Replace with annotated assignment
-            updated_node = self._replace_assign_with_annotated(
-                updated_node.targets[0].target
-            )
+            updated_node = self._create_annotated_assign(name=target_names[0])
 
         else:
-            # Unpack assignment with multiple targets into multple annotated ones
+            # Unpack assignment with multiple targets into multiple annotated ones
             # e.g. `x, y = (1, 2)` -> `x: Any = ...; y: Any = ...`
             unpacked = []
             for name in target_names:
                 is_last = name == target_names[-1]
-                sub_node = self._replace_assign_with_annotated(
-                    cst.Name(name), trailing_semicolon=not is_last
+                sub_node = self._create_annotated_assign(
+                    name=name, trailing_semicolon=not is_last
                 )
                 unpacked.append(sub_node)
             updated_node = cst.FlattenSentinel(unpacked)
@@ -471,9 +470,6 @@ class Py2StubTransformer(cst.CSTTransformer):
 
     def leave_AnnAssign(self, original_node, updated_node):
         """Handle annotated assignment statements.
-
-        Replace values of annotated assignments with ``...``, except when
-        the assignment target is `__all__` or the annotation is `TypeAlias`.
 
         Parameters
         ----------
@@ -484,12 +480,43 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.AnnAssign
         """
+        name = updated_node.target.value
         is_type_alias = cstm.matches(
             updated_node.annotation, cstm.Annotation(cstm.Name("TypeAlias"))
         )
         is__all__ = cstm.matches(updated_node.target, cstm.Name("__all__"))
+
+        # Remove value if not type alias or __all__
         if updated_node.value is not None and not is_type_alias and not is__all__:
-            updated_node = updated_node.with_changes(value=cst.Ellipsis())
+            updated_node = updated_node.with_changes(
+                value=None, equal=cst.MaybeSentinel.DEFAULT
+            )
+
+        # Replace with type annotation from docstring, if available
+        pytypes = self._pytypes_stack[-1]
+        if pytypes and name in pytypes.attributes:
+            pytype = pytypes.attributes[name]
+            expr = cst.parse_expression(pytype.value)
+            self._required_imports |= pytype.imports
+
+            if updated_node.annotation is not None:
+                # Turn original annotation into str and print with context
+                position = self.get_metadata(
+                    cst.metadata.PositionProvider, original_node
+                ).start
+                ctx = ContextFormatter(path=self.current_source, line=position.line)
+                replaced = cst.Module([]).code_for_node(
+                    updated_node.annotation.annotation
+                )
+                ctx.print_message(
+                    short="replacing existing inline annotation",
+                    details=f"{replaced}\n{"^" * len(replaced)} -> {pytype.value}",
+                )
+
+            updated_node = updated_node.with_deep_changes(
+                updated_node.annotation, annotation=expr
+            )
+
         return updated_node
 
     def visit_Module(self, node):
@@ -645,7 +672,6 @@ class Py2StubTransformer(cst.CSTTransformer):
             position = self.get_metadata(
                 cst.metadata.PositionProvider, docstring_node
             ).start
-
             ctx = ContextFormatter(path=self.current_source, line=position.line)
             try:
                 annotations = DocstringAnnotations(
@@ -663,18 +689,35 @@ class Py2StubTransformer(cst.CSTTransformer):
                 )
         return annotations
 
-    def _replace_assign_with_annotated(self, target, *, trailing_semicolon=False):
-        """Create an annotated assign."""
+    def _create_annotated_assign(self, *, name, trailing_semicolon=False):
+        """Create an annotated assign.
+
+        Parameters
+        ----------
+        name : str
+        trailing_semicolon : bool, optional
+
+        Returns
+        -------
+        replacement : cst.AnnAssign
+        """
+        pytypes = self._pytypes_stack[-1]
+        if pytypes and name in pytypes.attributes:
+            pytype = pytypes.attributes[name]
+            annotation = cst.Annotation(cst.parse_expression(pytype.value))
+            self._required_imports |= pytype.imports
+        else:
+            annotation = self._Annotation_Incomplete
+            self._required_imports.add(KnownImport.typeshed_Incomplete())
+
         semicolon = (
             cst.Semicolon(whitespace_after=cst.SimpleWhitespace(" "))
             if trailing_semicolon
             else cst.MaybeSentinel.DEFAULT
         )
         node = cst.AnnAssign(
-            target=target,
-            annotation=self._Annotation_Any,
-            value=cst.Ellipsis(),
+            target=cst.Name(name),
+            annotation=annotation,
             semicolon=semicolon,
         )
-        self._required_imports.add(KnownImport.Any())
         return node

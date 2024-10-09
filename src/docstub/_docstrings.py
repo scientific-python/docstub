@@ -421,6 +421,28 @@ class DocstringAnnotations:
             return annotation
 
     @cached_property
+    def attributes(self) -> dict[str, Annotation]:
+        annotations = {}
+        for attribute in self.np_docstring["Attributes"]:
+            if not attribute.type:
+                continue
+
+            ds_line = 0
+            for i, line in enumerate(self.docstring.split("\n")):
+                if attribute.name in line and attribute.type in line:
+                    ds_line = i
+                    break
+
+            if attribute.name in annotations:
+                logger.warning("duplicate parameter name %r, ignoring", attribute.name)
+                continue
+
+            annotation = self._doctype_to_annotation(attribute.type, ds_line=ds_line)
+            annotations[attribute.name] = annotation
+
+        return annotations
+
+    @cached_property
     def parameters(self) -> dict[str, Annotation]:
         all_params = chain(
             self.np_docstring["Parameters"], self.np_docstring["Other Parameters"]
