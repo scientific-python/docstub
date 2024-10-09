@@ -103,14 +103,14 @@ class Test_Py2StubTransformer:
         [
             ("annotated: int",                  "annotated: int"),
             # No implicit optional for values of `None`
-            ("annotated_value: int = None",     "annotated_value: int = ..."),
-            ("undocumented_assign = None",      "undocumented_assign: Any = ..."),
+            ("annotated_value: int = None",     "annotated_value: int"),
+            ("undocumented_assign = None",      "undocumented_assign: Incomplete"),
             # Type aliases are untouched
             ("annot_alias: TypeAlias = int",    "annot_alias: TypeAlias = int"),
             ("type type_stmt = int",            "type type_stmt = int"),
             # Unpacking assignments are expanded
-            ("a, b = (4, 5)",                   "a: Any = ...; b: Any = ..."),
-            ("x, *y = (4, 5)",                  "x: Any = ...; y: Any = ..."),
+            ("a, b = (4, 5)",                   "a: Incomplete; b: Incomplete"),
+            ("x, *y = (4, 5)",                  "x: Incomplete; y: Incomplete"),
             # All is untouched
             ("__all__ = ['foo']",               "__all__ = ['foo']"),
             ("__all__: list[str] = ['foo']",    "__all__: list[str] = ['foo']"),

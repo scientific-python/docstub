@@ -199,7 +199,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         leading_whitespace=cst.SimpleWhitespace(value=" "),
         body=[cst.Expr(value=cst.Ellipsis())],
     )
-    _Annotation_Any = cst.Annotation(cst.Name("Any"))
+    _Annotation_Incomplete = cst.Annotation(cst.Name("Incomplete"))
     _Annotation_None = cst.Annotation(cst.Name("None"))
 
     def __init__(self, *, types_db=None, replace_doctypes=None):
@@ -386,10 +386,10 @@ class Py2StubTransformer(cst.CSTTransformer):
                 if pytype.imports:
                     self._required_imports |= pytype.imports
 
-        # Potentially use "Any" except for first param in (class)methods
+        # Potentially use "Incomplete" except for first param in (class)methods
         elif not is_self_or_cls and updated_node.annotation is None:
-            node_changes["annotation"] = self._Annotation_Any
-            import_ = KnownImport(import_path="typing", import_name="Any")
+            node_changes["annotation"] = self._Annotation_Incomplete
+            import_ = KnownImport.typeshed_Incomplete()
             self._required_imports.add(import_)
 
         if node_changes:

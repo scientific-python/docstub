@@ -47,13 +47,13 @@ class KnownImport:
 
     Attributes
     ----------
-    import_path : str, optional
+    import_path
         Dotted names after "from".
-    import_name : str, optional
+    import_name
         Dotted names after "import".
-    import_alias : str, optional
+    import_alias
         Name (without ".") after "as".
-    builtin_name : str, optional
+    builtin_name
         Names an object that's builtin and doesn't need an import.
 
     Examples
@@ -69,15 +69,23 @@ class KnownImport:
 
     @classmethod
     @cache
-    def Any(cls):
-        """Create `KnownImport` corresponding to ``from typing import Any``.
+    def typeshed_Incomplete(cls):
+        """Create import corresponding to ``from _typeshed import Incomplete``.
+
+        This type is not actually available at runtime and only intended to be
+        used in stub files [1]_.
 
         Returns
         -------
-        any : Self
+        import : KnownImport
+            The import corresponding to ``from _typeshed import Incomplete``.
+
+        References
+        ----------
+        .. [1] https://typing.readthedocs.io/en/latest/guides/writing_stubs.html#incomplete-stubs
         """
-        out = cls(import_path="typing", import_name="Any")
-        return out
+        import_ = cls(import_path="_typeshed", import_name="Incomplete")
+        return import_
 
     @classmethod
     def one_from_config(cls, name, *, info):

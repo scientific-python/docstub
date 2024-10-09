@@ -135,7 +135,9 @@ class Annotation:
         return values, imports
 
 
-GrammarErrorFallback = Annotation(value="Any", imports=frozenset([KnownImport.Any()]))
+FallbackAnnotation = Annotation(
+    value="Incomplete", imports=frozenset([KnownImport.typeshed_Incomplete()])
+)
 
 
 @lark.visitors.v_args(tree=True)
@@ -396,7 +398,7 @@ class DocstringAnnotations:
                 details = details.replace("^", click.style("^", fg="red", bold=True))
             if ctx:
                 ctx.print_message("invalid syntax in doctype", details=details)
-            return GrammarErrorFallback
+            return FallbackAnnotation
 
         except lark.visitors.VisitError as e:
             tb = "\n".join(traceback.format_exception(e.orig_exc))
@@ -405,7 +407,7 @@ class DocstringAnnotations:
                 ctx.print_message(
                     "unexpected error while parsing doctype", details=details
                 )
-            return GrammarErrorFallback
+            return FallbackAnnotation
 
         else:
             for name, start_col, stop_col in unknown_qualnames:
