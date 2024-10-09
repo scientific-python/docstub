@@ -3,6 +3,7 @@
 import enum
 import logging
 from dataclasses import dataclass
+from functools import wraps
 
 import libcst as cst
 import libcst.matchers as cstm
@@ -106,7 +107,7 @@ def try_format_stub(stub: str) -> str:
     return stub
 
 
-class FuncType(enum.StrEnum):
+class ScopeType(enum.StrEnum):
     MODULE = enum.auto()
     CLASS = enum.auto()
     FUNC = enum.auto()
@@ -119,19 +120,19 @@ class FuncType(enum.StrEnum):
 class _Scope:
     """"""
 
-    type: FuncType
+    type: ScopeType
     node: cst.CSTNode = None
 
     @property
     def has_self_or_cls(self):
-        return self.type in {FuncType.METHOD, FuncType.CLASSMETHOD}
+        return self.type in {ScopeType.METHOD, ScopeType.CLASSMETHOD}
 
     @property
     def is_method(self):
         return self.type in {
-            FuncType.METHOD,
-            FuncType.CLASSMETHOD,
-            FuncType.STATICMETHOD,
+            ScopeType.METHOD,
+            ScopeType.CLASSMETHOD,
+            ScopeType.STATICMETHOD,
         }
 
     @property
@@ -280,7 +281,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         out : Literal[True]
         """
-        self._scope_stack.append(_Scope(type=FuncType.CLASS, node=node))
+        self._scope_stack.append(_Scope(type=ScopeType.CLASS, node=node))
         pytypes = self._annotations_from_node(node)
         self._pytypes_stack.append(pytypes)
         return True
@@ -502,7 +503,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         Literal[True]
         """
-        self._scope_stack.append(_Scope(type=FuncType.MODULE, node=node))
+        self._scope_stack.append(_Scope(type=ScopeType.MODULE, node=node))
         pytypes = self._annotations_from_node(node)
         self._pytypes_stack.append(pytypes)
         return True
@@ -609,20 +610,20 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Returns
         -------
-        func_type : FuncType
+        func_type : ScopeType
         """
-        func_type = FuncType.FUNC
-        if self._scope_stack[-1].type == FuncType.CLASS:
-            func_type = FuncType.METHOD
+        func_type = ScopeType.FUNC
+        if self._scope_stack[-1].type == ScopeType.CLASS:
+            func_type = ScopeType.METHOD
             for decorator in func_def.decorators:
                 if not hasattr(decorator.decorator, "value"):
                     continue
                 if decorator.decorator.value == "classmethod":
-                    func_type = FuncType.CLASSMETHOD
+                    func_type = ScopeType.CLASSMETHOD
                     break
                 if decorator.decorator.value == "staticmethod":
-                    assert func_type == FuncType.METHOD
-                    func_type = FuncType.STATICMETHOD
+                    assert func_type == ScopeType.METHOD
+                    func_type = ScopeType.STATICMETHOD
                     break
         return func_type
 
