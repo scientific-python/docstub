@@ -5,7 +5,7 @@ import pytest
 from docstub._analysis import KnownImport, TypeCollector, TypesDatabase
 
 
-@pytest.fixture()
+@pytest.fixture
 def module_factory(tmp_path):
     """Fixture to help with creating adhoc modules with a given source.
 
