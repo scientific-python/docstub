@@ -18,24 +18,33 @@ from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
 logger = logging.getLogger(__name__)
 
 
-def _shared_leading_path(*paths):
-    """Identify the common leading parts between import paths.
+def _shared_leading_qualname(*qualnames):
+    """Identify the common leading parts between fully qualified names.
 
     Parameters
     ----------
-    *paths : tuple[str]
+    *qualnames : tuple[str]
 
     Returns
     -------
     shared : str
+        The names, still split by ".", that are common to the start of all given
+        `qualnames`. Empty string if nothing is common.
+
+    Examples
+    --------
+    >>> _shared_leading_qualname("foo.bar", "foo.baz")
+    'foo'
+    >>> _shared_leading_qualname("foo.bar", "faa.baz")
+    ''
     """
-    if len(paths) < 2:
+    if len(qualnames) < 2:
         raise ValueError("need more than two paths")
-    splits = (p.split(".") for p in paths)
+    splits = (p.split(".") for p in qualnames)
     shared = []
-    for paths in zip(*splits, strict=False):
-        if all(paths[0] == p for p in paths):
-            shared.append(paths[0])
+    for names in zip(*splits, strict=False):
+        if all(names[0] == p for p in names):
+            shared.append(names[0])
         else:
             break
     return ".".join(shared)
@@ -147,7 +156,7 @@ class KnownImport:
         import_path = self.import_path
         if import_path:
             if relative_to:
-                shared = _shared_leading_path(relative_to, import_path)
+                shared = _shared_leading_qualname(relative_to, import_path)
                 if shared == import_path:
                     import_path = "."
                 else:
