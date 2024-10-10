@@ -4,9 +4,11 @@ import logging
 from collections.abc import Sequence
 from typing import Any, Literal, Self, Union
 
+from _typeshed import Incomplete
+
 from . import CustomException
 
-logger = ...
+logger: Incomplete
 
 __all__ = [
     "func_empty",

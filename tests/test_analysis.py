@@ -1,6 +1,94 @@
+from textwrap import dedent
+
 import pytest
 
-from docstub._analysis import KnownImport, TypesDatabase
+from docstub._analysis import KnownImport, TypeCollector, TypesDatabase
+
+
+@pytest.fixture()
+def module_factory(tmp_path):
+    """Fixture to help with creating adhoc modules with a given source.
+
+    Parameters
+    ----------
+    tmp_path : Path
+
+    Returns
+    -------
+    module_factory : callable
+        A callable with the signature `(src: str, module_name: str) -> Path`.
+    """
+
+    def _module_factory(src, module_name):
+        *parents, name = module_name.split(".")
+
+        cwd = tmp_path
+        for parent in parents:
+            package = cwd / parent
+            package.mkdir()
+            (package / "__init__.py").touch()
+            cwd = package
+
+        module_path = cwd / f"{name}.py"
+        with open(module_path, "w") as fp:
+            fp.write(src)
+
+        return module_path
+
+    return _module_factory
+
+
+class Test_TypeCollector:
+
+    def test_classes(self, module_factory):
+        module_path = module_factory(
+            src=dedent(
+                """
+                class TopLevelClass:
+                    class NestedClass:
+                        pass
+                """
+            ),
+            module_name="sub.module",
+        )
+        imports = TypeCollector.collect(file=module_path)
+        assert len(imports) == 2
+        assert imports["sub.module.TopLevelClass"] == KnownImport(
+            import_path="sub.module", import_name="TopLevelClass"
+        )
+        # The import for the nested class should still use only the top-level
+        # class as an import target
+        assert imports["sub.module.TopLevelClass.NestedClass"] == KnownImport(
+            import_path="sub.module", import_name="TopLevelClass"
+        )
+
+    @pytest.mark.parametrize(
+        "src", ["type alias_name = int", "alias_name: TypeAlias = int"]
+    )
+    def test_type_alias(self, module_factory, src):
+        module_path = module_factory(src=src, module_name="sub.module")
+        imports = TypeCollector.collect(file=module_path)
+        assert len(imports) == 1
+        assert imports == {
+            "sub.module.alias_name": KnownImport(
+                import_path="sub.module", import_name="alias_name"
+            )
+        }
+
+    @pytest.mark.parametrize(
+        "src",
+        [
+            "assign_name = 3",
+            "assign_name: int",
+            "assign_name: int = 3",
+            "assign_name = int",  # Valid type alias, but not supported (yet)
+            "assign_name: TypeAlias",  # No value, so should be ignored as a target
+        ],
+    )
+    def test_ignores_assigns(self, module_factory, src):
+        module_path = module_factory(src=src, module_name="sub.module")
+        imports = TypeCollector.collect(file=module_path)
+        assert len(imports) == 0
 
 
 class Test_TypesDatabase:

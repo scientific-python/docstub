@@ -13,7 +13,7 @@ import lark.visitors
 from numpydoc.docscrape import NumpyDocString
 
 from ._analysis import KnownImport
-from ._utils import ContextFormatter, accumulate_qualname, escape_qualname
+from ._utils import ContextFormatter, DocstubError, accumulate_qualname, escape_qualname
 
 logger = logging.getLogger(__name__)
 
@@ -135,15 +135,28 @@ class Annotation:
         return values, imports
 
 
-GrammarErrorFallback = Annotation(
-    value="Any",
-    imports=frozenset((KnownImport(import_path="typing", import_name="Any"),)),
+FallbackAnnotation = Annotation(
+    value="Incomplete", imports=frozenset([KnownImport.typeshed_Incomplete()])
 )
+
+
+class QualnameIsKeyword(DocstubError):
+    """Raised when a qualname is a blacklisted Python keyword."""
 
 
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
     """Transformer for docstring type descriptions (doctypes).
+
+    Attributes
+    ----------
+    blacklisted_qualnames : frozenset[str]
+        All Python keywords [1]_ are blacklisted from use in qualnames except for ``True``
+        ``False`` and ``None``.
+
+    References
+    ----------
+    .. [1] https://docs.python.org/3/reference/lexical_analysis.html#keywords
 
     Examples
     --------
@@ -154,6 +167,43 @@ class DoctypeTransformer(lark.visitors.Transformer):
     >>> unknown_names
     [('tuple', 0, 5), ('int', 9, 12)]
     """
+
+    blacklisted_qualnames = frozenset(
+        {
+            "await",
+            "else",
+            "import",
+            "pass",
+            "break",
+            "except",
+            "in",
+            "raise",
+            "class",
+            "finally",
+            "is",
+            "return",
+            "and",
+            "continue",
+            "for",
+            "lambda",
+            "try",
+            "as",
+            "def",
+            "from",
+            "nonlocal",
+            "while",
+            "assert",
+            "del",
+            "global",
+            "not",
+            "with",
+            "async",
+            "elif",
+            "if",
+            "or",
+            "yield",
+        }
+    )
 
     def __init__(self, *, types_db=None, replace_doctypes=None, **kwargs):
         """
@@ -204,7 +254,11 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 value=value, imports=frozenset(self._collected_imports)
             )
             return annotation, self._unknown_qualnames
-        except (lark.exceptions.LexError, lark.exceptions.ParseError):
+        except (
+            lark.exceptions.LexError,
+            lark.exceptions.ParseError,
+            QualnameIsKeyword,
+        ):
             self.stats["grammar_errors"] += 1
             raise
         finally:
@@ -273,6 +327,13 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 break
 
         _qualname = self._find_import(_qualname, meta=tree.meta)
+
+        if _qualname in self.blacklisted_qualnames:
+            msg = (
+                f"qualname {_qualname!r} in docstring type description "
+                "is a reserved Python keyword and not allowed"
+            )
+            raise QualnameIsKeyword(msg)
 
         _qualname = lark.Token(type="QUALNAME", value=_qualname)
         return _qualname
@@ -399,7 +460,7 @@ class DocstringAnnotations:
                 details = details.replace("^", click.style("^", fg="red", bold=True))
             if ctx:
                 ctx.print_message("invalid syntax in doctype", details=details)
-            return GrammarErrorFallback
+            return FallbackAnnotation
 
         except lark.visitors.VisitError as e:
             tb = "\n".join(traceback.format_exception(e.orig_exc))
@@ -408,7 +469,7 @@ class DocstringAnnotations:
                 ctx.print_message(
                     "unexpected error while parsing doctype", details=details
                 )
-            return GrammarErrorFallback
+            return FallbackAnnotation
 
         else:
             for name, start_col, stop_col in unknown_qualnames:
@@ -420,6 +481,28 @@ class DocstringAnnotations:
                         f"unknown name in doctype: {name!r}", details=details
                     )
             return annotation
+
+    @cached_property
+    def attributes(self) -> dict[str, Annotation]:
+        annotations = {}
+        for attribute in self.np_docstring["Attributes"]:
+            if not attribute.type:
+                continue
+
+            ds_line = 0
+            for i, line in enumerate(self.docstring.split("\n")):
+                if attribute.name in line and attribute.type in line:
+                    ds_line = i
+                    break
+
+            if attribute.name in annotations:
+                logger.warning("duplicate parameter name %r, ignoring", attribute.name)
+                continue
+
+            annotation = self._doctype_to_annotation(attribute.type, ds_line=ds_line)
+            annotations[attribute.name] = annotation
+
+        return annotations
 
     @cached_property
     def parameters(self) -> dict[str, Annotation]:

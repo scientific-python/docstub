@@ -7,9 +7,11 @@ import logging
 import re
 import typing
 from dataclasses import asdict, dataclass
+from functools import cache
 from pathlib import Path
 
 import libcst as cst
+import libcst.matchers as cstm
 
 from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
 
@@ -45,13 +47,13 @@ class KnownImport:
 
     Attributes
     ----------
-    import_path : str, optional
+    import_path
         Dotted names after "from".
-    import_name : str, optional
+    import_name
         Dotted names after "import".
-    import_alias : str, optional
+    import_alias
         Name (without ".") after "as".
-    builtin_name : str, optional
+    builtin_name
         Names an object that's builtin and doesn't need an import.
 
     Examples
@@ -64,6 +66,26 @@ class KnownImport:
     import_path: str = None
     import_alias: str = None
     builtin_name: str = None
+
+    @classmethod
+    @cache
+    def typeshed_Incomplete(cls):
+        """Create import corresponding to ``from _typeshed import Incomplete``.
+
+        This type is not actually available at runtime and only intended to be
+        used in stub files [1]_.
+
+        Returns
+        -------
+        import : KnownImport
+            The import corresponding to ``from _typeshed import Incomplete``.
+
+        References
+        ----------
+        .. [1] https://typing.readthedocs.io/en/latest/guides/writing_stubs.html#incomplete-stubs
+        """
+        import_ = cls(import_path="_typeshed", import_name="Incomplete")
+        return import_
 
     @classmethod
     def one_from_config(cls, name, *, info):
@@ -327,23 +349,47 @@ class TypeCollector(cst.CSTVisitor):
 
     def visit_ClassDef(self, node: cst.ClassDef) -> bool:
         self._stack.append(node.name.value)
-
-        class_name = ".".join(self._stack[:1])
-        qualname = f"{self.module_name}.{'.'.join(self._stack)}"
-        known_import = KnownImport(import_path=self.module_name, import_name=class_name)
-        self.known_imports[qualname] = known_import
-
+        self._collect_type_annotation(self._stack)
         return True
 
     def leave_ClassDef(self, original_node: cst.ClassDef) -> None:
         self._stack.pop()
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> bool:
-        self._stack.append(node.name.value)
-        return True
+        return False
 
-    def leave_FunctionDef(self, original_node: cst.FunctionDef) -> None:
-        self._stack.pop()
+    def visit_TypeAlias(self, node: cst.TypeAlias) -> bool:
+        """Collect type alias with 3.12 syntax."""
+        stack = [*self._stack, node.name.value]
+        self._collect_type_annotation(stack)
+        return False
+
+    def visit_AnnAssign(self, node: cst.AnnAssign) -> bool:
+        """Collect type alias annotated with `TypeAlias`."""
+        is_type_alias = cstm.matches(
+            node,
+            cstm.AnnAssign(
+                annotation=cstm.Annotation(annotation=cstm.Name(value="TypeAlias"))
+            ),
+        )
+        if is_type_alias and node.value is not None:
+            names = cstm.findall(node.target, cstm.Name())
+            assert len(names) == 1
+            stack = [*self._stack, names[0].value]
+            self._collect_type_annotation(stack)
+        return False
+
+    def _collect_type_annotation(self, stack):
+        """Collect an importable type annotation.
+
+        Parameters
+        ----------
+        stack : Iterable[str]
+            A list of names that form the path to the collected type.
+        """
+        qualname = ".".join([self.module_name, *stack])
+        known_import = KnownImport(import_path=self.module_name, import_name=stack[0])
+        self.known_imports[qualname] = known_import
 
 
 class TypesDatabase:
