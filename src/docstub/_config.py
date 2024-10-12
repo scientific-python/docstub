@@ -1,13 +1,8 @@
 import dataclasses
 import logging
+import tomllib
 from pathlib import Path
 from typing import ClassVar
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
-
 
 logger = logging.getLogger(__name__)
 
