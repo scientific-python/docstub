@@ -127,13 +127,13 @@ def report_execution_time():
     "-o",
     "--out-dir",
     type=click.Path(file_okay=False),
-    help="Set explicit output directory.",
+    help="Set output directory explicitly.",
 )
 @click.option(
     "--config",
     "config_path",
     type=click.Path(exists=True, dir_okay=False),
-    help="Set explicitly configuration file.",
+    help="Set configuration file explicitly.",
 )
 @click.option("-v", "--verbose", count=True, help="Log more details.")
 @click.help_option("-h", "--help")
