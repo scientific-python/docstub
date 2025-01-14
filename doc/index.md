@@ -1,6 +1,6 @@
 # docstub's documentation
 
-**Date**: , **Version**:
+**Version**:
 
 Welcome! [docstub]{.title-ref} is a command-line tool to generate
 [Python](https://www.python.org) stub files (i.e., PYI files) from type
