@@ -1,8 +1,10 @@
-# docstub's documentation
+# docstub user guide
 
 **Version**:
 
-Welcome! [docstub]{.title-ref} is a command-line tool to generate
+## What is docstub?
+
+[docstub]{.title-ref} is a command-line tool to generate
 [Python](https://www.python.org) stub files (i.e., PYI files) from type
 descriptions found in [numpydoc](https://numpydoc.readthedocs.io)-style
 docstrings.
@@ -17,7 +19,14 @@ reference guides.
 Our project follows the [SciPy code of
 conduct](https://github.com/scipy/scipy/blob/master/doc/source/dev/conduct/code_of_conduct.rst).
 
-## Basics
+## Installation
+
+To install docstub, you need Python 3.10, 3.11, or 3.12.
+We recommend that you install docstub with `pip`:
+
+    pip install 'docstub [optional] @ git+https://github.com/scientific-python/docstub'
+
+## Fundamentals and usage
 
 Consider a function written as follows:
 
