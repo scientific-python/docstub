@@ -375,6 +375,9 @@ class Py2StubTransformer(cst.CSTTransformer):
             )
             node_changes["returns"] = annotation
             self._required_imports |= ds_annotations.returns.imports
+        else:
+            annotation = cst.Annotation(cst.parse_expression("None"))
+            node_changes["returns"] = annotation
 
         updated_node = updated_node.with_changes(**node_changes)
         self._scope_stack.pop()

@@ -118,22 +118,31 @@ class Test_Py2StubTransformer:
         # Appending `| None` if a doctype is marked as "optional"
         # is only correct if the default is actually None
         # Ref: https://github.com/scientific-python/docstub/issues/13
+
+        # TODO use literal values for simple defaults
+        #   https://typing.readthedocs.io/en/latest/guides/writing_stubs.html#functions-and-methods
+
         source = dedent(
             '''
-        def foo(a=None, b=1):
-            """
-            Parameters
-            ----------
-            a : int, optional
-            b : int, optional
-            """
-        '''
+            def foo(a=None, b=1):
+                """
+                Parameters
+                ----------
+                a : int, optional
+                b : int, optional
+                """
+            '''
         )
-        expected = "def foo(a: int | None = ..., b: int = ...) -> None: ..."
+        expected = dedent(
+            """
+            from typing import Any as int
+            def foo(a: int | None=..., b: int=...) -> None: ...
+            """
+        )
 
         transformer = Py2StubTransformer()
         result = transformer.python_to_stub(source)
-        assert expected in result
+        assert expected == result
 
     # fmt: off
     @pytest.mark.parametrize(
