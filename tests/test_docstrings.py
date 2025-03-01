@@ -141,7 +141,9 @@ class Test_DoctypeTransformer:
         annotation, unknown_names = transformer.doctype_to_annotation("a")
         assert annotation.value == "a"
         assert annotation.imports == {
-            KnownImport(import_name="Any", import_path="typing", import_alias="a")
+            KnownImport(
+                import_name="Incomplete", import_path="_typeshed", import_alias="a"
+            )
         }
         assert unknown_names == [("a", 0, 1)]
 
@@ -151,7 +153,9 @@ class Test_DoctypeTransformer:
         annotation, unknown_names = transformer.doctype_to_annotation("a.b")
         assert annotation.value == "a_b"
         assert annotation.imports == {
-            KnownImport(import_name="Any", import_path="typing", import_alias="a_b")
+            KnownImport(
+                import_name="Incomplete", import_path="_typeshed", import_alias="a_b"
+            )
         }
         assert unknown_names == [("a.b", 0, 3)]
 
@@ -161,8 +165,12 @@ class Test_DoctypeTransformer:
         annotation, unknown_names = transformer.doctype_to_annotation("a.b of c")
         assert annotation.value == "a_b[c]"
         assert annotation.imports == {
-            KnownImport(import_name="Any", import_path="typing", import_alias="a_b"),
-            KnownImport(import_name="Any", import_path="typing", import_alias="c"),
+            KnownImport(
+                import_name="Incomplete", import_path="_typeshed", import_alias="a_b"
+            ),
+            KnownImport(
+                import_name="Incomplete", import_path="_typeshed", import_alias="c"
+            ),
         }
         assert unknown_names == [("a.b", 0, 3), ("c", 7, 8)]
 

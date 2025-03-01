@@ -386,8 +386,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
             self._unknown_qualnames.append((qualname, meta.start_pos, meta.end_pos))
             qualname = escape_qualname(qualname)
             any_alias = KnownImport(
-                import_name="Any",
-                import_path="typing",
+                import_path="_typeshed",
+                import_name="Incomplete",
                 import_alias=qualname,
             )
             self._collected_imports.add(any_alias)

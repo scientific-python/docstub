@@ -135,7 +135,7 @@ class Test_Py2StubTransformer:
         )
         expected = dedent(
             """
-            from typing import Any as int
+            from _typeshed import Incomplete as int
             def foo(a: int | None=..., b: int=...) -> None: ...
             """
         )
@@ -222,6 +222,6 @@ class Test_Py2StubTransformer:
         # Docstrings are stripped
         assert "'''" not in result
         assert '"""' not in result
-        if "Any" in result:
-            assert "from typing import Any" in result
+        if "Incomplete" in result:
+            assert "from _typeshed import Incomplete" in result
     # fmt: on
