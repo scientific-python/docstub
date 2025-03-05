@@ -362,20 +362,28 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.FunctionDef
         """
-        node_changes = {
-            "body": self._body_replacement,
-            "returns": self._Annotation_None,
-        }
+        node_changes = {"body": self._body_replacement}
 
         ds_annotations = self._pytypes_stack.pop()
         if ds_annotations and ds_annotations.returns:
             assert ds_annotations.returns.value
-            annotation = cst.Annotation(
-                cst.parse_expression(ds_annotations.returns.value)
-            )
+            annotation_value = ds_annotations.returns.value
+
+            if original_node.returns is not None:
+                position = self.get_metadata(
+                    cst.metadata.PositionProvider, original_node
+                ).start
+                ctx = ContextFormatter(path=self.current_source, line=position.line)
+                replaced = updated_node.returns.annotation.value
+                ctx.print_message(
+                    short="replacing existing inline return annotation",
+                    details=f"{replaced}\n{"^" * len(replaced)} -> {annotation_value}",
+                )
+
+            annotation = cst.Annotation(cst.parse_expression(annotation_value))
             node_changes["returns"] = annotation
             self._required_imports |= ds_annotations.returns.imports
-        else:
+        elif original_node.returns is None:
             annotation = cst.Annotation(cst.parse_expression("None"))
             node_changes["returns"] = annotation
 

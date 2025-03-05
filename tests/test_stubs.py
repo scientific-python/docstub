@@ -231,6 +231,47 @@ class Test_Py2StubTransformer:
         #  https://typing.readthedocs.io/en/latest/guides/writing_stubs.html#undocumented-objects
         pass
 
+    def test_existing_typed_return(self):
+        source = dedent(
+            """
+            def foo() -> str:
+                pass
+            """
+        )
+        expected = dedent(
+            """
+            def foo() -> str: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    def test_overwriting_typed_return(self, capsys):
+        source = dedent(
+            '''
+            def foo() -> str:
+                """
+                Returns
+                -------
+                out : int
+                """
+                pass
+            '''
+        )
+        expected = dedent(
+            """
+            from _typeshed import Incomplete as int
+            def foo() -> int: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+        captured = capsys.readouterr()
+        assert "replacing existing inline return annotation" in captured.out
+
     def test_preserved_type_comment(self):
         source = dedent(
             """
