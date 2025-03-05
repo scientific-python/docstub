@@ -448,7 +448,9 @@ class Py2StubTransformer(cst.CSTTransformer):
         return cst.RemovalSentinel.REMOVE
 
     def leave_Comment(self, original_node, updated_node):
-        """Drop comment from stub file.
+        """Drop comments from stub file.
+
+        Special typing or formatting related comments are preserved.
 
         Parameters
         ----------
@@ -459,7 +461,10 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         cst.RemovalSentinel
         """
-        return cst.RemovalSentinel.REMOVE
+        comment = original_node.value
+        if comment.startswith("# type:"):
+            return cst.RemovalSentinel.REMOVE
+        return updated_node
 
     @_log_error_with_line_context
     def leave_Assign(self, original_node, updated_node):

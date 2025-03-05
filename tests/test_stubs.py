@@ -225,3 +225,53 @@ class Test_Py2StubTransformer:
         if "Incomplete" in result:
             assert "from _typeshed import Incomplete" in result
     # fmt: on
+
+    def test_undocumented_objects(self):
+        # TODO test undocumented objects
+        #  https://typing.readthedocs.io/en/latest/guides/writing_stubs.html#undocumented-objects
+        pass
+
+    def test_preserved_type_comment(self):
+        source = dedent(
+            """
+            # Import untyped library
+            import untyped  # type: ignore
+            """
+        )
+        expected = dedent(
+            """
+            import untyped  # type: ignore
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    @pytest.mark.xfail(reason="not supported yet")
+    def test_preserved_comments_extended(self):
+        source = dedent(
+            """
+            # Import untyped library
+            import untyped  # type: ignore
+
+            class Foo:
+                a = 3  # type: int
+
+            def bar(x: str) -> None:  # undocumented
+              pass
+            """
+        )
+        expected = dedent(
+            """
+            import untyped  # type: ignore
+
+            class Foo:
+                a = 3  # type: int
+
+            def bar(x: str) -> None: ...  # undocumented
+            """
+        )
+
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
