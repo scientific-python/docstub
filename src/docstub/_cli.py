@@ -14,7 +14,12 @@ from ._analysis import (
 )
 from ._cache import FileCache
 from ._config import Config
-from ._stubs import Py2StubTransformer, walk_source, walk_source_and_targets
+from ._stubs import (
+    Py2StubTransformer,
+    try_format_stub,
+    walk_source,
+    walk_source_and_targets,
+)
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
@@ -171,6 +176,7 @@ def main(source_dir, out_dir, config_path, verbose):
                 stub_content = stub_transformer.python_to_stub(
                     py_content, module_path=source_path
                 )
+                stub_content = try_format_stub(stub_content)
             except (SystemExit, KeyboardInterrupt):
                 raise
             except Exception as e:

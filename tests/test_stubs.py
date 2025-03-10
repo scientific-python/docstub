@@ -173,7 +173,7 @@ class Test_Py2StubTransformer:
             src = NESTED_CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype="")
 
         transformer = Py2StubTransformer()
-        result = transformer.python_to_stub(src, try_format=False)
+        result = transformer.python_to_stub(src)
 
         # Find exactly one occurrence of `expected`
         pattern = f"^ *({re.escape(expected)})$"
@@ -212,7 +212,7 @@ class Test_Py2StubTransformer:
             src = NESTED_CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype=doctype)
 
         transformer = Py2StubTransformer()
-        result = transformer.python_to_stub(src, try_format=False)
+        result = transformer.python_to_stub(src)
 
         # Find exactly one occurrence of `expected`
         pattern = f"^ *({re.escape(expected)})$"

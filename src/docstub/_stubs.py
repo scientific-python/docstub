@@ -264,7 +264,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         if self.types_db is not None:
             self.types_db.current_source = value
 
-    def python_to_stub(self, source, *, module_path=None, try_format=True):
+    def python_to_stub(self, source, *, module_path=None):
         """Convert Python source code to stub-file ready code.
 
         Parameters
@@ -274,9 +274,6 @@ class Py2StubTransformer(cst.CSTTransformer):
             The location of the source that is transformed into a stub file.
             If given, used to enhance logging & error messages with more
             context information.
-        try_format : bool, optional
-            Try to format the output, if the appropriate dependencies are
-            installed.
 
         Returns
         -------
@@ -292,8 +289,6 @@ class Py2StubTransformer(cst.CSTTransformer):
             source_tree = cst.metadata.MetadataWrapper(source_tree)
             stub_tree = source_tree.visit(self)
             stub = stub_tree.code
-            if try_format is True:
-                stub = try_format_stub(stub)
             return stub
         finally:
             self._scope_stack = None
