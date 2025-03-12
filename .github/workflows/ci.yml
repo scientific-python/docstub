@@ -15,6 +15,7 @@ env:
   # Many color libraries just need this to be set to any value, but at least
   # one distinguishes color depth, where "3" -> "256-bit color".
   FORCE_COLOR: 3
+  MYPYPATH: ${CI_PROJECT_DIR}/stubs
 
 jobs:
   lint:
@@ -69,4 +70,8 @@ jobs:
 
       - name: Generate docstub stubs
         run: |
-          python -m docstub -v src/docstub
+          python -m docstub -v src/docstub -o ${MYPYPATH}/docstub
+
+      - name: Check docstub stubs with mypy
+        run: |
+          python -m mypy.stubtest docstub

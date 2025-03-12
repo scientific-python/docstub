@@ -45,6 +45,7 @@ dev = [
 test = [
   "pytest >=5.0.0",
   "pytest-cov >= 5.0.0",
+  "mypy",
 ]
 
 [project.urls]
@@ -80,6 +81,7 @@ extend-select = [
   "UP",       # pyupgrade
   "YTT",      # flake8-2020
   "EXE",      # flake8-executable
+#  "PYI",      # flake8-pyi
 ]
 ignore = [
   "PLR09",    # Too many <...>
