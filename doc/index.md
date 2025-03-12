@@ -64,7 +64,7 @@ def example_metric(
 ```
 
 As you can see, it is a typed function signature, where types are read from
-the well-enough written docstring.
+the (well-enough) written docstring.
 
 In practice, you run the docstub command on a .py file and get a corresponding
 .pyi file containing the same imports, the same variables, with classes and
