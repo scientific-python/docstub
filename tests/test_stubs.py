@@ -316,3 +316,34 @@ class Test_Py2StubTransformer:
         transformer = Py2StubTransformer()
         result = transformer.python_to_stub(source)
         assert expected == result
+
+    def test_on_off_comment(self):
+        source = """
+class Foo:
+    '''
+    Parameters
+    ----------
+    a
+    b
+    c
+    d
+    '''
+    # docstub: off
+    a: int = None
+    b: str = ""
+    # docstub: on
+    c: int = None
+    b: str = ""
+"""
+        expected = """
+class Foo:
+
+    a: int = None
+    b: str = ""
+
+    c: int
+    b: str
+"""
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result

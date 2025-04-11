@@ -206,6 +206,72 @@ def _log_error_with_line_context(func):
     return wrapped
 
 
+def _docstub_comment_directives(transformer_cls):
+    """Handle `Py2StubTransformer` docstub directives.
+
+    This handles the comment directives ``# docstub: off`` and``# docstub: on``.
+    All existing ``leave_`` methods are wrapped such that they don't modify the tree
+    if docstub has been "switched off".
+
+    Parameters
+    ----------
+    transformer_cls : Py2StubTransformer
+        The class whose methods will be decorated.
+
+    Returns
+    -------
+    wrapped_cls : Py2StubTransformer
+        The modified class.
+
+    Notes
+    -----
+    I considered a metaclass based approach, too. But it seems that is not trivially
+    possible since the `ABCmeta` is already used in a base class of
+    :class:`CSTTransformer`. And I'm not even sure that that approach would have been
+    simpler.
+    """
+    state = {"is_off": False}
+
+    def wrap_leave_Comment(method):
+        """Detect docstub comment directives and record the state."""
+
+        @wraps(method)
+        def wrapped(self, original_node, updated_node):
+            if cstm.matches(original_node, cstm.Comment(value="# docstub: off")):
+                state["is_off"] = True
+                return cst.RemovalSentinel.REMOVE
+            if cstm.matches(original_node, cstm.Comment(value="# docstub: on")):
+                state["is_off"] = False
+                return cst.RemovalSentinel.REMOVE
+            return method(self, original_node, updated_node)
+
+        return wrapped
+
+    def wrap_leave(method):
+        """Return unmodified node in ``leave_`` methods while docstub is "off"."""
+
+        @wraps(method)
+        def wrapped(self, original_node, updated_node):
+            if state["is_off"]:
+                # Pass a copy of updated_node and return unmodified one
+                updated_node_copy = updated_node.deep_clone()
+                method(self, original_node, updated_node_copy)
+                return updated_node
+            # Just pass through
+            return method(self, original_node, updated_node)
+
+        return wrapped
+
+    for attr_name, attr_value in transformer_cls.__dict__.items():
+        if attr_name == "leave_Comment":
+            setattr(transformer_cls, attr_name, wrap_leave_Comment(attr_value))
+        elif attr_name.startswith("leave_"):
+            setattr(transformer_cls, attr_name, wrap_leave(attr_value))
+
+    return transformer_cls
+
+
+@_docstub_comment_directives
 class Py2StubTransformer(cst.CSTTransformer):
     """Transform syntax tree of a Python file into the tree of a stub file [1]_.
 
@@ -462,12 +528,12 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Returns
         -------
-        cst.RemovalSentinel
+        cst.Comment
         """
         comment = original_node.value
         if comment.startswith("# type:"):
-            return cst.RemovalSentinel.REMOVE
-        return updated_node
+            return updated_node
+        return cst.RemovalSentinel.REMOVE
 
     @_log_error_with_line_context
     def leave_Assign(self, original_node, updated_node):

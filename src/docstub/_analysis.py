@@ -71,10 +71,12 @@ class KnownImport:
     <KnownImport 'from numpy import uint8 as ui8'>
     """
 
-    import_name: str = None
-    import_path: str = None
-    import_alias: str = None
-    builtin_name: str = None
+    # docstub: off
+    import_name: str | None = None
+    import_path: str | None = None
+    import_alias: str | None = None
+    builtin_name: str | None = None
+    # docstub: on
 
     @classmethod
     @cache
