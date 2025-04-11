@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 import lark
 import lark.visitors
-from numpydoc.docscrape import NumpyDocString
+from numpydoc.docscrape import NumpyDocString  # type: ignore[import-untyped]
 
 from ._analysis import KnownImport
 from ._utils import ContextFormatter, DocstubError, accumulate_qualname, escape_qualname
@@ -272,14 +272,14 @@ class DoctypeTransformer(lark.visitors.Transformer):
         ----------
         data : lark.Token
             The rule-token of the current node.
-        children : list[lark.Token, ...]
+        children : list[lark.Token]
             The children of the current node.
         meta : lark.tree.Meta
             Meta information for the current node.
 
         Returns
         -------
-        out : lark.Token or list[lark.Token, ...]
+        out : lark.Token or list[lark.Token]
             Either a token or list of tokens.
         """
         if isinstance(children, list) and len(children) == 1:

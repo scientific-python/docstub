@@ -196,7 +196,7 @@ class KnownImport:
         elif self.import_name is None:
             raise ValueError("non builtin must at least define an `import_name`")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.builtin_name:
             info = f"{self.target} (builtin)"
         else:
@@ -204,7 +204,7 @@ class KnownImport:
         out = f"<{type(self).__name__} {info}>"
         return out
 
-    def __str__(self):
+    def __str__(self) -> str:
         out = self.format_import()
         return out
 
@@ -408,7 +408,8 @@ class TypesDatabase:
 
     Attributes
     ----------
-    current_source : ~.PackageFile | None
+    current_source : Path | None
+    source_pkgs : list[Path]
 
     Examples
     --------
@@ -526,6 +527,6 @@ class TypesDatabase:
 
         return annotation_name, known_import
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         repr = f"{type(self).__name__}({self.source_pkgs})"
         return repr

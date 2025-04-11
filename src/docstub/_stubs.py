@@ -4,6 +4,7 @@ import enum
 import logging
 from dataclasses import dataclass
 from functools import wraps
+from typing import ClassVar
 
 import libcst as cst
 import libcst.matchers as cstm
@@ -284,21 +285,17 @@ class Py2StubTransformer(cst.CSTTransformer):
     .. [1] Stub file specification https://typing.readthedocs.io/en/latest/spec/distributing.html#stub-files
     """
 
-    METADATA_DEPENDENCIES = (cst.metadata.PositionProvider,)
-
-    _docstub_generated_comment = cst.EmptyLine(
-        comment=cst.Comment(
-            "# Generated with docstub. Manual edits will be overwritten!"
-        ),
-    )
+    METADATA_DEPENDENCIES: ClassVar[tuple] = (cst.metadata.PositionProvider,)
 
     # Equivalent to ` ...`, to replace the body of callables with
-    _body_replacement = cst.SimpleStatementSuite(
+    _body_replacement: ClassVar[cst.SimpleStatementSuite] = cst.SimpleStatementSuite(
         leading_whitespace=cst.SimpleWhitespace(value=" "),
         body=[cst.Expr(value=cst.Ellipsis())],
     )
-    _Annotation_Incomplete = cst.Annotation(cst.Name("Incomplete"))
-    _Annotation_None = cst.Annotation(cst.Name("None"))
+    _Annotation_Incomplete: ClassVar[cst.Annotation] = cst.Annotation(
+        cst.Name("Incomplete")
+    )
+    _Annotation_None: ClassVar[cst.Annotation] = cst.Annotation(cst.Name("None"))
 
     def __init__(self, *, types_db=None, replace_doctypes=None):
         """
@@ -322,10 +319,20 @@ class Py2StubTransformer(cst.CSTTransformer):
 
     @property
     def current_source(self):
+        """
+        Returns
+        -------
+        out : Path
+        """
         return self._current_source
 
     @current_source.setter
     def current_source(self, value):
+        """
+        Parameters
+        ----------
+        value : Path
+        """
         self._current_source = value
         if self.types_db is not None:
             self.types_db.current_source = value
