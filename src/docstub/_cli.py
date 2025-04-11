@@ -191,14 +191,14 @@ def main(source_dir, out_dir, config_path, verbose):
     successful_queries = types_db.stats["successful_queries"]
     click.secho(f"{successful_queries} matched annotations", fg="green")
 
-    grammar_errors = stub_transformer.transformer.stats["grammar_errors"]
-    if grammar_errors:
-        click.secho(f"{grammar_errors} grammar violations", fg="red")
+    grammar_error_count = stub_transformer.transformer.stats["grammar_errors"]
+    if grammar_error_count:
+        click.secho(f"{grammar_error_count} grammar violations", fg="red")
 
     unknown_doctypes = types_db.stats["unknown_doctypes"]
     if unknown_doctypes:
         click.secho(f"{len(unknown_doctypes)} unknown doctypes:", fg="red")
         click.echo("  " + "\n  ".join(set(unknown_doctypes)))
 
-    if unknown_doctypes or grammar_errors:
+    if unknown_doctypes or grammar_error_count:
         sys.exit(1)
