@@ -226,6 +226,48 @@ class Test_Py2StubTransformer:
             assert "from _typeshed import Incomplete" in result
     # fmt: on
 
+    def test_class_init_attributes(self):
+        src = dedent(
+            """
+            class Foo:
+                '''
+                Attributes
+                ----------
+                a : int
+                b : float
+                c : tuple
+                d : ClassVar[bool]
+                '''
+
+                c: list
+                d = True
+
+                def __init__(self, a):
+                    self.a = a
+                    self.e = None
+            """
+        )
+        expected = dedent(
+            """
+            from _typeshed import Incomplete as ClassVar
+            from _typeshed import Incomplete as bool
+            from _typeshed import Incomplete as float
+            from _typeshed import Incomplete as int
+            from _typeshed import Incomplete as tuple
+            class Foo:
+                a: int
+                b: float
+
+                c: tuple
+                d: ClassVar[bool]
+
+                def __init__(self, a) -> None: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(src)
+        assert result == expected
+
     def test_undocumented_objects(self):
         # TODO test undocumented objects
         #  https://typing.readthedocs.io/en/latest/guides/writing_stubs.html#undocumented-objects

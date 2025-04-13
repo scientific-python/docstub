@@ -337,6 +337,22 @@ class Py2StubTransformer(cst.CSTTransformer):
         if self.types_db is not None:
             self.types_db.current_source = value
 
+    @property
+    def is_inside_function_def(self):
+        """Check whether the current scope is within a function.
+
+        Returns
+        -------
+        out : bool
+        """
+        inside_function_def = self._scope_stack[-1].type in (
+            ScopeType.FUNC,
+            ScopeType.METHOD,
+            ScopeType.CLASSMETHOD,
+            ScopeType.STATICMETHOD,
+        )
+        return inside_function_def
+
     def python_to_stub(self, source, *, module_path=None):
         """Convert Python source code to stub-file ready code.
 
@@ -386,7 +402,10 @@ class Py2StubTransformer(cst.CSTTransformer):
         return True
 
     def leave_ClassDef(self, original_node, updated_node):
-        """Drop class scope from the stack.
+        """Finalize class definition.
+
+        If the docstring documents attributes, make sure to insert them as (instance)
+        attributes for the class. Also drop class scope from the stack.
 
         Parameters
         ----------
@@ -397,6 +416,11 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.ClassDef
         """
+        pytypes = self._pytypes_stack[-1]
+        if pytypes and pytypes.attributes:
+            updated_node = self._insert_instance_attributes(
+                updated_node, pytypes.attributes
+            )
         self._scope_stack.pop()
         self._pytypes_stack.pop()
         return updated_node
@@ -417,6 +441,32 @@ class Py2StubTransformer(cst.CSTTransformer):
         pytypes = self._annotations_from_node(node)
         self._pytypes_stack.append(pytypes)
         return True
+
+    def visit_IndentedBlock(self, node):
+        """Skip function body.
+
+        Parameters
+        ----------
+        node : cst.IndentedBlock
+
+        Returns
+        -------
+        out : bool
+        """
+        return not self.is_inside_function_def
+
+    def visit_SimpleStatementSuite(self, node):
+        """Skip statement suites inside functions.
+
+        Parameters
+        ----------
+        node : cst.SimpleStatementSuite
+
+        Returns
+        -------
+        out : bool
+        """
+        return not self.is_inside_function_def
 
     def leave_FunctionDef(self, original_node, updated_node):
         """Add type annotation for return to function.
@@ -671,15 +721,12 @@ class Py2StubTransformer(cst.CSTTransformer):
         if self.current_source:
             current_module = module_name_from_path(self.current_source)
             required_imports = [
-                imp
-                for imp in self._required_imports
-                if imp.import_path != current_module
+                imp for imp in required_imports if imp.import_path != current_module
             ]
         import_nodes = self._parse_imports(
             required_imports, current_module=current_module
         )
         updated_node = updated_node.with_changes(
-            header=[self._docstub_generated_comment],
             body=import_nodes + updated_node.body,
         )
         self._scope_stack.pop()
@@ -744,6 +791,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         import_nodes : tuple[cst.SimpleStatementLine, ...]
         """
         lines = {imp.format_import(relative_to=current_module) for imp in imports}
+        lines = sorted(lines)
         import_nodes = tuple(cst.parse_statement(line) for line in lines)
         return import_nodes
 
@@ -840,3 +888,39 @@ class Py2StubTransformer(cst.CSTTransformer):
             semicolon=semicolon,
         )
         return node
+
+    def _insert_instance_attributes(self, updated_node, attributes):
+        """Insert instance attributes into ClassDef node.
+
+        Instance attributes of classes are usually initialized inside the ``__init__``
+        or other methods, whose body this transformer doesn't visit. Instead, we rely
+        on the "Attributes" section in the docstring to make those available. If
+        attributes are found in the docstring, we need to make sure that they are
+        inserted into the class scope / definition.
+
+        Parameters
+        ----------
+        updated_node : cst.ClassDef
+        attributes : dict[str, ~.Annotation]
+
+        Returns
+        -------
+        updated_node : cst.ClassDef
+        """
+        to_insert = []
+        for name in attributes:
+            attribute_exists = any(
+                cstm.findall(updated_node, cstm.AnnAssign(target=cstm.Name(name)))
+            )
+            if attribute_exists:
+                continue
+
+            assign = self._create_annotated_assign(name=name)
+            stmnt_line = cst.SimpleStatementLine(body=[assign])
+            to_insert.append(stmnt_line)
+
+        updated_node = updated_node.with_deep_changes(
+            updated_node.body, body=tuple(to_insert) + updated_node.body.body
+        )
+
+        return updated_node
