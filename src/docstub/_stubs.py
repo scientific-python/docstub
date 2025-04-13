@@ -109,12 +109,14 @@ def try_format_stub(stub: str) -> str:
 
 
 class ScopeType(enum.StrEnum):
-    MODULE = enum.auto()
-    CLASS = enum.auto()
-    FUNC = enum.auto()
-    METHOD = enum.auto()
-    CLASSMETHOD = enum.auto()
-    STATICMETHOD = enum.auto()
+    # docstub: off
+    MODULE = "module"
+    CLASS = "class"
+    FUNC = "func"
+    METHOD = "method"
+    CLASSMETHOD = "classmethod"
+    STATICMETHOD = "staticmethod"
+    # docstub: on
 
 
 @dataclass(slots=True, frozen=True)
