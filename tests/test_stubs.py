@@ -201,8 +201,7 @@ class Test_Py2StubTransformer:
             ("type alias = int",       "alias: str",      "type alias = int"),
         ],
     )
-    # @pytest.mark.parametrize("scope", ["module", "class", "nested class"])
-    @pytest.mark.parametrize("scope", ["module"])
+    @pytest.mark.parametrize("scope", ["module", "class", "nested class"])
     def test_attributes_with_doctype(self, assign, doctype, expected, scope):
         if scope == "module":
             src = MODULE_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype=doctype)
@@ -323,6 +322,7 @@ class Test_Py2StubTransformer:
         )
         expected = dedent(
             """
+
             import untyped  # type: ignore
             """
         )
@@ -360,32 +360,39 @@ class Test_Py2StubTransformer:
         assert expected == result
 
     def test_on_off_comment(self):
-        source = """
-class Foo:
-    '''
-    Parameters
-    ----------
-    a
-    b
-    c
-    d
-    '''
-    # docstub: off
-    a: int = None
-    b: str = ""
-    # docstub: on
-    c: int = None
-    b: str = ""
-"""
-        expected = """
-class Foo:
+        source = dedent(
+            """
+            class Foo:
+                '''
+                Parameters
+                ----------
+                a
+                b
+                c
+                d
+                '''
+                # docstub: off
+                a: int = None
+                b: str = ""
+                # docstub: on
+                c: int = None
+                b: str = ""
+            """
+        )
+        expected = dedent(
+            """
+            class Foo:
 
-    a: int = None
-    b: str = ""
+                a: int = None
+                b: str = ""
 
-    c: int
-    b: str
-"""
+                c: int
+                b: str
+            """
+        )
         transformer = Py2StubTransformer()
         result = transformer.python_to_stub(source)
+        # Removing the comments leaves the whitespace from the indent,
+        # remove these empty lines from the result too
+        result = dedent(result)
         assert expected == result
