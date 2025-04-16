@@ -113,6 +113,10 @@ class TopLevel:
 
 
 class Test_Py2StubTransformer:
+    # TODO Refactor so that there's less overlap between tests
+    #   For many cases, the tests aren't very focused on only a single property.
+    #   A change / fix might affect more tests than it should. Additionally,
+    #   the tests are sensitive to non-meaningful whitespace.
 
     def test_default_None(self):
         # Appending `| None` if a doctype is marked as "optional"
