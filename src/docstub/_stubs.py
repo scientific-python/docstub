@@ -178,38 +178,46 @@ def _get_docstring_node(node):
     return docstring_node
 
 
-def _log_error_with_line_context(func):
+def _log_error_with_line_context(cls):
     """Log unexpected errors in Py2StubTransformer` with line context.
 
     Parameters
     ----------
-    func : callable
-        A `leave_*` method of `Py2StubTransformer`.
+    cls : Py2StubTransformer
+        The class whose methods will be decorated.
 
     Returns
     -------
-    wrapped : callable
+    updated_cls : Py2StubTransformer
+        The modified class.
     """
 
-    @wraps(func)
-    def wrapped(self: "Py2StubTransformer", original_node, updated_node):
-        try:
-            return func(self, original_node, updated_node)
-        except (SystemError, KeyboardInterrupt):
-            raise
-        except Exception:
-            position = self.get_metadata(
-                cst.metadata.PositionProvider, original_node
-            ).start
-            logger.exception(
-                "unexpected exception at %s:%s", self.current_source, position.line
-            )
-            return updated_node
+    def wrap(func):
+        @wraps(func)
+        def wrapped(self, original_node, updated_node):
+            try:
+                return func(self, original_node, updated_node)
+            except (SystemError, KeyboardInterrupt):
+                raise
+            except Exception:
+                position = self.get_metadata(
+                    cst.metadata.PositionProvider, original_node
+                ).start
+                logger.exception(
+                    "unexpected exception at %s:%s", self.current_source, position.line
+                )
+                return updated_node
 
-    return wrapped
+        return wrapped
+
+    for attr_name, attr_value in cls.__dict__.items():
+        if attr_name.startswith("leave_"):
+            setattr(cls, attr_name, wrap(attr_value))
+
+    return cls
 
 
-def _docstub_comment_directives(transformer_cls):
+def _docstub_comment_directives(cls):
     """Handle `Py2StubTransformer` docstub directives.
 
     This handles the comment directives ``# docstub: off`` and``# docstub: on``.
@@ -218,12 +226,12 @@ def _docstub_comment_directives(transformer_cls):
 
     Parameters
     ----------
-    transformer_cls : Py2StubTransformer
+    cls : Py2StubTransformer
         The class whose methods will be decorated.
 
     Returns
     -------
-    wrapped_cls : Py2StubTransformer
+    updated_cls : Py2StubTransformer
         The modified class.
 
     Notes
@@ -265,15 +273,18 @@ def _docstub_comment_directives(transformer_cls):
 
         return wrapped
 
-    for attr_name, attr_value in transformer_cls.__dict__.items():
+    assert hasattr(cls, "leave_Comment")
+
+    for attr_name, attr_value in cls.__dict__.items():
         if attr_name == "leave_Comment":
-            setattr(transformer_cls, attr_name, wrap_leave_Comment(attr_value))
+            setattr(cls, attr_name, wrap_leave_Comment(attr_value))
         elif attr_name.startswith("leave_"):
-            setattr(transformer_cls, attr_name, wrap_leave(attr_value))
+            setattr(cls, attr_name, wrap_leave(attr_value))
 
-    return transformer_cls
+    return cls
 
 
+@_log_error_with_line_context
 @_docstub_comment_directives
 class Py2StubTransformer(cst.CSTTransformer):
     """Transform syntax tree of a Python file into the tree of a stub file [1]_.
@@ -511,7 +522,6 @@ class Py2StubTransformer(cst.CSTTransformer):
         self._scope_stack.pop()
         return updated_node
 
-    @_log_error_with_line_context
     def leave_Param(self, original_node, updated_node):
         """Add type annotation to parameter.
 
@@ -594,7 +604,6 @@ class Py2StubTransformer(cst.CSTTransformer):
             return updated_node
         return cst.RemovalSentinel.REMOVE
 
-    @_log_error_with_line_context
     def leave_Assign(self, original_node, updated_node):
         """Handle assignment statements without annotations.
 
@@ -638,7 +647,6 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         return updated_node
 
-    @_log_error_with_line_context
     def leave_AnnAssign(self, original_node, updated_node):
         """Handle annotated assignment statements.
 
