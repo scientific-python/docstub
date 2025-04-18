@@ -25,6 +25,9 @@ from ._version import __version__
 logger = logging.getLogger(__name__)
 
 
+STUB_HEADER_COMMENT = "# File generated with docstub"
+
+
 def _load_configuration(config_path=None):
     """Load and merge configuration from CWD and optional files.
 
@@ -184,6 +187,7 @@ def main(source_dir, out_dir, config_path, verbose):
                 stub_content = stub_transformer.python_to_stub(
                     py_content, module_path=source_path
                 )
+                stub_content = f"{STUB_HEADER_COMMENT}\n\n{stub_content}"
                 stub_content = try_format_stub(stub_content)
             except (SystemExit, KeyboardInterrupt):
                 raise
