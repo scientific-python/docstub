@@ -144,6 +144,14 @@ def report_execution_time():
 @click.help_option("-h", "--help")
 @report_execution_time()
 def main(source_dir, out_dir, config_path, verbose):
+    """
+    Parameters
+    ----------
+    source_dir : Path
+    out_dir : Path
+    config_path : Path
+    verbose : str
+    """
     _setup_logging(verbose=verbose)
 
     source_dir = Path(source_dir)

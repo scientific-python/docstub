@@ -150,7 +150,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
     Attributes
     ----------
-    blacklisted_qualnames : frozenset[str]
+    types_db : ~.TypesDatabase
+    replace_doctypes : dict[str, str]
+    stats : dict[str, Any]
+    blacklisted_qualnames : ClassVar[frozenset[str]]
         All Python keywords [1]_ are blacklisted from use in qualnames except for ``True``
         ``False`` and ``None``.
 

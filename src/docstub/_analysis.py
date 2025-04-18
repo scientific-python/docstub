@@ -410,6 +410,8 @@ class TypesDatabase:
     ----------
     current_source : Path | None
     source_pkgs : list[Path]
+    known_imports: dict[str, KnownImport]
+    stats : dict[str, Any]
 
     Examples
     --------

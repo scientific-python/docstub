@@ -291,7 +291,9 @@ class Py2StubTransformer(cst.CSTTransformer):
 
     Attributes
     ----------
-    types_db : ~.TypesDatabase
+    types_db : ~.TypesDatabase | None
+    replace_doctypes : dict[str, str] | None
+    transformer : ~.DoctypeTransformer
 
     References
     ----------
