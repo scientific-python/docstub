@@ -63,6 +63,7 @@ class Test_DoctypeTransformer:
         [
             ("{'a', 1, None, False}", "Literal['a', 1, None, False]"),
             ("dict[{'a', 'b'}, int]", "dict[Literal['a', 'b'], int]"),
+            ("{SomeEnum.FIRST}", "Literal[SomeEnum_FIRST]"),
         ],
     )
     def test_literals(self, doctype, expected):

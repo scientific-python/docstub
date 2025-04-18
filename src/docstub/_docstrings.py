@@ -10,9 +10,9 @@ from pathlib import Path
 import click
 import lark
 import lark.visitors
-from numpydoc.docscrape import NumpyDocString
+from numpydoc.docscrape import NumpyDocString  # type: ignore[import-untyped]
 
-from ._analysis import KnownImport
+from ._analysis import KnownImport, TypesDatabase
 from ._utils import ContextFormatter, DocstubError, accumulate_qualname, escape_qualname
 
 logger = logging.getLogger(__name__)
@@ -150,7 +150,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
     Attributes
     ----------
-    blacklisted_qualnames : frozenset[str]
+    types_db : ~.TypesDatabase
+    replace_doctypes : dict[str, str]
+    stats : dict[str, Any]
+    blacklisted_qualnames : ClassVar[frozenset[str]]
         All Python keywords [1]_ are blacklisted from use in qualnames except for ``True``
         ``False`` and ``None``.
 
@@ -161,11 +164,13 @@ class DoctypeTransformer(lark.visitors.Transformer):
     Examples
     --------
     >>> transformer = DoctypeTransformer()
-    >>> annotation, unknown_names = transformer.doctype_to_annotation("tuple of int")
+    >>> annotation, unknown_names = transformer.doctype_to_annotation(
+    ...     "tuple of (int or ndarray)"
+    ... )
     >>> annotation.value
-    'tuple[int]'
+    'tuple[int | ndarray]'
     >>> unknown_names
-    [('tuple', 0, 5), ('int', 9, 12)]
+    [('ndarray', 17, 24)]
     """
 
     blacklisted_qualnames = frozenset(
@@ -209,8 +214,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         Parameters
         ----------
-        types_db : ~.TypesDatabase
-            A static database of collected types usable as an annotation.
+        types_db : ~.TypesDatabase, optional
+            A static database of collected types usable as an annotation. If
+            not given, defaults to a database with common types from the
+            standard library (see :func:`~.common_known_imports`).
         replace_doctypes : dict[str, str], optional
             Replacements for human-friendly aliases.
         kwargs : dict[Any, Any], optional
@@ -218,6 +225,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         if replace_doctypes is None:
             replace_doctypes = {}
+        if types_db is None:
+            types_db = TypesDatabase()
 
         self.types_db = types_db
         self.replace_doctypes = replace_doctypes
@@ -272,14 +281,14 @@ class DoctypeTransformer(lark.visitors.Transformer):
         ----------
         data : lark.Token
             The rule-token of the current node.
-        children : list[lark.Token, ...]
+        children : list[lark.Token]
             The children of the current node.
         meta : lark.tree.Meta
             Meta information for the current node.
 
         Returns
         -------
-        out : lark.Token or list[lark.Token, ...]
+        out : lark.Token or list[lark.Token]
             Either a token or list of tokens.
         """
         if isinstance(children, list) and len(children) == 1:

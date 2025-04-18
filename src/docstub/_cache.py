@@ -54,7 +54,7 @@ def create_cache(path):
 
     gitignore_path = path / ".gitignore"
     gitignore_content = (
-        "# This file is a cache directory tag automatically created by docstub.\n" "*\n"
+        "# This file is a cache directory automatically created by docstub.\n" "*\n"
     )
     if not gitignore_path.is_file():
         with open(gitignore_path, "w") as fp:

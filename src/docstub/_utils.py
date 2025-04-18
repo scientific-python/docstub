@@ -156,9 +156,11 @@ class ContextFormatter:
         More details
     """
 
-    path: Path = None
-    line: int = None
-    column: int = None
+    # docstub: off
+    path: Path | None = None
+    line: int | None = None
+    column: int | None = None
+    # docstub: on
 
     def with_line(self, line=None, *, offset=0):
         """Return a new copy with a modified line.

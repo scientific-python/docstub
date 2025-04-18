@@ -1,4 +1,5 @@
-# Generated with docstub. Manual edits will be overwritten!
+# File generated with docstub
+
 import configparser
 import logging
 from collections.abc import Sequence

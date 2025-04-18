@@ -1,0 +1,7 @@
+docstub\._version\..*
+docstub\..*\.__match_args__$
+docstub._cache.FuncSerializer.__type_params__
+docstub._cli.main
+docstub._config.Config.__init__
+docstub._docstrings.Annotation.__init__
+docstub._stubs._Scope.__init__

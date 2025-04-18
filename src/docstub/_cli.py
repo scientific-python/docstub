@@ -14,10 +14,18 @@ from ._analysis import (
 )
 from ._cache import FileCache
 from ._config import Config
-from ._stubs import Py2StubTransformer, walk_source, walk_source_and_targets
+from ._stubs import (
+    Py2StubTransformer,
+    try_format_stub,
+    walk_source,
+    walk_source_and_targets,
+)
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
+
+
+STUB_HEADER_COMMENT = "# File generated with docstub"
 
 
 def _load_configuration(config_path=None):
@@ -139,6 +147,14 @@ def report_execution_time():
 @click.help_option("-h", "--help")
 @report_execution_time()
 def main(source_dir, out_dir, config_path, verbose):
+    """
+    Parameters
+    ----------
+    source_dir : Path
+    out_dir : Path
+    config_path : Path
+    verbose : str
+    """
     _setup_logging(verbose=verbose)
 
     source_dir = Path(source_dir)
@@ -171,6 +187,8 @@ def main(source_dir, out_dir, config_path, verbose):
                 stub_content = stub_transformer.python_to_stub(
                     py_content, module_path=source_path
                 )
+                stub_content = f"{STUB_HEADER_COMMENT}\n\n{stub_content}"
+                stub_content = try_format_stub(stub_content)
             except (SystemExit, KeyboardInterrupt):
                 raise
             except Exception as e:
@@ -185,14 +203,14 @@ def main(source_dir, out_dir, config_path, verbose):
     successful_queries = types_db.stats["successful_queries"]
     click.secho(f"{successful_queries} matched annotations", fg="green")
 
-    grammar_errors = stub_transformer.transformer.stats["grammar_errors"]
-    if grammar_errors:
-        click.secho(f"{grammar_errors} grammar violations", fg="red")
+    grammar_error_count = stub_transformer.transformer.stats["grammar_errors"]
+    if grammar_error_count:
+        click.secho(f"{grammar_error_count} grammar violations", fg="red")
 
     unknown_doctypes = types_db.stats["unknown_doctypes"]
     if unknown_doctypes:
         click.secho(f"{len(unknown_doctypes)} unknown doctypes:", fg="red")
         click.echo("  " + "\n  ".join(set(unknown_doctypes)))
 
-    if unknown_doctypes or grammar_errors:
+    if unknown_doctypes or grammar_error_count:
         sys.exit(1)

@@ -113,6 +113,10 @@ class TopLevel:
 
 
 class Test_Py2StubTransformer:
+    # TODO Refactor so that there's less overlap between tests
+    #   For many cases, the tests aren't very focused on only a single property.
+    #   A change / fix might affect more tests than it should. Additionally,
+    #   the tests are sensitive to non-meaningful whitespace.
 
     def test_default_None(self):
         # Appending `| None` if a doctype is marked as "optional"
@@ -135,7 +139,6 @@ class Test_Py2StubTransformer:
         )
         expected = dedent(
             """
-            from _typeshed import Incomplete as int
             def foo(a: int | None=..., b: int=...) -> None: ...
             """
         )
@@ -173,7 +176,7 @@ class Test_Py2StubTransformer:
             src = NESTED_CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype="")
 
         transformer = Py2StubTransformer()
-        result = transformer.python_to_stub(src, try_format=False)
+        result = transformer.python_to_stub(src)
 
         # Find exactly one occurrence of `expected`
         pattern = f"^ *({re.escape(expected)})$"
@@ -201,8 +204,7 @@ class Test_Py2StubTransformer:
             ("type alias = int",       "alias: str",      "type alias = int"),
         ],
     )
-    # @pytest.mark.parametrize("scope", ["module", "class", "nested class"])
-    @pytest.mark.parametrize("scope", ["module"])
+    @pytest.mark.parametrize("scope", ["module", "class", "nested class"])
     def test_attributes_with_doctype(self, assign, doctype, expected, scope):
         if scope == "module":
             src = MODULE_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype=doctype)
@@ -212,7 +214,7 @@ class Test_Py2StubTransformer:
             src = NESTED_CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype=doctype)
 
         transformer = Py2StubTransformer()
-        result = transformer.python_to_stub(src, try_format=False)
+        result = transformer.python_to_stub(src)
 
         # Find exactly one occurrence of `expected`
         pattern = f"^ *({re.escape(expected)})$"
@@ -225,3 +227,170 @@ class Test_Py2StubTransformer:
         if "Incomplete" in result:
             assert "from _typeshed import Incomplete" in result
     # fmt: on
+
+    def test_class_init_attributes(self):
+        src = dedent(
+            """
+            class Foo:
+                '''
+                Attributes
+                ----------
+                a : int
+                b : float
+                c : tuple
+                d : ClassVar[bool]
+                '''
+
+                c: list
+                d = True
+
+                def __init__(self, a):
+                    self.a = a
+                    self.e = None
+            """
+        )
+        expected = dedent(
+            """
+            from typing import ClassVar
+            class Foo:
+                a: int
+                b: float
+
+                c: tuple
+                d: ClassVar[bool]
+
+                def __init__(self, a) -> None: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(src)
+        assert result == expected
+
+    def test_undocumented_objects(self):
+        # TODO test undocumented objects
+        #  https://typing.readthedocs.io/en/latest/guides/writing_stubs.html#undocumented-objects
+        pass
+
+    def test_existing_typed_return(self):
+        source = dedent(
+            """
+            def foo() -> str:
+                pass
+            """
+        )
+        expected = dedent(
+            """
+            def foo() -> str: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    def test_overwriting_typed_return(self, capsys):
+        source = dedent(
+            '''
+            def foo() -> str:
+                """
+                Returns
+                -------
+                out : int
+                """
+                pass
+            '''
+        )
+        expected = dedent(
+            """
+            def foo() -> int: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+        captured = capsys.readouterr()
+        assert "replacing existing inline return annotation" in captured.out
+
+    def test_preserved_type_comment(self):
+        source = dedent(
+            """
+            # Import untyped library
+            import untyped  # type: ignore
+            """
+        )
+        expected = dedent(
+            """
+
+            import untyped  # type: ignore
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    @pytest.mark.xfail(reason="not supported yet")
+    def test_preserved_comments_extended(self):
+        source = dedent(
+            """
+            # Import untyped library
+            import untyped  # type: ignore
+
+            class Foo:
+                a = 3  # type: int
+
+            def bar(x: str) -> None:  # undocumented
+              pass
+            """
+        )
+        expected = dedent(
+            """
+            import untyped  # type: ignore
+
+            class Foo:
+                a = 3  # type: int
+
+            def bar(x: str) -> None: ...  # undocumented
+            """
+        )
+
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    def test_on_off_comment(self):
+        source = dedent(
+            """
+            class Foo:
+                '''
+                Parameters
+                ----------
+                a
+                b
+                c
+                d
+                '''
+                # docstub: off
+                a: int = None
+                b: str = ""
+                # docstub: on
+                c: int = None
+                b: str = ""
+            """
+        )
+        expected = dedent(
+            """
+            class Foo:
+
+                a: int = None
+                b: str = ""
+
+                c: int
+                b: str
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        # Removing the comments leaves the whitespace from the indent,
+        # remove these empty lines from the result too
+        result = dedent(result)
+        assert expected == result
