@@ -432,11 +432,13 @@ class TypesDatabase:
         ----------
         source_pkgs: list[Path], optional
         known_imports: dict[str, KnownImport], optional
+            If not provided, defaults to imports returned by
+            :func:`common_known_imports`.
         """
         if source_pkgs is None:
             source_pkgs = []
         if known_imports is None:
-            known_imports = {}
+            known_imports = common_known_imports()
 
         self.current_source = None
         self.source_pkgs = source_pkgs

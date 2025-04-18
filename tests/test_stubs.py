@@ -139,7 +139,6 @@ class Test_Py2StubTransformer:
         )
         expected = dedent(
             """
-            from _typeshed import Incomplete as int
             def foo(a: int | None=..., b: int=...) -> None: ...
             """
         )
@@ -252,11 +251,7 @@ class Test_Py2StubTransformer:
         )
         expected = dedent(
             """
-            from _typeshed import Incomplete as ClassVar
-            from _typeshed import Incomplete as bool
-            from _typeshed import Incomplete as float
-            from _typeshed import Incomplete as int
-            from _typeshed import Incomplete as tuple
+            from typing import ClassVar
             class Foo:
                 a: int
                 b: float
@@ -306,7 +301,6 @@ class Test_Py2StubTransformer:
         )
         expected = dedent(
             """
-            from _typeshed import Incomplete as int
             def foo() -> int: ...
             """
         )
