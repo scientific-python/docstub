@@ -298,6 +298,16 @@ class Py2StubTransformer(cst.CSTTransformer):
     References
     ----------
     .. [1] Stub file specification https://typing.readthedocs.io/en/latest/spec/distributing.html#stub-files
+
+    Examples
+    --------
+    >>> from docstub._stubs import Py2StubTransformer
+    >>> transformer = Py2StubTransformer()
+    >>> source = 'def print_upper(x): print(x.upper())'
+    >>> stub = transformer.python_to_stub(source)
+    >>> print(stub)
+    from _typeshed import Incomplete
+    def print_upper(x: Incomplete) -> None: ...
     """
 
     METADATA_DEPENDENCIES: ClassVar[tuple] = (cst.metadata.PositionProvider,)
