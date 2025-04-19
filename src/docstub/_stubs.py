@@ -124,14 +124,14 @@ class _Scope:
     """"""
 
     type: ScopeType
-    node: cst.CSTNode = None
+    node: cst.CSTNode | None = None
 
     @property
-    def has_self_or_cls(self):
+    def has_self_or_cls(self) -> bool:
         return self.type in {ScopeType.METHOD, ScopeType.CLASSMETHOD}
 
     @property
-    def is_method(self):
+    def is_method(self) -> bool:
         return self.type in {
             ScopeType.METHOD,
             ScopeType.CLASSMETHOD,
@@ -139,9 +139,20 @@ class _Scope:
         }
 
     @property
-    def is_class_init(self):
+    def is_class_init(self) -> bool:
         out = self.is_method and self.node.name.value == "__init__"
         return out
+
+    @property
+    def is_dataclass(self) -> bool:
+        if cstm.matches(self.node, cstm.ClassDef()):
+            # Determine if dataclass
+            decorators = cstm.findall(self.node, cstm.Decorator())
+            is_dataclass = any(
+                cstm.findall(d, cstm.Name("dataclass")) for d in decorators
+            )
+            return is_dataclass
+        return False
 
 
 def _get_docstring_node(node):
@@ -672,16 +683,27 @@ class Py2StubTransformer(cst.CSTTransformer):
         updated_node : cst.AnnAssign
         """
         name = updated_node.target.value
-        is_type_alias = cstm.matches(
-            updated_node.annotation, cstm.Annotation(cstm.Name("TypeAlias"))
-        )
-        is__all__ = cstm.matches(updated_node.target, cstm.Name("__all__"))
 
-        # Remove value if not type alias or __all__
-        if updated_node.value is not None and not is_type_alias and not is__all__:
-            updated_node = updated_node.with_changes(
-                value=None, equal=cst.MaybeSentinel.DEFAULT
+        if updated_node.value is not None:
+            is_type_alias = cstm.matches(
+                updated_node.annotation, cstm.Annotation(cstm.Name("TypeAlias"))
             )
+            is__all__ = cstm.matches(updated_node.target, cstm.Name("__all__"))
+            is_dataclass = self._scope_stack[-1].is_dataclass
+            is_classvar = any(
+                cstm.findall(updated_node.annotation, cstm.Name("ClassVar"))
+            )
+
+            # Replace with ellipses if dataclass
+            if is_dataclass and not is_classvar:
+                updated_node = updated_node.with_changes(
+                    value=cst.Ellipsis(), equal=cst.MaybeSentinel.DEFAULT
+                )
+            # Remove value if not type alias or __all__
+            elif not is_type_alias and not is__all__:
+                updated_node = updated_node.with_changes(
+                    value=None, equal=cst.MaybeSentinel.DEFAULT
+                )
 
         # Replace with type annotation from docstring, if available
         pytypes = self._pytypes_stack[-1]
