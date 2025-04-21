@@ -73,10 +73,14 @@ jobs:
           python -m docstub -v --config=examples/docstub.toml examples/example_pkg
           git diff --exit-code examples/ && echo "Stubs for example_pkg did not change"
 
-      - name: Generate docstub stubs
+      - name: Generate stubs for docstub
         run: |
           python -m docstub -v src/docstub -o ${MYPYPATH}/docstub
 
-      - name: Check docstub stubs with mypy
+      - name: Check with mypy.stubtest
         run: |
           python -m mypy.stubtest --allowlist stubtest_allow.txt docstub
+
+      - name: Check tests/ with mypy
+        run: |
+          python -m mypy tests/
