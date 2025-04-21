@@ -510,7 +510,7 @@ class DocstringAnnotations:
                 continue
 
             annotation = self._doctype_to_annotation(attribute.type, ds_line=ds_line)
-            annotations[attribute.name] = annotation
+            annotations[attribute.name.strip()] = annotation
 
         return annotations
 
@@ -536,7 +536,7 @@ class DocstringAnnotations:
                 continue
 
             annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
-            name = param.name.lstrip("*")  # normalize *args & **kwargs
+            name = param.name.strip(" *")  # normalize *args & **kwargs
             annotated_params[name] = annotation
 
         return annotated_params
@@ -560,7 +560,7 @@ class DocstringAnnotations:
                 continue
 
             annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
-            annotated_params[param.name] = annotation
+            annotated_params[param.name.strip()] = annotation
 
         if annotated_params:
             out = Annotation.as_return_tuple(annotated_params.values())
