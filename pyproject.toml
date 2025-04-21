@@ -108,3 +108,7 @@ run.source = ["docstub"]
 cst = {import = "libcst", as="cst"}
 lark = {import = "lark"}
 numpydoc = {import = "numpydoc"}
+
+
+[tool.mypy]
+strict = true
