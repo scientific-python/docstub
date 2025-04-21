@@ -119,6 +119,7 @@ class ScopeType(enum.StrEnum):
     # docstub: on
 
 
+# TODO use `libcst.metadata.ScopeProvider` instead
 @dataclass(slots=True, frozen=True)
 class _Scope:
     """"""

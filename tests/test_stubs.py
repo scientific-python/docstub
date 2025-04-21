@@ -404,10 +404,12 @@ class Test_Py2StubTransformer:
                 a: float
                 b: int = 3
                 c: str = None
+                _: KW_ONLY
                 d: dict[str, Any] = field(default_factory=dict)
-                e: ClassVar
-                f: ClassVar[float]
-                g: Final[ClassVar[int]] = 1
+                e: InitVar[tuple] = tuple()
+                f: ClassVar
+                g: ClassVar[float]
+                h: Final[ClassVar[int]] = 1
             """
         )
         expected = dedent(
@@ -417,10 +419,12 @@ class Test_Py2StubTransformer:
                 a: float
                 b: int = ...
                 c: str = ...
+                _: KW_ONLY
                 d: dict[str, Any] = ...
-                e: ClassVar
-                f: ClassVar[float]
-                g: Final[ClassVar[int]]
+                e: InitVar[tuple] = ...
+                f: ClassVar
+                g: ClassVar[float]
+                h: Final[ClassVar[int]]
             """
         )
         transformer = Py2StubTransformer()
