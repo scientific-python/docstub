@@ -394,3 +394,39 @@ class Test_Py2StubTransformer:
         # remove these empty lines from the result too
         result = dedent(result)
         assert expected == result
+
+    @pytest.mark.parametrize("decorator", ["dataclass", "dataclasses.dataclass"])
+    def test_dataclass(self, decorator):
+        source = dedent(
+            f"""
+            @{decorator}
+            class Foo:
+                a: float
+                b: int = 3
+                c: str = None
+                _: KW_ONLY
+                d: dict[str, Any] = field(default_factory=dict)
+                e: InitVar[tuple] = tuple()
+                f: ClassVar
+                g: ClassVar[float]
+                h: Final[ClassVar[int]] = 1
+            """
+        )
+        expected = dedent(
+            f"""
+            @{decorator}
+            class Foo:
+                a: float
+                b: int = ...
+                c: str = ...
+                _: KW_ONLY
+                d: dict[str, Any] = ...
+                e: InitVar[tuple] = ...
+                f: ClassVar
+                g: ClassVar[float]
+                h: Final[ClassVar[int]]
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
