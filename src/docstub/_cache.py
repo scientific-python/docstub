@@ -1,6 +1,6 @@
 import logging
 from functools import cached_property
-from typing import Protocol
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class FuncSerializer[T](Protocol):
 
     suffix: str
 
-    def hash_args(self, *args, **kwargs) -> str:
+    def hash_args(self, *args: Any, **kwargs: Any) -> str:
         """Compute a unique hash from the arguments passed to a function."""
 
     def serialize(self, data: T) -> bytes:
@@ -85,7 +85,7 @@ class FuncSerializer[T](Protocol):
 
 
 class FileCache:
-    """Cache results from a function call as a files on disk.
+    """Cache results from a function call as a file on disk.
 
     This class can cache results of a function to the disk. A unique key is
     generated from the arguments to the function, and the result is cached
@@ -100,7 +100,7 @@ class FileCache:
             The function whose output shall be cached.
         serializer : FuncSerializer
             An interface that matches the given `func`. It must implement the
-            `FileCachIO` protocol.
+            `FuncSerializer` protocol.
         cache_dir : Path
             The directory of the cache.
         name : str
@@ -126,7 +126,17 @@ class FileCache:
         return _named_cache_dir
 
     def __call__(self, *args, **kwargs):
-        """Call the wrapped `func` and cache each result in a file."""
+        """Call the wrapped `func` and cache each result in a file.
+
+        Parameters
+        ----------
+        args : Any
+        kwargs : Any
+
+        Returns
+        -------
+        data : Any
+        """
         key = self.serializer.hash_args(*args, **kwargs)
         entry_path = self.named_cache_dir / f"{key}{self.serializer.suffix}"
         if entry_path.is_file():

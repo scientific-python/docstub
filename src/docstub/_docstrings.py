@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 import lark
 import lark.visitors
-from numpydoc.docscrape import NumpyDocString  # type: ignore[import-untyped]
+from numpydoc.docscrape import NumpyDocString
 
 from ._analysis import KnownImport, TypesDatabase
 from ._utils import ContextFormatter, DocstubError, accumulate_qualname, escape_qualname
@@ -335,7 +335,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 _qualname = _qualname.replace(partial_qualname, replacement)
                 break
 
-        _qualname = self._find_import(_qualname, meta=tree.meta)
+        _qualname = self._match_import(_qualname, meta=tree.meta)
 
         if _qualname in self.blacklisted_qualnames:
             msg = (
@@ -377,8 +377,20 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 self._collected_imports.add(known_import)
         return out
 
-    def _find_import(self, qualname, meta):
-        """Match type names to known imports."""
+    def _match_import(self, qualname, *, meta):
+        """Match `qualname` to known imports or alias to "Incomplete".
+
+        Parameters
+        ----------
+        qualname : str
+        meta : lark.tree.Meta
+            Location metadata for the `qualname`, used to report possible errors.
+
+        Returns
+        -------
+        matched_qualname : str
+            Possibly modified or normalized qualname.
+        """
         if self.types_db is not None:
             annotation_name, known_import = self.types_db.query(qualname)
         else:
@@ -389,18 +401,18 @@ class DoctypeTransformer(lark.visitors.Transformer):
             self._collected_imports.add(known_import)
 
         if annotation_name:
-            qualname = annotation_name
+            matched_qualname = annotation_name
         else:
-            # Unknown qualname, alias to `Any` and make visible
+            # Unknown qualname, alias to `Incomplete`
             self._unknown_qualnames.append((qualname, meta.start_pos, meta.end_pos))
-            qualname = escape_qualname(qualname)
+            matched_qualname = escape_qualname(qualname)
             any_alias = KnownImport(
                 import_path="_typeshed",
                 import_name="Incomplete",
-                import_alias=qualname,
+                import_alias=matched_qualname,
             )
             self._collected_imports.add(any_alias)
-        return qualname
+        return matched_qualname
 
 
 class DocstringAnnotations:

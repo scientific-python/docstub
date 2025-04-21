@@ -209,8 +209,17 @@ class KnownImport:
         return out
 
 
-def _is_type(value) -> bool:
-    """Check if value is a type."""
+def _is_type(value):
+    """Check if value is a type.
+
+    Parameters
+    ----------
+    value : Any
+
+    Returns
+    -------
+    is_type : bool
+    """
     # Checking for isinstance(..., type) isn't enough, some types such as
     # typing.Literal don't pass that check. So combine with checking for a
     # __class__ attribute. Not sure about edge cases!
@@ -410,7 +419,7 @@ class TypesDatabase:
     ----------
     current_source : Path | None
     source_pkgs : list[Path]
-    known_imports: dict[str, KnownImport]
+    known_imports : dict[str, KnownImport]
     stats : dict[str, Any]
 
     Examples
@@ -430,8 +439,8 @@ class TypesDatabase:
         """
         Parameters
         ----------
-        source_pkgs: list[Path], optional
-        known_imports: dict[str, KnownImport], optional
+        source_pkgs : list[Path], optional
+        known_imports : dict[str, KnownImport], optional
             If not provided, defaults to imports returned by
             :func:`common_known_imports`.
         """

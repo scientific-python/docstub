@@ -49,6 +49,7 @@ class Test_get_docstring_node:
         assert len(matches) == 1
         func_def = matches[0]
 
+        assert isinstance(func_def, cst.FunctionDef)
         docstring_node = _get_docstring_node(func_def)
 
         assert docstring_node.value == docstring
@@ -70,6 +71,7 @@ class Test_get_docstring_node:
         assert len(matches) == 1
         func_def = matches[0]
 
+        assert isinstance(func_def, cst.FunctionDef)
         docstring_node = _get_docstring_node(func_def)
 
         assert docstring_node is None

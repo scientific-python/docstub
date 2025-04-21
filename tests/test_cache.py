@@ -43,13 +43,13 @@ class Test_FileCache:
         class Serializer:
             suffix = ".txt"
 
-            def hash_args(self, arg):
+            def hash_args(self, arg: int) -> str:
                 return str(hash(arg))
 
-            def serialize(self, data):
+            def serialize(self, data: int) -> bytes:
                 return str(data).encode()
 
-            def deserialize(self, raw):
+            def deserialize(self, raw: bytes) -> int:
                 return int(raw.decode())
 
         counter = defaultdict(lambda: 0)
