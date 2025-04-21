@@ -534,7 +534,8 @@ class DocstringAnnotations:
                 continue
 
             annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
-            annotated_params[param.name] = annotation
+            name = param.name.lstrip("*")  # normalize *args & **kwargs
+            annotated_params[name] = annotation
 
         return annotated_params
 

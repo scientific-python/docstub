@@ -430,3 +430,25 @@ class Test_Py2StubTransformer:
         transformer = Py2StubTransformer()
         result = transformer.python_to_stub(source)
         assert expected == result
+
+    def test_args_kwargs(self):
+        # Unpack and TypedDict (PEP 692) are not yet considered / supported
+        source = dedent(
+            """
+            def foo(*args, **kwargs):
+                '''
+                Parameters
+                ----------
+                *args : str
+                **kwargs : int
+                '''
+            """
+        )
+        expected = dedent(
+            """
+            def foo(*args: str, **kwargs: int) -> None: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result

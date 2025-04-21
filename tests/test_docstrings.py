@@ -195,11 +195,11 @@ class Test_DocstringAnnotations:
     def test_parameters(self, doctype, expected):
         docstring = dedent(
             f"""
-        Parameters
-        ----------
-        a : {doctype}
-        b :
-        """
+            Parameters
+            ----------
+            a : {doctype}
+            b :
+            """
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
@@ -216,11 +216,11 @@ class Test_DocstringAnnotations:
     def test_returns(self, doctypes, expected):
         docstring = dedent(
             """
-        Returns
-        -------
-        a : {}
-        b : {}
-        """
+            Returns
+            -------
+            a : {}
+            b : {}
+            """
         ).format(*doctypes)
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
@@ -229,11 +229,11 @@ class Test_DocstringAnnotations:
     def test_duplicate_parameters(self, caplog):
         docstring = dedent(
             """
-        Parameters
-        ----------
-        a : int
-        a : str
-        """
+            Parameters
+            ----------
+            a : int
+            a : str
+            """
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
@@ -252,3 +252,19 @@ class Test_DocstringAnnotations:
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
         assert annotations.returns.value == "int"
+
+    def test_args_kwargs(self):
+        docstring = dedent(
+            """
+            Parameters
+            ----------
+            *args : int
+            **kwargs : str
+            """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert "args" in annotations.parameters
+        assert "*args" not in annotations.parameters
+        assert "kwargs" in annotations.parameters
+        assert "**kargs" not in annotations.parameters
