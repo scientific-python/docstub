@@ -268,3 +268,21 @@ class Test_DocstringAnnotations:
         assert "*args" not in annotations.parameters
         assert "kwargs" in annotations.parameters
         assert "**kargs" not in annotations.parameters
+
+    def test_missing_whitespace(self, capsys):
+        """Check for warning if a whitespace is missing between parameter and colon.
+
+        In this case, NumPyDoc parses the entire thing as the parameter name.
+        """
+        docstring = dedent(
+            """
+            Parameters
+            ----------
+            a: int
+            """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert not annotations.parameters  # parsing yields no annotation
+        captured = capsys.readouterr()
+        assert "Possibly missing whitespace" in captured.out

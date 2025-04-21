@@ -413,11 +413,19 @@ class DocstringAnnotations:
     ... ----------
     ... a : tuple of int
     ... b : some invalid syntax
-    ... c : unkown.symbol
+    ... c : unknown.symbol
     ... '''
     >>> transformer = DoctypeTransformer()
     >>> annotations = DocstringAnnotations(docstring, transformer=transformer)
     >>> annotations.parameters.keys()
+    invalid syntax in doctype
+        some invalid syntax
+             ^
+    <BLANKLINE>
+    unknown name in doctype: 'unknown.symbol'
+        unknown.symbol
+        ^^^^^^^^^^^^^^
+    <BLANKLINE>
     dict_keys(['a', 'b', 'c'])
     """
 
@@ -433,6 +441,8 @@ class DocstringAnnotations:
         self.np_docstring = NumpyDocString(docstring)
         self.transformer = transformer
 
+        if ctx is None:
+            ctx = ContextFormatter(line=0)
         self._ctx: ContextFormatter = ctx
 
     def _doctype_to_annotation(self, doctype, ds_line=0):
@@ -452,10 +462,7 @@ class DocstringAnnotations:
             The transformed type, ready to be inserted into a stub file, with
             necessary imports attached.
         """
-        if self._ctx is not None:
-            ctx = self._ctx.with_line(offset=ds_line)
-        else:
-            ctx = None
+        ctx = self._ctx.with_line(offset=ds_line)
 
         try:
             annotation, unknown_qualnames = self.transformer.doctype_to_annotation(
@@ -467,17 +474,13 @@ class DocstringAnnotations:
             if hasattr(error, "get_context"):
                 details = error.get_context(doctype)
                 details = details.replace("^", click.style("^", fg="red", bold=True))
-            if ctx:
-                ctx.print_message("invalid syntax in doctype", details=details)
+            ctx.print_message("invalid syntax in doctype", details=details)
             return FallbackAnnotation
 
         except lark.visitors.VisitError as e:
             tb = "\n".join(traceback.format_exception(e.orig_exc))
             details = f"doctype: {doctype!r}\n\n{tb}"
-            if ctx:
-                ctx.print_message(
-                    "unexpected error while parsing doctype", details=details
-                )
+            ctx.print_message("unexpected error while parsing doctype", details=details)
             return FallbackAnnotation
 
         else:
@@ -485,16 +488,14 @@ class DocstringAnnotations:
                 width = stop_col - start_col
                 error_underline = click.style("^" * width, fg="red", bold=True)
                 details = f"{doctype}\n{' ' * start_col}{error_underline}\n"
-                if ctx:
-                    ctx.print_message(
-                        f"unknown name in doctype: {name!r}", details=details
-                    )
+                ctx.print_message(f"unknown name in doctype: {name!r}", details=details)
             return annotation
 
     @cached_property
     def attributes(self) -> dict[str, Annotation]:
         annotations = {}
         for attribute in self.np_docstring["Attributes"]:
+            self._warn_missing_whitespace(attribute)
             if not attribute.type:
                 continue
 
@@ -520,6 +521,7 @@ class DocstringAnnotations:
         )
         annotated_params = {}
         for param in all_params:
+            self._warn_missing_whitespace(param)
             if not param.type:
                 continue
 
@@ -543,6 +545,7 @@ class DocstringAnnotations:
     def returns(self) -> Annotation | None:
         annotated_params = {}
         for param in self.np_docstring["Returns"]:
+            self._warn_missing_whitespace(param)
             # NumPyDoc always requires a doctype for returns,
             assert param.type
 
@@ -564,3 +567,30 @@ class DocstringAnnotations:
         else:
             out = None
         return out
+
+    def _warn_missing_whitespace(self, param):
+        """Check for warning if a whitespace is missing between parameter and colon.
+
+        In this case, NumPyDoc parses the entire thing as the parameter name and
+        no annotation is detected. Since this typo can lead to very subtle & confusing
+        bugs, let's warn users about it
+
+        Parameters
+        ----------
+        param : numpydoc.docscrape.Parameter
+        """
+        if ":" in param.name and param.type == "":
+            msg = (
+                "Possibly missing whitespace between parameter and colon in "
+                "docstring, make sure to include it so that the type is parsed "
+                "properly!"
+            )
+            hint = f"{param.name}"
+
+            ds_line = 0
+            for i, line in enumerate(self.docstring.split("\n")):
+                if param.name in line:
+                    ds_line = i
+                    break
+            ctx = self._ctx.with_line(offset=ds_line)
+            ctx.print_message(msg, details=hint)
