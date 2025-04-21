@@ -79,7 +79,10 @@ jobs:
 
       - name: Check with mypy.stubtest
         run: |
-          python -m mypy.stubtest --allowlist stubtest_allow.txt docstub
+          python -m mypy.stubtest \
+            --mypy-config-file pyproject.toml \
+            --allowlist stubtest_allow.txt \
+            docstub
 
       - name: Check tests/ with mypy
         run: |
