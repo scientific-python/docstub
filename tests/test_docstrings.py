@@ -122,7 +122,7 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize("shape", ["(2, 3)", "(N, m)", "3D", "2-D", "(N, ...)"])
     def test_shape_n_dtype(self, fmt, expected_fmt, name, dtype, shape):
 
-        def escape(name):
+        def escape(name: str) -> str:
             return name.replace("-", "_").replace(".", "_")
 
         doctype = fmt.format(name=name, dtype=dtype, shape=shape)

@@ -395,7 +395,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Parameters
         ----------
-        source  : str
+        source : str
         module_path : Path, optional
             The location of the source that is transformed into a stub file.
             If given, used to enhance logging & error messages with more
@@ -573,6 +573,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         name = original_node.name.value
         pytypes = self._pytypes_stack[-1]
         if not pytypes and scope.is_class_init:
+            # Fallback to class if __init__'s docstring doesn't document parameters
             pytypes = self._pytypes_stack[-2]
 
         if pytypes:
