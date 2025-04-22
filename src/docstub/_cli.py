@@ -16,18 +16,16 @@ from ._analysis import (
 from ._cache import FileCache
 from ._config import Config
 from ._stubs import (
+    STUB_HEADER_COMMENT,
     Py2StubTransformer,
     try_format_stub,
-    walk_source,
+    walk_python_package,
     walk_source_and_targets,
 )
 from ._utils import ErrorReporter, GroupedErrorReporter
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
-
-
-STUB_HEADER_COMMENT = "# File generated with docstub"
 
 
 def _load_configuration(config_path=None):
@@ -78,13 +76,13 @@ def _setup_logging(*, verbose):
     )
 
 
-def _build_import_map(config, source_dir):
+def _build_import_map(config, root_path):
     """Build a map of known imports.
 
     Parameters
     ----------
     config : ~.Config
-    source_dir : Path
+    root_path : Path
 
     Returns
     -------
@@ -98,10 +96,11 @@ def _build_import_map(config, source_dir):
         cache_dir=Path.cwd() / ".docstub_cache",
         name=f"{__version__}/collected_types",
     )
-    for source_path in walk_source(source_dir):
-        logger.info("collecting types in %s", source_path)
-        known_imports_in_source = collect_cached_types(source_path)
-        known_imports.update(known_imports_in_source)
+    if root_path.is_dir():
+        for source_path in walk_python_package(root_path):
+            logger.info("collecting types in %s", source_path)
+            known_imports_in_source = collect_cached_types(source_path)
+            known_imports.update(known_imports_in_source)
 
     known_imports.update(KnownImport.many_from_config(config.known_imports))
 
@@ -138,7 +137,7 @@ def report_execution_time():
     "--out-dir",
     type=click.Path(file_okay=False),
     metavar="PATH",
-    help="Set output directory explicitly.",
+    help="Set output directory explicitly. Otherwise, stubs are generated inplace.",
 )
 @click.option(
     "--config",
@@ -176,7 +175,7 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
 
     Parameters
     ----------
-    source_dir : Path
+    root_path : Path
     out_dir : Path
     config_path : Path
     group_errors : bool
@@ -189,6 +188,12 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
     _setup_logging(verbose=verbose)
 
     root_path = Path(root_path)
+    if root_path.is_file():
+        logger.warning(
+            "Running docstub on a single file is experimental. Relative imports "
+            "or type references won't work."
+        )
+
     config = _load_configuration(config_path)
     known_imports = _build_import_map(config, root_path)
 
@@ -204,7 +209,7 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
         if root_path.is_file():
             out_dir = root_path.parent
         else:
-            out_dir = root_path.parent / (root_path.name + "-stubs")
+            out_dir = root_path
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
