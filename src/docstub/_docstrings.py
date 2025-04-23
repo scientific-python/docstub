@@ -562,7 +562,7 @@ class DocstringAnnotations:
         return annotations
 
     @cached_property
-    def parameters(self) -> dict[str, Annotation]:
+    def parameters(self):
         """Return the parameters and "Other Parameters" found in the docstring.
 
         Returns
@@ -571,8 +571,8 @@ class DocstringAnnotations:
             A dictionary mapping parameters names to their annotations.
             Parameters without annotations fall back to :class:`_typeshed.Incomplete`.
         """
-        param_section = self._get_section("Parameters")
-        other_section = self._get_section("Other Parameters")
+        param_section = self._section_annotations("Parameters")
+        other_section = self._section_annotations("Other Parameters")
 
         duplicates = param_section.keys() & other_section.keys()
         for duplicate in duplicates:
@@ -586,7 +586,7 @@ class DocstringAnnotations:
 
     @cached_property
     def returns(self):
-        """Return the attributes found in the docstring.
+        """Return annotation of the callable documented in the docstring.
 
         Returns
         -------
@@ -598,8 +598,16 @@ class DocstringAnnotations:
         return out
 
     @cached_property
-    def _returns(self) -> Annotation | None:
-        out = self._get_section("Returns")
+    def _returns(self):
+        """Annotation of the "Return" section in the docstring.
+
+        Returns
+        -------
+        return_annotation : Annotation | None
+            The "return" annotation. If the section contains multiple entries,
+            they are concatenated inside a tuple.
+        """
+        out = self._section_annotations("Returns")
         if out:
             out = Annotation.many_as_tuple(out.values())
         else:
@@ -607,19 +615,27 @@ class DocstringAnnotations:
         return out
 
     @cached_property
-    def _yields(self) -> Annotation | None:
-        yields = self._get_section("Yields")
+    def _yields(self):
+        """Annotations of the docstring's "Yields", "Receives" and "Returns" sections.
+
+        Returns
+        -------
+        yield_annotation : Annotation | None
+            The annotations from "Yields", "Receives" and "Returns" sections aggregated
+            in a :class`typing.Generator`.
+        """
+        yields = self._section_annotations("Yields")
         if not yields:
             return None
 
-        receive_types = self._get_section("Receives")
+        receive_types = self._section_annotations("Receives")
 
-        out = Annotation.as_generator(
+        yield_annotation = Annotation.as_generator(
             yield_types=yields.values(),
             receive_types=receive_types.values(),
             return_types=(self._returns,) if self._returns else (),
         )
-        return out
+        return yield_annotation
 
     def _handle_missing_whitespace(self, param):
         """Handle missing whitespace between parameter and colon.
@@ -657,7 +673,20 @@ class DocstringAnnotations:
 
         return param
 
-    def _get_section(self, name: str) -> dict[str, Annotation]:
+    def _section_annotations(self, name):
+        """Return the parameters of a specific section found in the docstring.
+
+        Parameters
+        ----------
+        name : str
+            Name of the specific section.
+
+        Returns
+        -------
+        annotations : dict[str, Annotation]
+            A dictionary mapping names to their annotations.
+            Entries without annotations fall back to :class:`_typeshed.Incomplete`.
+        """
         annotated_params = {}
         for param in self.np_docstring[name]:
             param = self._handle_missing_whitespace(param)  # noqa: PLW2901
@@ -676,10 +705,23 @@ class DocstringAnnotations:
 
         return annotated_params
 
-    def _find_docstring_line(self, *patterns):
-        line_count = 0
+    def _find_docstring_line(self, *substrings):
+        """Find line with all given substrings.
+
+        Parameters
+        ----------
+        *substrings : str
+            Naive substrings to search for.
+
+        Returns
+        -------
+        line_number : int
+            The number of the first line that contains all given `substrings`.
+            Defaults to 0 if `substrings` never match.
+        """
+        line_number = 0
         for i, line in enumerate(self.docstring.split("\n")):
-            if all(p in line for p in patterns):
-                line_count = i
+            if all(p in line for p in substrings):
+                line_number = i
                 break
-        return line_count
+        return line_number
