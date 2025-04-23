@@ -301,7 +301,7 @@ def _inline_node_as_code(node):
 
     Parameters
     ----------
-    node : cst.Node
+    node : cst.CSTNode
 
     Returns
     -------

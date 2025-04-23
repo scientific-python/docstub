@@ -16,7 +16,7 @@ __all__ = [
     "ExampleClass",
 ]
 
-def func_empty(a1, a2, a3) -> None: ...
+def func_empty(a1: Incomplete, a2: Incomplete, a3) -> None: ...
 def func_contains(
     a1: list[float],
     a2: dict[str, Union[int, str]],
