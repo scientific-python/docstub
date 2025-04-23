@@ -296,6 +296,22 @@ def _docstub_comment_directives(cls):
     return cls
 
 
+def _inline_node_as_code(node):
+    """Turn nodes without `code` attribute into source code representation.
+
+    Parameters
+    ----------
+    node : cst.Node
+
+    Returns
+    -------
+    code : str
+    """
+    # Doesn't work in all contexts, but better than nothing for now
+    code = cst.Module([]).code_for_node(node)
+    return code
+
+
 @_log_error_with_line_context
 @_docstub_comment_directives
 class Py2StubTransformer(cst.CSTTransformer):
@@ -529,7 +545,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                     cst.metadata.PositionProvider, original_node
                 ).start
                 ctx = ContextFormatter(path=self.current_source, line=position.line)
-                replaced = updated_node.returns.annotation.value
+                replaced = _inline_node_as_code(original_node.returns.annotation)
                 ctx.print_message(
                     short="replacing existing inline return annotation",
                     details=f"{replaced}\n{"^" * len(replaced)} -> {annotation_value}",

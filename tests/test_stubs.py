@@ -292,7 +292,7 @@ class Test_Py2StubTransformer:
     def test_overwriting_typed_return(self, capsys):
         source = dedent(
             '''
-            def foo() -> str:
+            def foo() -> dic[str, int]:
                 """
                 Returns
                 -------
