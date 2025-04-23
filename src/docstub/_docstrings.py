@@ -4,13 +4,12 @@ import logging
 import traceback
 from dataclasses import dataclass, field
 from functools import cached_property
-from itertools import chain
 from pathlib import Path
 
 import click
 import lark
 import lark.visitors
-from numpydoc.docscrape import NumpyDocString
+import numpydoc.docscrape as npds
 
 from ._analysis import KnownImport, TypesDatabase
 from ._utils import ContextFormatter, DocstubError, accumulate_qualname, escape_qualname
@@ -56,7 +55,7 @@ class Annotation:
         return self.value
 
     @classmethod
-    def as_return_tuple(cls, return_types):
+    def many_as_tuple(cls, types):
         """Concatenate multiple annotations and wrap in tuple if more than one.
 
         Useful to combine multiple returned types for a function into a single
@@ -64,7 +63,7 @@ class Annotation:
 
         Parameters
         ----------
-        return_types : Iterable[Annotation]
+        types : Iterable[Annotation]
             The types to combine.
 
         Returns
@@ -72,7 +71,7 @@ class Annotation:
         concatenated : Annotation
             The concatenated types.
         """
-        values, imports = cls._aggregate_annotations(*return_types)
+        values, imports = cls._aggregate_annotations(*types)
         value = ", ".join(values)
         if len(values) > 1:
             value = f"tuple[{value}]"
@@ -80,8 +79,8 @@ class Annotation:
         return concatenated
 
     @classmethod
-    def as_yields_generator(cls, yield_types, receive_types=()):
-        """Create new iterator type from yield and receive types.
+    def as_generator(cls, *, yield_types, receive_types=(), return_types=()):
+        """Create new ``Generator`` type from yield, receive and return types.
 
         Parameters
         ----------
@@ -89,14 +88,35 @@ class Annotation:
             The types to yield.
         receive_types : Iterable[Annotation], optional
             The types the generator receives.
+        return_types : Iterable[Annotation], optional
+            The types the generator function returns.
 
         Returns
         -------
-        iterator : Annotation
-            The yielded and received types wrapped in a generator.
+        generator : Annotation
+            The provided types wrapped in a ``Generator``.
         """
-        # TODO
-        raise NotImplementedError()
+        yield_annotation = cls.many_as_tuple(yield_types)
+        imports = yield_annotation.imports
+        value = yield_annotation.value
+
+        if receive_types:
+            receive_annotation = cls.many_as_tuple(receive_types)
+            imports |= receive_annotation.imports
+            value = f"{value}, {receive_annotation.value}"
+        elif return_types:
+            # Append None, so that return types are at correct position
+            value = f"{value}, None"
+
+        if return_types:
+            return_annotation = cls.many_as_tuple(return_types)
+            imports |= return_annotation.imports
+            value = f"{value}, {return_annotation.value}"
+
+        value = f"Generator[{value}]"
+        imports |= {KnownImport(import_path="typing", import_name="Generator")}
+        generator = cls(value=value, imports=imports)
+        return generator
 
     def as_optional(self):
         """Return optional version of this annotation by appending `| None`.
@@ -110,6 +130,7 @@ class Annotation:
         >>> Annotation(value="int").as_optional()
         Annotation(value='int | None', imports=frozenset())
         """
+        # TODO account for `| None` or `Optional` already being included?
         value = f"{self.value} | None"
         optional = type(self)(value=value, imports=self.imports)
         return optional
@@ -418,6 +439,12 @@ class DoctypeTransformer(lark.visitors.Transformer):
 class DocstringAnnotations:
     """Collect annotations in a given docstring.
 
+    Attributes
+    ----------
+    docstring : str
+    transformer : DoctypeTransformer
+    ctx : ~.ContextFormatter
+
     Examples
     --------
     >>> docstring = '''
@@ -450,12 +477,12 @@ class DocstringAnnotations:
         ctx : ~.ContextFormatter, optional
         """
         self.docstring = docstring
-        self.np_docstring = NumpyDocString(docstring)
+        self.np_docstring = npds.NumpyDocString(docstring)
         self.transformer = transformer
 
         if ctx is None:
             ctx = ContextFormatter(line=0)
-        self._ctx: ContextFormatter = ctx
+        self.ctx: ContextFormatter = ctx
 
     def _doctype_to_annotation(self, doctype, ds_line=0):
         """Convert a type description to a Python-ready type.
@@ -474,7 +501,7 @@ class DocstringAnnotations:
             The transformed type, ready to be inserted into a stub file, with
             necessary imports attached.
         """
-        ctx = self._ctx.with_line(offset=ds_line)
+        ctx = self.ctx.with_line(offset=ds_line)
 
         try:
             annotation, unknown_qualnames = self.transformer.doctype_to_annotation(
@@ -504,10 +531,18 @@ class DocstringAnnotations:
             return annotation
 
     @cached_property
-    def attributes(self) -> dict[str, Annotation]:
+    def attributes(self):
+        """Return the attributes found in the docstring.
+
+        Returns
+        -------
+        attributes : dict[str, Annotation]
+            A dictionary mapping attribute names to their annotations.
+            Attributes without annotations fall back to :class:`_typeshed.Incomplete`.
+        """
         annotations = {}
         for attribute in self.np_docstring["Attributes"]:
-            self._warn_missing_whitespace(attribute)
+            self._handle_missing_whitespace(attribute)
             if not attribute.type:
                 continue
 
@@ -528,67 +563,77 @@ class DocstringAnnotations:
 
     @cached_property
     def parameters(self) -> dict[str, Annotation]:
-        all_params = chain(
-            self.np_docstring["Parameters"], self.np_docstring["Other Parameters"]
-        )
-        annotated_params = {}
-        for param in all_params:
-            self._warn_missing_whitespace(param)
-            if not param.type:
-                continue
+        """Return the parameters and "Other Parameters" found in the docstring.
 
-            ds_line = 0
-            for i, line in enumerate(self.docstring.split("\n")):
-                if param.name in line and param.type in line:
-                    ds_line = i
-                    break
+        Returns
+        -------
+        parameters : dict[str, Annotation]
+            A dictionary mapping parameters names to their annotations.
+            Parameters without annotations fall back to :class:`_typeshed.Incomplete`.
+        """
+        param_section = self._get_section("Parameters")
+        other_section = self._get_section("Other Parameters")
 
-            if param.name in annotated_params:
-                logger.warning("duplicate parameter name %r, ignoring", param.name)
-                continue
+        duplicates = param_section.keys() & other_section.keys()
+        for duplicate in duplicates:
+            logger.warning("duplicate parameter name %r, ignoring", duplicate)
 
-            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
-            name = param.name.strip(" *")  # normalize *args & **kwargs
-            annotated_params[name] = annotation
-
-        return annotated_params
+        # Last takes priority
+        paramaters = other_section | param_section
+        # Normalize *args & **kwargs
+        paramaters = {name.strip(" *"): value for name, value in paramaters.items()}
+        return paramaters
 
     @cached_property
-    def returns(self) -> Annotation | None:
-        annotated_params = {}
-        for param in self.np_docstring["Returns"]:
-            self._warn_missing_whitespace(param)
-            # NumPyDoc always requires a doctype for returns,
-            assert param.type
+    def returns(self):
+        """Return the attributes found in the docstring.
 
-            ds_line = 0
-            for i, line in enumerate(self.docstring.split("\n")):
-                if param.name in line and param.type in line:
-                    ds_line = i
-                    break
+        Returns
+        -------
+        return_annotation : Annotation | None
+            The "return" annotation of a callable. If the docstring defines a
+            "Yield" section, this will be a :class:`typing.Generator`.
+        """
+        out = self._yields or self._returns
+        return out
 
-            if param.name in annotated_params:
-                logger.warning("duplicate parameter name %r, ignoring", param.name)
-                continue
-
-            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
-            annotated_params[param.name.strip()] = annotation
-
-        if annotated_params:
-            out = Annotation.as_return_tuple(annotated_params.values())
+    @cached_property
+    def _returns(self) -> Annotation | None:
+        out = self._get_section("Returns")
+        if out:
+            out = Annotation.many_as_tuple(out.values())
         else:
             out = None
         return out
 
-    def _warn_missing_whitespace(self, param):
-        """Check for warning if a whitespace is missing between parameter and colon.
+    @cached_property
+    def _yields(self) -> Annotation | None:
+        yields = self._get_section("Yields")
+        if not yields:
+            return None
+
+        receive_types = self._get_section("Receives")
+
+        out = Annotation.as_generator(
+            yield_types=yields.values(),
+            receive_types=receive_types.values(),
+            return_types=(self._returns,) if self._returns else (),
+        )
+        return out
+
+    def _handle_missing_whitespace(self, param):
+        """Handle missing whitespace between parameter and colon.
 
         In this case, NumPyDoc parses the entire thing as the parameter name and
         no annotation is detected. Since this typo can lead to very subtle & confusing
-        bugs, let's warn users about it
+        bugs, let's warn users about it and attempt to handle it.
 
         Parameters
         ----------
+        param : numpydoc.docscrape.Parameter
+
+        Returns
+        -------
         param : numpydoc.docscrape.Parameter
         """
         if ":" in param.name and param.type == "":
@@ -604,5 +649,37 @@ class DocstringAnnotations:
                 if param.name in line:
                     ds_line = i
                     break
-            ctx = self._ctx.with_line(offset=ds_line)
+            ctx = self.ctx.with_line(offset=ds_line)
             ctx.print_message(msg, details=hint)
+
+            new_name, new_type = param.name.split(":", maxsplit=1)
+            param = npds.Parameter(name=new_name, type=new_type, desc=param.desc)
+
+        return param
+
+    def _get_section(self, name: str) -> dict[str, Annotation]:
+        annotated_params = {}
+        for param in self.np_docstring[name]:
+            param = self._handle_missing_whitespace(param)  # noqa: PLW2901
+
+            if param.name in annotated_params:
+                # TODO make error
+                logger.warning("duplicate parameter name %r, ignoring", param.name)
+                continue
+
+            if param.type:
+                ds_line = self._find_docstring_line(param.name, param.type)
+                annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
+            else:
+                annotation = FallbackAnnotation
+            annotated_params[param.name.strip()] = annotation
+
+        return annotated_params
+
+    def _find_docstring_line(self, *patterns):
+        line_count = 0
+        for i, line in enumerate(self.docstring.split("\n")):
+            if all(p in line for p in patterns):
+                line_count = i
+                break
+        return line_count

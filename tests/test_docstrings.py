@@ -25,7 +25,7 @@ class Test_Annotation:
                 {KnownImport(import_name="Sequence", import_path="typing")}
             ),
         )
-        return_annotation = Annotation.as_return_tuple([path_anno, sequence_anno])
+        return_annotation = Annotation.many_as_tuple([path_anno, sequence_anno])
         assert return_annotation.value == "tuple[Path, Sequence]"
         assert return_annotation.imports == path_anno.imports | sequence_anno.imports
 
@@ -181,6 +181,7 @@ class Test_DocstringAnnotations:
         docstring = dedent("""No sections in this docstring.""")
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.attributes == {}
         assert annotations.parameters == {}
         assert annotations.returns is None
 
@@ -203,8 +204,12 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
-        assert len(annotations.parameters) == 1
+        assert len(annotations.parameters) == 2
         assert annotations.parameters["a"].value == expected
+        assert annotations.parameters["b"].value == "Incomplete"
+        assert annotations.parameters["b"].imports == {
+            KnownImport.typeshed_Incomplete()
+        }
 
     @pytest.mark.parametrize(
         ("doctypes", "expected"),
@@ -225,6 +230,93 @@ class Test_DocstringAnnotations:
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
         assert annotations.returns.value == expected
+
+    def test_yields(self, caplog):
+        docstring = dedent(
+            """
+            Yields
+            ------
+            a : int
+            b : str
+            """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns.value == "Generator[tuple[int, str]]"
+        assert annotations.returns.imports == {
+            KnownImport(import_path="typing", import_name="Generator")
+        }
+
+    def test_receives(self, caplog):
+        docstring = dedent(
+            """
+            Yields
+            ------
+            a : int
+            b : str
+
+            Receives
+            --------
+            c : float
+            d : bytes
+            """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert (
+            annotations.returns.value
+            == "Generator[tuple[int, str], tuple[float, bytes]]"
+        )
+        assert annotations.returns.imports == {
+            KnownImport(import_path="typing", import_name="Generator")
+        }
+
+    def test_full_generator(self, caplog):
+        docstring = dedent(
+            """
+            Yields
+            ------
+            a : int
+            b : str
+
+            Receives
+            --------
+            c : float
+            d : bytes
+
+            Returns
+            -------
+            e : bool
+            """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns.value == (
+            "Generator[tuple[int, str], tuple[float, bytes], bool]"
+        )
+        assert annotations.returns.imports == {
+            KnownImport(import_path="typing", import_name="Generator")
+        }
+
+    def test_yields_and_returns(self, caplog):
+        docstring = dedent(
+            """
+            Yields
+            ------
+            a : int
+            b : str
+
+            Returns
+            -------
+            e : bool
+            """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns.value == ("Generator[tuple[int, str], None, bool]")
+        assert annotations.returns.imports == {
+            KnownImport(import_path="typing", import_name="Generator")
+        }
 
     def test_duplicate_parameters(self, caplog):
         docstring = dedent(
@@ -283,6 +375,6 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
-        assert not annotations.parameters  # parsing yields no annotation
+        assert annotations.parameters["a"].value == "int"
         captured = capsys.readouterr()
         assert "Possibly missing whitespace" in captured.out
