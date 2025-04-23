@@ -75,8 +75,8 @@ def walk_source_and_targets(root_dir, target_dir):
     target_dir : Path
         Root directory in which a matching stub package will be created.
 
-    Returns
-    -------
+    Yields
+    ------
     source_path : Path
         Either a Python file or a stub file that takes precedence.
     stub_path : Path
