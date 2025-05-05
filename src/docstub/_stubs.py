@@ -11,7 +11,7 @@ import libcst.matchers as cstm
 
 from ._analysis import KnownImport
 from ._docstrings import DocstringAnnotations, DoctypeTransformer
-from ._utils import ContextFormatter, module_name_from_path
+from ._utils import ErrorReporter, module_name_from_path
 
 logger = logging.getLogger(__name__)
 
@@ -350,18 +350,22 @@ class Py2StubTransformer(cst.CSTTransformer):
     )
     _Annotation_None: ClassVar[cst.Annotation] = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, *, types_db=None, replace_doctypes=None):
+    def __init__(self, *, types_db=None, replace_doctypes=None, reporter=None):
         """
         Parameters
         ----------
         types_db : ~.TypesDatabase
         replace_doctypes : dict[str, str]
         """
+        if reporter is None:
+            reporter = ErrorReporter()
+
         self.types_db = types_db
         self.replace_doctypes = replace_doctypes
         self.transformer = DoctypeTransformer(
             types_db=types_db, replace_doctypes=replace_doctypes
         )
+        self.reporter = reporter
         # Relevant docstring for the current context
         self._scope_stack = None  # Entered module, class or function scopes
         self._pytypes_stack = None  # Collected pytypes for each stack
@@ -544,11 +548,17 @@ class Py2StubTransformer(cst.CSTTransformer):
                 position = self.get_metadata(
                     cst.metadata.PositionProvider, original_node
                 ).start
-                ctx = ContextFormatter(path=self.current_source, line=position.line)
+                reporter = self.reporter.copy_with(
+                    path=self.current_source, line=position.line
+                )
                 replaced = _inline_node_as_code(original_node.returns.annotation)
-                ctx.print_message(
-                    short="replacing existing inline return annotation",
-                    details=f"{replaced}\n{"^" * len(replaced)} -> {annotation_value}",
+                details = (
+                    f"{replaced}\n"
+                    f"{reporter.underline(replaced)} -> {annotation_value}"
+                )
+                reporter.message(
+                    short="Replacing existing inline return annotation",
+                    details=details,
                 )
 
             annotation = cst.Annotation(cst.parse_expression(annotation_value))
@@ -735,13 +745,18 @@ class Py2StubTransformer(cst.CSTTransformer):
                 position = self.get_metadata(
                     cst.metadata.PositionProvider, original_node
                 ).start
-                ctx = ContextFormatter(path=self.current_source, line=position.line)
+                reporter = self.reporter.copy_with(
+                    path=self.current_source, line=position.line
+                )
                 replaced = cst.Module([]).code_for_node(
                     updated_node.annotation.annotation
                 )
-                ctx.print_message(
-                    short="replacing existing inline annotation",
-                    details=f"{replaced}\n{"^" * len(replaced)} -> {pytype.value}",
+                details = (
+                    f"{replaced}\n{reporter.underline(replaced)} -> {pytype.value}"
+                )
+                reporter.message(
+                    short="Replacing existing inline annotation",
+                    details=details,
                 )
 
             updated_node = updated_node.with_deep_changes(
@@ -901,12 +916,14 @@ class Py2StubTransformer(cst.CSTTransformer):
             position = self.get_metadata(
                 cst.metadata.PositionProvider, docstring_node
             ).start
-            ctx = ContextFormatter(path=self.current_source, line=position.line)
+            reporter = self.reporter.copy_with(
+                path=self.current_source, line=position.line
+            )
             try:
                 annotations = DocstringAnnotations(
                     docstring_node.evaluated_value,
                     transformer=self.transformer,
-                    ctx=ctx,
+                    reporter=reporter,
                 )
             except (SystemExit, KeyboardInterrupt):
                 raise
