@@ -155,7 +155,9 @@ def report_execution_time():
 @click.help_option("-h", "--help")
 @report_execution_time()
 def main(source_dir, out_dir, config_path, group_errors, verbose):
-    """
+    """Generate Python stub files from docstrings.
+    \f
+
     Parameters
     ----------
     source_dir : Path
