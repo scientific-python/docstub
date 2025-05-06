@@ -443,7 +443,7 @@ class DocstringAnnotations:
     ----------
     docstring : str
     transformer : DoctypeTransformer
-    reporter : ~.ContextFormatter
+    reporter : ~.ErrorReporter
 
     Examples
     --------
@@ -474,7 +474,7 @@ class DocstringAnnotations:
         ----------
         docstring : str
         transformer : DoctypeTransformer
-        reporter : ~.Reporter, optional
+        reporter : ~.ErrorReporter, optional
         """
         self.docstring = docstring
         self.np_docstring = npds.NumpyDocString(docstring)

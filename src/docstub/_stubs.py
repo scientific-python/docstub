@@ -356,6 +356,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         ----------
         types_db : ~.TypesDatabase
         replace_doctypes : dict[str, str]
+        reporter : ~.ErrorReporter
         """
         if reporter is None:
             reporter = ErrorReporter()
