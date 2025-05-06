@@ -12,7 +12,7 @@ import lark.visitors
 import numpydoc.docscrape as npds
 
 from ._analysis import KnownImport, TypesDatabase
-from ._utils import ContextFormatter, DocstubError, accumulate_qualname, escape_qualname
+from ._utils import DocstubError, ErrorReporter, accumulate_qualname, escape_qualname
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ class Annotation:
 
     @classmethod
     def as_generator(cls, *, yield_types, receive_types=(), return_types=()):
-        """Create new ``Generator`` type from yield, receive and return types.
+        """Create copy_with ``Generator`` type from yield, receive and return types.
 
         Parameters
         ----------
@@ -257,7 +257,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         super().__init__(**kwargs)
 
-        self.stats = {"grammar_errors": 0}
+        self.stats = {"syntax_errors": 0}
 
     def doctype_to_annotation(self, doctype):
         """Turn a type description in a docstring into a type annotation.
@@ -289,7 +289,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
             lark.exceptions.ParseError,
             QualnameIsKeyword,
         ):
-            self.stats["grammar_errors"] += 1
+            self.stats["syntax_errors"] += 1
             raise
         finally:
             self._collected_imports = None
@@ -443,7 +443,7 @@ class DocstringAnnotations:
     ----------
     docstring : str
     transformer : DoctypeTransformer
-    ctx : ~.ContextFormatter
+    reporter : ~.ErrorReporter
 
     Examples
     --------
@@ -457,32 +457,32 @@ class DocstringAnnotations:
     >>> transformer = DoctypeTransformer()
     >>> annotations = DocstringAnnotations(docstring, transformer=transformer)
     >>> annotations.parameters.keys()
-    invalid syntax in doctype
+    Invalid syntax in docstring type annotation
         some invalid syntax
              ^
     <BLANKLINE>
-    unknown name in doctype: 'unknown.symbol'
+    Unknown name in doctype: 'unknown.symbol'
         unknown.symbol
         ^^^^^^^^^^^^^^
     <BLANKLINE>
     dict_keys(['a', 'b', 'c'])
     """
 
-    def __init__(self, docstring, *, transformer, ctx=None):
+    def __init__(self, docstring, *, transformer, reporter=None):
         """
         Parameters
         ----------
         docstring : str
         transformer : DoctypeTransformer
-        ctx : ~.ContextFormatter, optional
+        reporter : ~.ErrorReporter, optional
         """
         self.docstring = docstring
         self.np_docstring = npds.NumpyDocString(docstring)
         self.transformer = transformer
 
-        if ctx is None:
-            ctx = ContextFormatter(line=0)
-        self.ctx: ContextFormatter = ctx
+        if reporter is None:
+            reporter = ErrorReporter(line=0)
+        self.reporter: ErrorReporter = reporter
 
     def _doctype_to_annotation(self, doctype, ds_line=0):
         """Convert a type description to a Python-ready type.
@@ -501,7 +501,7 @@ class DocstringAnnotations:
             The transformed type, ready to be inserted into a stub file, with
             necessary imports attached.
         """
-        ctx = self.ctx.with_line(offset=ds_line)
+        reporter = self.reporter.copy_with(line_offset=ds_line)
 
         try:
             annotation, unknown_qualnames = self.transformer.doctype_to_annotation(
@@ -513,13 +513,15 @@ class DocstringAnnotations:
             if hasattr(error, "get_context"):
                 details = error.get_context(doctype)
                 details = details.replace("^", click.style("^", fg="red", bold=True))
-            ctx.print_message("invalid syntax in doctype", details=details)
+            reporter.message(
+                "Invalid syntax in docstring type annotation", details=details
+            )
             return FallbackAnnotation
 
         except lark.visitors.VisitError as e:
             tb = "\n".join(traceback.format_exception(e.orig_exc))
             details = f"doctype: {doctype!r}\n\n{tb}"
-            ctx.print_message("unexpected error while parsing doctype", details=details)
+            reporter.message("unexpected error while parsing doctype", details=details)
             return FallbackAnnotation
 
         else:
@@ -527,7 +529,7 @@ class DocstringAnnotations:
                 width = stop_col - start_col
                 error_underline = click.style("^" * width, fg="red", bold=True)
                 details = f"{doctype}\n{' ' * start_col}{error_underline}\n"
-                ctx.print_message(f"unknown name in doctype: {name!r}", details=details)
+                reporter.message(f"Unknown name in doctype: {name!r}", details=details)
             return annotation
 
     @cached_property
@@ -553,7 +555,10 @@ class DocstringAnnotations:
                     break
 
             if attribute.name in annotations:
-                logger.warning("duplicate parameter name %r, ignoring", attribute.name)
+                self.reporter.message(
+                    "duplicate attribute name in docstring",
+                    details=self.reporter.underline(attribute.name),
+                )
                 continue
 
             annotation = self._doctype_to_annotation(attribute.type, ds_line=ds_line)
@@ -576,7 +581,10 @@ class DocstringAnnotations:
 
         duplicates = param_section.keys() & other_section.keys()
         for duplicate in duplicates:
-            logger.warning("duplicate parameter name %r, ignoring", duplicate)
+            self.reporter.message(
+                "duplicate attribute name in docstring",
+                details=self.reporter.underline(duplicate),
+            )
 
         # Last takes priority
         paramaters = other_section | param_section
@@ -653,20 +661,21 @@ class DocstringAnnotations:
         param : numpydoc.docscrape.Parameter
         """
         if ":" in param.name and param.type == "":
-            msg = (
-                "Possibly missing whitespace between parameter and colon in "
-                "docstring, make sure to include it so that the type is parsed "
-                "properly!"
+            msg = "Possibly missing whitespace between parameter and colon in docstring"
+            underline = "".join("^" if c == ":" else " " for c in param.name)
+            underline = click.style(underline, fg="red", bold=True)
+            hint = (
+                f"{param.name}\n{underline}"
+                f"\nInclude whitespace so that the type is parsed properly!"
             )
-            hint = f"{param.name}"
 
             ds_line = 0
             for i, line in enumerate(self.docstring.split("\n")):
                 if param.name in line:
                     ds_line = i
                     break
-            ctx = self.ctx.with_line(offset=ds_line)
-            ctx.print_message(msg, details=hint)
+            reporter = self.reporter.copy_with(line_offset=ds_line)
+            reporter.message(msg, details=hint)
 
             new_name, new_type = param.name.split(":", maxsplit=1)
             param = npds.Parameter(name=new_name, type=new_type, desc=param.desc)
@@ -693,7 +702,10 @@ class DocstringAnnotations:
 
             if param.name in annotated_params:
                 # TODO make error
-                logger.warning("duplicate parameter name %r, ignoring", param.name)
+                self.reporter.message(
+                    "duplicate parameter / attribute name in docstring",
+                    details=self.reporter.underline(param.name),
+                )
                 continue
 
             if param.type:

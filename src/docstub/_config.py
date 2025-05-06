@@ -48,7 +48,7 @@ class Config:
         return config
 
     def merge(self, other):
-        """Merge contents with other and return a new Config instance.
+        """Merge contents with other and return a copy_with Config instance.
 
         Parameters
         ----------
