@@ -255,11 +255,11 @@ class GroupedErrorReporter(ErrorReporter):
     >>> rep.print_grouped()
     Syntax error (x2)
         <unknown location>
-        file/with/problems.py:3
+        ...problems.py:3
     <BLANKLINE>
     Unknown doctype (x2)
-        file/with/problems.py
-        file/with/problems.py:4:2
+        ...problems.py
+        ...problems.py:4:2
     <BLANKLINE>
     """
 
