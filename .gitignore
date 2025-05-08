@@ -84,6 +84,7 @@ src/*/_version.py
 .Trashes
 ehthumbs.db
 Thumbs.db
+.directory
 
 # Common editor files
 *~
