@@ -1,13 +1,8 @@
 import dataclasses
 import logging
+import tomllib
 from pathlib import Path
 from typing import ClassVar
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
-
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +18,17 @@ class Config:
     _source: tuple[Path, ...] = ()
 
     @classmethod
-    def from_toml(cls, path: Path | str) -> "Config":
-        """Return configuration options in local TOML file if they exist."""
+    def from_toml(cls, path):
+        """Return configuration options in local TOML file if they exist.
+
+        Parameters
+        ----------
+        path : Path or str
+
+        Returns
+        -------
+        config : Self
+        """
         path = Path(path)
         with open(path, "rb") as fp:
             raw = tomllib.load(fp)
@@ -34,11 +38,26 @@ class Config:
 
     @classmethod
     def from_default(cls):
+        """Create a configuration with default values.
+
+        Returns
+        -------
+        config : Self
+        """
         config = cls.from_toml(cls.DEFAULT_CONFIG_PATH)
         return config
 
     def merge(self, other):
-        """Merge contents with other and return a new Config instance."""
+        """Merge contents with other and return a copy_with Config instance.
+
+        Parameters
+        ----------
+        other : Self
+
+        Returns
+        -------
+        merged : Self
+        """
         if not isinstance(other, type(self)):
             return NotImplemented
         new = Config(
@@ -61,7 +80,7 @@ class Config:
         if not isinstance(self.replace_doctypes, dict):
             raise TypeError("replace_doctypes must be a string")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         sources = " | ".join(str(s) for s in self._source)
         formatted = f"<{type(self).__name__}: {sources}>"
         return formatted

@@ -1,6 +1,7 @@
 import logging
 import sys
 import time
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -14,10 +15,19 @@ from ._analysis import (
 )
 from ._cache import FileCache
 from ._config import Config
-from ._stubs import Py2StubTransformer, walk_source, walk_source_and_targets
+from ._stubs import (
+    Py2StubTransformer,
+    try_format_stub,
+    walk_source,
+    walk_source_and_targets,
+)
+from ._utils import ErrorReporter, GroupedErrorReporter
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
+
+
+STUB_HEADER_COMMENT = "# File generated with docstub"
 
 
 def _load_configuration(config_path=None):
@@ -127,36 +137,57 @@ def report_execution_time():
     "-o",
     "--out-dir",
     type=click.Path(file_okay=False),
-    help="Set explicit output directory.",
+    help="Set output directory explicitly.",
 )
 @click.option(
     "--config",
     "config_path",
     type=click.Path(exists=True, dir_okay=False),
-    help="Set explicitly configuration file.",
+    help="Set configuration file explicitly.",
+)
+@click.option(
+    "--group-errors",
+    is_flag=True,
+    help="Group errors by type and content. "
+    "Will delay showing errors until all files have been processed.",
 )
 @click.option("-v", "--verbose", count=True, help="Log more details.")
 @click.help_option("-h", "--help")
 @report_execution_time()
-def main(source_dir, out_dir, config_path, verbose):
+def main(source_dir, out_dir, config_path, group_errors, verbose):
+    """Generate Python stub files from docstrings.
+    \f
+
+    Parameters
+    ----------
+    source_dir : Path
+    out_dir : Path
+    config_path : Path
+    verbose : str
+    """
+
+    # Setup -------------------------------------------------------------------
+
     _setup_logging(verbose=verbose)
 
     source_dir = Path(source_dir)
     config = _load_configuration(config_path)
     known_imports = _build_import_map(config, source_dir)
 
+    reporter = GroupedErrorReporter() if group_errors else ErrorReporter()
     types_db = TypesDatabase(
         source_pkgs=[source_dir.parent.resolve()], known_imports=known_imports
     )
-    # and the stub transformer
     stub_transformer = Py2StubTransformer(
-        types_db=types_db, replace_doctypes=config.replace_doctypes
+        types_db=types_db, replace_doctypes=config.replace_doctypes, reporter=reporter
     )
 
     if not out_dir:
         out_dir = source_dir.parent / (source_dir.name + "-stubs")
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Stub generation ---------------------------------------------------------
 
     for source_path, stub_path in walk_source_and_targets(source_dir, out_dir):
         if source_path.suffix.lower() == ".pyi":
@@ -171,6 +202,8 @@ def main(source_dir, out_dir, config_path, verbose):
                 stub_content = stub_transformer.python_to_stub(
                     py_content, module_path=source_path
                 )
+                stub_content = f"{STUB_HEADER_COMMENT}\n\n{stub_content}"
+                stub_content = try_format_stub(stub_content)
             except (SystemExit, KeyboardInterrupt):
                 raise
             except Exception as e:
@@ -181,18 +214,25 @@ def main(source_dir, out_dir, config_path, verbose):
             logger.info("wrote %s", stub_path)
             fo.write(stub_content)
 
+    # Reporting --------------------------------------------------------------
+
+    if group_errors:
+        reporter.print_grouped()
+
     # Report basic statistics
     successful_queries = types_db.stats["successful_queries"]
     click.secho(f"{successful_queries} matched annotations", fg="green")
 
-    grammar_errors = stub_transformer.transformer.stats["grammar_errors"]
-    if grammar_errors:
-        click.secho(f"{grammar_errors} grammar violations", fg="red")
+    syntax_error_count = stub_transformer.transformer.stats["syntax_errors"]
+    if syntax_error_count:
+        click.secho(f"{syntax_error_count} syntax errors", fg="red")
 
     unknown_doctypes = types_db.stats["unknown_doctypes"]
     if unknown_doctypes:
         click.secho(f"{len(unknown_doctypes)} unknown doctypes:", fg="red")
-        click.echo("  " + "\n  ".join(set(unknown_doctypes)))
+        counter = Counter(unknown_doctypes)
+        for item, count in sorted(counter.items(), key=lambda x: x[1]):
+            click.echo(f"  {item} (x{count})")
 
-    if unknown_doctypes or grammar_errors:
+    if unknown_doctypes or syntax_error_count:
         sys.exit(1)

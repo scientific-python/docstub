@@ -45,6 +45,7 @@ dev = [
 test = [
   "pytest >=5.0.0",
   "pytest-cov >= 5.0.0",
+  "mypy",
 ]
 
 [project.urls]
@@ -80,6 +81,7 @@ extend-select = [
   "UP",       # pyupgrade
   "YTT",      # flake8-2020
   "EXE",      # flake8-executable
+#  "PYI",      # flake8-pyi
 ]
 ignore = [
   "PLR09",    # Too many <...>
@@ -105,3 +107,21 @@ run.source = ["docstub"]
 [tool.docstub.known_imports]
 cst = {import = "libcst", as="cst"}
 lark = {import = "lark"}
+numpydoc = {import = "numpydoc"}
+
+
+[tool.mypy]
+strict = true
+disable_error_code = ["type-arg"]
+
+# Don't type test suite itself but check if usage makes sense with docstub's stubs
+[[tool.mypy.overrides]]
+module = "tests.*"
+check_untyped_defs = true
+allow_untyped_defs = true
+disable_error_code = ["var-annotated", "union-attr"]
+
+# NumPyDoc isn't typed?
+[[tool.mypy.overrides]]
+module = ["numpydoc.*"]
+ignore_missing_imports = true

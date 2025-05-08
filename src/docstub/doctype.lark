@@ -59,7 +59,7 @@ literals : "{" literal ("," literal)* "}"
 literal : PY_ELLIPSES
         | STRING
         | NUMBER
-        | NAME
+        | qualname
 
 PY_ELLIPSES : "..."
 

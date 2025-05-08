@@ -4,13 +4,14 @@ import enum
 import logging
 from dataclasses import dataclass
 from functools import wraps
+from typing import ClassVar
 
 import libcst as cst
 import libcst.matchers as cstm
 
 from ._analysis import KnownImport
 from ._docstrings import DocstringAnnotations, DoctypeTransformer
-from ._utils import ContextFormatter, module_name_from_path
+from ._utils import ErrorReporter, module_name_from_path
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +75,8 @@ def walk_source_and_targets(root_dir, target_dir):
     target_dir : Path
         Root directory in which a matching stub package will be created.
 
-    Returns
-    -------
+    Yields
+    ------
     source_path : Path
         Either a Python file or a stub file that takes precedence.
     stub_path : Path
@@ -108,27 +109,30 @@ def try_format_stub(stub: str) -> str:
 
 
 class ScopeType(enum.StrEnum):
-    MODULE = enum.auto()
-    CLASS = enum.auto()
-    FUNC = enum.auto()
-    METHOD = enum.auto()
-    CLASSMETHOD = enum.auto()
-    STATICMETHOD = enum.auto()
+    # docstub: off
+    MODULE = "module"
+    CLASS = "class"
+    FUNC = "func"
+    METHOD = "method"
+    CLASSMETHOD = "classmethod"
+    STATICMETHOD = "staticmethod"
+    # docstub: on
 
 
+# TODO use `libcst.metadata.ScopeProvider` instead
 @dataclass(slots=True, frozen=True)
 class _Scope:
     """"""
 
     type: ScopeType
-    node: cst.CSTNode = None
+    node: cst.CSTNode | None = None
 
     @property
-    def has_self_or_cls(self):
+    def has_self_or_cls(self) -> bool:
         return self.type in {ScopeType.METHOD, ScopeType.CLASSMETHOD}
 
     @property
-    def is_method(self):
+    def is_method(self) -> bool:
         return self.type in {
             ScopeType.METHOD,
             ScopeType.CLASSMETHOD,
@@ -136,9 +140,20 @@ class _Scope:
         }
 
     @property
-    def is_class_init(self):
+    def is_class_init(self) -> bool:
         out = self.is_method and self.node.name.value == "__init__"
         return out
+
+    @property
+    def is_dataclass(self) -> bool:
+        if cstm.matches(self.node, cstm.ClassDef()):
+            # Determine if dataclass
+            decorators = cstm.findall(self.node, cstm.Decorator())
+            is_dataclass = any(
+                cstm.findall(d, cstm.Name("dataclass")) for d in decorators
+            )
+            return is_dataclass
+        return False
 
 
 def _get_docstring_node(node):
@@ -175,77 +190,183 @@ def _get_docstring_node(node):
     return docstring_node
 
 
-def _log_error_with_line_context(func):
+def _log_error_with_line_context(cls):
     """Log unexpected errors in Py2StubTransformer` with line context.
 
     Parameters
     ----------
-    func : callable
-        A `leave_*` method of `Py2StubTransformer`.
+    cls : Py2StubTransformer
+        The class whose methods will be decorated.
 
     Returns
     -------
-    wrapped : callable
+    updated_cls : Py2StubTransformer
+        The modified class.
     """
 
-    @wraps(func)
-    def wrapped(self: "Py2StubTransformer", original_node, updated_node):
-        try:
-            return func(self, original_node, updated_node)
-        except (SystemError, KeyboardInterrupt):
-            raise
-        except Exception:
-            position = self.get_metadata(
-                cst.metadata.PositionProvider, original_node
-            ).start
-            logger.exception(
-                "unexpected exception at %s:%s", self.current_source, position.line
-            )
-            return updated_node
+    def wrap(func):
+        @wraps(func)
+        def wrapped(self, original_node, updated_node):
+            try:
+                return func(self, original_node, updated_node)
+            except (SystemError, KeyboardInterrupt):
+                raise
+            except Exception:
+                position = self.get_metadata(
+                    cst.metadata.PositionProvider, original_node
+                ).start
+                logger.exception(
+                    "unexpected exception at %s:%s", self.current_source, position.line
+                )
+                return updated_node
 
-    return wrapped
+        return wrapped
+
+    for attr_name, attr_value in cls.__dict__.items():
+        if attr_name.startswith("leave_"):
+            setattr(cls, attr_name, wrap(attr_value))
+
+    return cls
 
 
+def _docstub_comment_directives(cls):
+    """Handle `Py2StubTransformer` docstub directives.
+
+    This handles the comment directives ``# docstub: off`` and``# docstub: on``.
+    All existing ``leave_`` methods are wrapped such that they don't modify the tree
+    if docstub has been "switched off".
+
+    Parameters
+    ----------
+    cls : Py2StubTransformer
+        The class whose methods will be decorated.
+
+    Returns
+    -------
+    updated_cls : Py2StubTransformer
+        The modified class.
+
+    Notes
+    -----
+    I considered a metaclass based approach, too. But it seems that is not trivially
+    possible since the `ABCmeta` is already used in a base class of
+    :class:`CSTTransformer`. And I'm not even sure that that approach would have been
+    simpler.
+    """
+    state = {"is_off": False}
+
+    def wrap_leave_Comment(method):
+        """Detect docstub comment directives and record the state."""
+
+        @wraps(method)
+        def wrapped(self, original_node, updated_node):
+            if cstm.matches(original_node, cstm.Comment(value="# docstub: off")):
+                state["is_off"] = True
+                return cst.RemovalSentinel.REMOVE
+            if cstm.matches(original_node, cstm.Comment(value="# docstub: on")):
+                state["is_off"] = False
+                return cst.RemovalSentinel.REMOVE
+            return method(self, original_node, updated_node)
+
+        return wrapped
+
+    def wrap_leave(method):
+        """Return unmodified node in ``leave_`` methods while docstub is "off"."""
+
+        @wraps(method)
+        def wrapped(self, original_node, updated_node):
+            if state["is_off"]:
+                # Pass a copy of updated_node and return unmodified one
+                updated_node_copy = updated_node.deep_clone()
+                method(self, original_node, updated_node_copy)
+                return updated_node
+            # Just pass through
+            return method(self, original_node, updated_node)
+
+        return wrapped
+
+    assert hasattr(cls, "leave_Comment")
+
+    for attr_name, attr_value in cls.__dict__.items():
+        if attr_name == "leave_Comment":
+            setattr(cls, attr_name, wrap_leave_Comment(attr_value))
+        elif attr_name.startswith("leave_"):
+            setattr(cls, attr_name, wrap_leave(attr_value))
+
+    return cls
+
+
+def _inline_node_as_code(node):
+    """Turn nodes without `code` attribute into source code representation.
+
+    Parameters
+    ----------
+    node : cst.CSTNode
+
+    Returns
+    -------
+    code : str
+    """
+    # Doesn't work in all contexts, but better than nothing for now
+    code = cst.Module([]).code_for_node(node)
+    return code
+
+
+@_log_error_with_line_context
+@_docstub_comment_directives
 class Py2StubTransformer(cst.CSTTransformer):
     """Transform syntax tree of a Python file into the tree of a stub file [1]_.
 
     Attributes
     ----------
-    types_db : ~.TypesDatabase
+    types_db : ~.TypesDatabase | None
+    replace_doctypes : dict[str, str] | None
+    transformer : ~.DoctypeTransformer
 
     References
     ----------
     .. [1] Stub file specification https://typing.readthedocs.io/en/latest/spec/distributing.html#stub-files
+
+    Examples
+    --------
+    >>> from docstub._stubs import Py2StubTransformer
+    >>> transformer = Py2StubTransformer()
+    >>> source = 'def print_upper(x): print(x.upper())'
+    >>> stub = transformer.python_to_stub(source)
+    >>> print(stub)
+    from _typeshed import Incomplete
+    def print_upper(x: Incomplete) -> None: ...
     """
 
-    METADATA_DEPENDENCIES = (cst.metadata.PositionProvider,)
-
-    _docstub_generated_comment = cst.EmptyLine(
-        comment=cst.Comment(
-            "# Generated with docstub. Manual edits will be overwritten!"
-        ),
-    )
+    METADATA_DEPENDENCIES: ClassVar[tuple] = (cst.metadata.PositionProvider,)
 
     # Equivalent to ` ...`, to replace the body of callables with
-    _body_replacement = cst.SimpleStatementSuite(
+    _body_replacement: ClassVar[cst.SimpleStatementSuite] = cst.SimpleStatementSuite(
         leading_whitespace=cst.SimpleWhitespace(value=" "),
         body=[cst.Expr(value=cst.Ellipsis())],
     )
-    _Annotation_Incomplete = cst.Annotation(cst.Name("Incomplete"))
-    _Annotation_None = cst.Annotation(cst.Name("None"))
+    _Annotation_Incomplete: ClassVar[cst.Annotation] = cst.Annotation(
+        cst.Name("Incomplete")
+    )
+    _Annotation_None: ClassVar[cst.Annotation] = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, *, types_db=None, replace_doctypes=None):
+    def __init__(self, *, types_db=None, replace_doctypes=None, reporter=None):
         """
         Parameters
         ----------
         types_db : ~.TypesDatabase
         replace_doctypes : dict[str, str]
+        reporter : ~.ErrorReporter
         """
+        if reporter is None:
+            reporter = ErrorReporter()
+
         self.types_db = types_db
         self.replace_doctypes = replace_doctypes
         self.transformer = DoctypeTransformer(
             types_db=types_db, replace_doctypes=replace_doctypes
         )
+        self.reporter = reporter
         # Relevant docstring for the current context
         self._scope_stack = None  # Entered module, class or function scopes
         self._pytypes_stack = None  # Collected pytypes for each stack
@@ -256,27 +377,50 @@ class Py2StubTransformer(cst.CSTTransformer):
 
     @property
     def current_source(self):
+        """
+        Returns
+        -------
+        out : Path
+        """
         return self._current_source
 
     @current_source.setter
     def current_source(self, value):
+        """
+        Parameters
+        ----------
+        value : Path
+        """
         self._current_source = value
         if self.types_db is not None:
             self.types_db.current_source = value
 
-    def python_to_stub(self, source, *, module_path=None, try_format=True):
+    @property
+    def is_inside_function_def(self):
+        """Check whether the current scope is within a function.
+
+        Returns
+        -------
+        out : bool
+        """
+        inside_function_def = self._scope_stack[-1].type in (
+            ScopeType.FUNC,
+            ScopeType.METHOD,
+            ScopeType.CLASSMETHOD,
+            ScopeType.STATICMETHOD,
+        )
+        return inside_function_def
+
+    def python_to_stub(self, source, *, module_path=None):
         """Convert Python source code to stub-file ready code.
 
         Parameters
         ----------
-        source  : str
+        source : str
         module_path : Path, optional
             The location of the source that is transformed into a stub file.
             If given, used to enhance logging & error messages with more
             context information.
-        try_format : bool, optional
-            Try to format the output, if the appropriate dependencies are
-            installed.
 
         Returns
         -------
@@ -292,8 +436,6 @@ class Py2StubTransformer(cst.CSTTransformer):
             source_tree = cst.metadata.MetadataWrapper(source_tree)
             stub_tree = source_tree.visit(self)
             stub = stub_tree.code
-            if try_format is True:
-                stub = try_format_stub(stub)
             return stub
         finally:
             self._scope_stack = None
@@ -318,7 +460,10 @@ class Py2StubTransformer(cst.CSTTransformer):
         return True
 
     def leave_ClassDef(self, original_node, updated_node):
-        """Drop class scope from the stack.
+        """Finalize class definition.
+
+        If the docstring documents attributes, make sure to insert them as (instance)
+        attributes for the class. Also drop class scope from the stack.
 
         Parameters
         ----------
@@ -329,6 +474,11 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.ClassDef
         """
+        pytypes = self._pytypes_stack[-1]
+        if pytypes and pytypes.attributes:
+            updated_node = self._insert_instance_attributes(
+                updated_node, pytypes.attributes
+            )
         self._scope_stack.pop()
         self._pytypes_stack.pop()
         return updated_node
@@ -350,6 +500,32 @@ class Py2StubTransformer(cst.CSTTransformer):
         self._pytypes_stack.append(pytypes)
         return True
 
+    def visit_IndentedBlock(self, node):
+        """Skip function body.
+
+        Parameters
+        ----------
+        node : cst.IndentedBlock
+
+        Returns
+        -------
+        out : bool
+        """
+        return not self.is_inside_function_def
+
+    def visit_SimpleStatementSuite(self, node):
+        """Skip statement suites inside functions.
+
+        Parameters
+        ----------
+        node : cst.SimpleStatementSuite
+
+        Returns
+        -------
+        out : bool
+        """
+        return not self.is_inside_function_def
+
     def leave_FunctionDef(self, original_node, updated_node):
         """Add type annotation for return to function.
 
@@ -362,25 +538,41 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.FunctionDef
         """
-        node_changes = {
-            "body": self._body_replacement,
-            "returns": self._Annotation_None,
-        }
+        node_changes = {"body": self._body_replacement}
 
         ds_annotations = self._pytypes_stack.pop()
         if ds_annotations and ds_annotations.returns:
             assert ds_annotations.returns.value
-            annotation = cst.Annotation(
-                cst.parse_expression(ds_annotations.returns.value)
-            )
+            annotation_value = ds_annotations.returns.value
+
+            if original_node.returns is not None:
+                position = self.get_metadata(
+                    cst.metadata.PositionProvider, original_node
+                ).start
+                reporter = self.reporter.copy_with(
+                    path=self.current_source, line=position.line
+                )
+                replaced = _inline_node_as_code(original_node.returns.annotation)
+                details = (
+                    f"{replaced}\n"
+                    f"{reporter.underline(replaced)} -> {annotation_value}"
+                )
+                reporter.message(
+                    short="Replacing existing inline return annotation",
+                    details=details,
+                )
+
+            annotation = cst.Annotation(cst.parse_expression(annotation_value))
             node_changes["returns"] = annotation
             self._required_imports |= ds_annotations.returns.imports
+        elif original_node.returns is None:
+            annotation = cst.Annotation(cst.parse_expression("None"))
+            node_changes["returns"] = annotation
 
         updated_node = updated_node.with_changes(**node_changes)
         self._scope_stack.pop()
         return updated_node
 
-    @_log_error_with_line_context
     def leave_Param(self, original_node, updated_node):
         """Add type annotation to parameter.
 
@@ -408,6 +600,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         name = original_node.name.value
         pytypes = self._pytypes_stack[-1]
         if not pytypes and scope.is_class_init:
+            # Fallback to class if __init__'s docstring doesn't document parameters
             pytypes = self._pytypes_stack[-2]
 
         if pytypes:
@@ -445,7 +638,9 @@ class Py2StubTransformer(cst.CSTTransformer):
         return cst.RemovalSentinel.REMOVE
 
     def leave_Comment(self, original_node, updated_node):
-        """Drop comment from stub file.
+        """Drop comments from stub file.
+
+        Special typing or formatting related comments are preserved.
 
         Parameters
         ----------
@@ -454,11 +649,13 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Returns
         -------
-        cst.RemovalSentinel
+        cst.Comment
         """
+        comment = original_node.value
+        if comment.startswith("# type:"):
+            return updated_node
         return cst.RemovalSentinel.REMOVE
 
-    @_log_error_with_line_context
     def leave_Assign(self, original_node, updated_node):
         """Handle assignment statements without annotations.
 
@@ -502,7 +699,6 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         return updated_node
 
-    @_log_error_with_line_context
     def leave_AnnAssign(self, original_node, updated_node):
         """Handle annotated assignment statements.
 
@@ -516,16 +712,27 @@ class Py2StubTransformer(cst.CSTTransformer):
         updated_node : cst.AnnAssign
         """
         name = updated_node.target.value
-        is_type_alias = cstm.matches(
-            updated_node.annotation, cstm.Annotation(cstm.Name("TypeAlias"))
-        )
-        is__all__ = cstm.matches(updated_node.target, cstm.Name("__all__"))
 
-        # Remove value if not type alias or __all__
-        if updated_node.value is not None and not is_type_alias and not is__all__:
-            updated_node = updated_node.with_changes(
-                value=None, equal=cst.MaybeSentinel.DEFAULT
+        if updated_node.value is not None:
+            is_type_alias = cstm.matches(
+                updated_node.annotation, cstm.Annotation(cstm.Name("TypeAlias"))
             )
+            is__all__ = cstm.matches(updated_node.target, cstm.Name("__all__"))
+            is_dataclass = self._scope_stack[-1].is_dataclass
+            is_classvar = any(
+                cstm.findall(updated_node.annotation, cstm.Name("ClassVar"))
+            )
+
+            # Replace with ellipses if dataclass
+            if is_dataclass and not is_classvar:
+                updated_node = updated_node.with_changes(
+                    value=cst.Ellipsis(), equal=cst.MaybeSentinel.DEFAULT
+                )
+            # Remove value if not type alias or __all__
+            elif not is_type_alias and not is__all__:
+                updated_node = updated_node.with_changes(
+                    value=None, equal=cst.MaybeSentinel.DEFAULT
+                )
 
         # Replace with type annotation from docstring, if available
         pytypes = self._pytypes_stack[-1]
@@ -539,13 +746,18 @@ class Py2StubTransformer(cst.CSTTransformer):
                 position = self.get_metadata(
                     cst.metadata.PositionProvider, original_node
                 ).start
-                ctx = ContextFormatter(path=self.current_source, line=position.line)
+                reporter = self.reporter.copy_with(
+                    path=self.current_source, line=position.line
+                )
                 replaced = cst.Module([]).code_for_node(
                     updated_node.annotation.annotation
                 )
-                ctx.print_message(
-                    short="replacing existing inline annotation",
-                    details=f"{replaced}\n{"^" * len(replaced)} -> {pytype.value}",
+                details = (
+                    f"{replaced}\n{reporter.underline(replaced)} -> {pytype.value}"
+                )
+                reporter.message(
+                    short="Replacing existing inline annotation",
+                    details=details,
                 )
 
             updated_node = updated_node.with_deep_changes(
@@ -587,15 +799,12 @@ class Py2StubTransformer(cst.CSTTransformer):
         if self.current_source:
             current_module = module_name_from_path(self.current_source)
             required_imports = [
-                imp
-                for imp in self._required_imports
-                if imp.import_path != current_module
+                imp for imp in required_imports if imp.import_path != current_module
             ]
         import_nodes = self._parse_imports(
             required_imports, current_module=current_module
         )
         updated_node = updated_node.with_changes(
-            header=[self._docstub_generated_comment],
             body=import_nodes + updated_node.body,
         )
         self._scope_stack.pop()
@@ -660,6 +869,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         import_nodes : tuple[cst.SimpleStatementLine, ...]
         """
         lines = {imp.format_import(relative_to=current_module) for imp in imports}
+        lines = sorted(lines)
         import_nodes = tuple(cst.parse_statement(line) for line in lines)
         return import_nodes
 
@@ -707,12 +917,14 @@ class Py2StubTransformer(cst.CSTTransformer):
             position = self.get_metadata(
                 cst.metadata.PositionProvider, docstring_node
             ).start
-            ctx = ContextFormatter(path=self.current_source, line=position.line)
+            reporter = self.reporter.copy_with(
+                path=self.current_source, line=position.line
+            )
             try:
                 annotations = DocstringAnnotations(
                     docstring_node.evaluated_value,
                     transformer=self.transformer,
-                    ctx=ctx,
+                    reporter=reporter,
                 )
             except (SystemExit, KeyboardInterrupt):
                 raise
@@ -756,3 +968,39 @@ class Py2StubTransformer(cst.CSTTransformer):
             semicolon=semicolon,
         )
         return node
+
+    def _insert_instance_attributes(self, updated_node, attributes):
+        """Insert instance attributes into ClassDef node.
+
+        Instance attributes of classes are usually initialized inside the ``__init__``
+        or other methods, whose body this transformer doesn't visit. Instead, we rely
+        on the "Attributes" section in the docstring to make those available. If
+        attributes are found in the docstring, we need to make sure that they are
+        inserted into the class scope / definition.
+
+        Parameters
+        ----------
+        updated_node : cst.ClassDef
+        attributes : dict[str, ~.Annotation]
+
+        Returns
+        -------
+        updated_node : cst.ClassDef
+        """
+        to_insert = []
+        for name in attributes:
+            attribute_exists = any(
+                cstm.findall(updated_node, cstm.AnnAssign(target=cstm.Name(name)))
+            )
+            if attribute_exists:
+                continue
+
+            assign = self._create_annotated_assign(name=name)
+            stmnt_line = cst.SimpleStatementLine(body=[assign])
+            to_insert.append(stmnt_line)
+
+        updated_node = updated_node.with_deep_changes(
+            updated_node.body, body=tuple(to_insert) + updated_node.body.body
+        )
+
+        return updated_node

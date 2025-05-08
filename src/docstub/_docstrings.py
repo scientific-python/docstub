@@ -4,16 +4,15 @@ import logging
 import traceback
 from dataclasses import dataclass, field
 from functools import cached_property
-from itertools import chain
 from pathlib import Path
 
 import click
 import lark
 import lark.visitors
-from numpydoc.docscrape import NumpyDocString
+import numpydoc.docscrape as npds
 
-from ._analysis import KnownImport
-from ._utils import ContextFormatter, DocstubError, accumulate_qualname, escape_qualname
+from ._analysis import KnownImport, TypesDatabase
+from ._utils import DocstubError, ErrorReporter, accumulate_qualname, escape_qualname
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +55,7 @@ class Annotation:
         return self.value
 
     @classmethod
-    def as_return_tuple(cls, return_types):
+    def many_as_tuple(cls, types):
         """Concatenate multiple annotations and wrap in tuple if more than one.
 
         Useful to combine multiple returned types for a function into a single
@@ -64,7 +63,7 @@ class Annotation:
 
         Parameters
         ----------
-        return_types : Iterable[Annotation]
+        types : Iterable[Annotation]
             The types to combine.
 
         Returns
@@ -72,7 +71,7 @@ class Annotation:
         concatenated : Annotation
             The concatenated types.
         """
-        values, imports = cls._aggregate_annotations(*return_types)
+        values, imports = cls._aggregate_annotations(*types)
         value = ", ".join(values)
         if len(values) > 1:
             value = f"tuple[{value}]"
@@ -80,8 +79,8 @@ class Annotation:
         return concatenated
 
     @classmethod
-    def as_yields_generator(cls, yield_types, receive_types=()):
-        """Create new iterator type from yield and receive types.
+    def as_generator(cls, *, yield_types, receive_types=(), return_types=()):
+        """Create copy_with ``Generator`` type from yield, receive and return types.
 
         Parameters
         ----------
@@ -89,14 +88,35 @@ class Annotation:
             The types to yield.
         receive_types : Iterable[Annotation], optional
             The types the generator receives.
+        return_types : Iterable[Annotation], optional
+            The types the generator function returns.
 
         Returns
         -------
-        iterator : Annotation
-            The yielded and received types wrapped in a generator.
+        generator : Annotation
+            The provided types wrapped in a ``Generator``.
         """
-        # TODO
-        raise NotImplementedError()
+        yield_annotation = cls.many_as_tuple(yield_types)
+        imports = yield_annotation.imports
+        value = yield_annotation.value
+
+        if receive_types:
+            receive_annotation = cls.many_as_tuple(receive_types)
+            imports |= receive_annotation.imports
+            value = f"{value}, {receive_annotation.value}"
+        elif return_types:
+            # Append None, so that return types are at correct position
+            value = f"{value}, None"
+
+        if return_types:
+            return_annotation = cls.many_as_tuple(return_types)
+            imports |= return_annotation.imports
+            value = f"{value}, {return_annotation.value}"
+
+        value = f"Generator[{value}]"
+        imports |= {KnownImport(import_path="typing", import_name="Generator")}
+        generator = cls(value=value, imports=imports)
+        return generator
 
     def as_optional(self):
         """Return optional version of this annotation by appending `| None`.
@@ -110,6 +130,7 @@ class Annotation:
         >>> Annotation(value="int").as_optional()
         Annotation(value='int | None', imports=frozenset())
         """
+        # TODO account for `| None` or `Optional` already being included?
         value = f"{self.value} | None"
         optional = type(self)(value=value, imports=self.imports)
         return optional
@@ -150,7 +171,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
     Attributes
     ----------
-    blacklisted_qualnames : frozenset[str]
+    types_db : ~.TypesDatabase
+    replace_doctypes : dict[str, str]
+    stats : dict[str, Any]
+    blacklisted_qualnames : ClassVar[frozenset[str]]
         All Python keywords [1]_ are blacklisted from use in qualnames except for ``True``
         ``False`` and ``None``.
 
@@ -161,11 +185,13 @@ class DoctypeTransformer(lark.visitors.Transformer):
     Examples
     --------
     >>> transformer = DoctypeTransformer()
-    >>> annotation, unknown_names = transformer.doctype_to_annotation("tuple of int")
+    >>> annotation, unknown_names = transformer.doctype_to_annotation(
+    ...     "tuple of (int or ndarray)"
+    ... )
     >>> annotation.value
-    'tuple[int]'
+    'tuple[int | ndarray]'
     >>> unknown_names
-    [('tuple', 0, 5), ('int', 9, 12)]
+    [('ndarray', 17, 24)]
     """
 
     blacklisted_qualnames = frozenset(
@@ -209,8 +235,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         Parameters
         ----------
-        types_db : ~.TypesDatabase
-            A static database of collected types usable as an annotation.
+        types_db : ~.TypesDatabase, optional
+            A static database of collected types usable as an annotation. If
+            not given, defaults to a database with common types from the
+            standard library (see :func:`~.common_known_imports`).
         replace_doctypes : dict[str, str], optional
             Replacements for human-friendly aliases.
         kwargs : dict[Any, Any], optional
@@ -218,6 +246,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         if replace_doctypes is None:
             replace_doctypes = {}
+        if types_db is None:
+            types_db = TypesDatabase()
 
         self.types_db = types_db
         self.replace_doctypes = replace_doctypes
@@ -227,7 +257,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         super().__init__(**kwargs)
 
-        self.stats = {"grammar_errors": 0}
+        self.stats = {"syntax_errors": 0}
 
     def doctype_to_annotation(self, doctype):
         """Turn a type description in a docstring into a type annotation.
@@ -259,7 +289,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
             lark.exceptions.ParseError,
             QualnameIsKeyword,
         ):
-            self.stats["grammar_errors"] += 1
+            self.stats["syntax_errors"] += 1
             raise
         finally:
             self._collected_imports = None
@@ -272,14 +302,14 @@ class DoctypeTransformer(lark.visitors.Transformer):
         ----------
         data : lark.Token
             The rule-token of the current node.
-        children : list[lark.Token, ...]
+        children : list[lark.Token]
             The children of the current node.
         meta : lark.tree.Meta
             Meta information for the current node.
 
         Returns
         -------
-        out : lark.Token or list[lark.Token, ...]
+        out : lark.Token or list[lark.Token]
             Either a token or list of tokens.
         """
         if isinstance(children, list) and len(children) == 1:
@@ -326,7 +356,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 _qualname = _qualname.replace(partial_qualname, replacement)
                 break
 
-        _qualname = self._find_import(_qualname, meta=tree.meta)
+        _qualname = self._match_import(_qualname, meta=tree.meta)
 
         if _qualname in self.blacklisted_qualnames:
             msg = (
@@ -368,8 +398,20 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 self._collected_imports.add(known_import)
         return out
 
-    def _find_import(self, qualname, meta):
-        """Match type names to known imports."""
+    def _match_import(self, qualname, *, meta):
+        """Match `qualname` to known imports or alias to "Incomplete".
+
+        Parameters
+        ----------
+        qualname : str
+        meta : lark.tree.Meta
+            Location metadata for the `qualname`, used to report possible errors.
+
+        Returns
+        -------
+        matched_qualname : str
+            Possibly modified or normalized qualname.
+        """
         if self.types_db is not None:
             annotation_name, known_import = self.types_db.query(qualname)
         else:
@@ -380,22 +422,28 @@ class DoctypeTransformer(lark.visitors.Transformer):
             self._collected_imports.add(known_import)
 
         if annotation_name:
-            qualname = annotation_name
+            matched_qualname = annotation_name
         else:
-            # Unknown qualname, alias to `Any` and make visible
+            # Unknown qualname, alias to `Incomplete`
             self._unknown_qualnames.append((qualname, meta.start_pos, meta.end_pos))
-            qualname = escape_qualname(qualname)
+            matched_qualname = escape_qualname(qualname)
             any_alias = KnownImport(
-                import_name="Any",
-                import_path="typing",
-                import_alias=qualname,
+                import_path="_typeshed",
+                import_name="Incomplete",
+                import_alias=matched_qualname,
             )
             self._collected_imports.add(any_alias)
-        return qualname
+        return matched_qualname
 
 
 class DocstringAnnotations:
     """Collect annotations in a given docstring.
+
+    Attributes
+    ----------
+    docstring : str
+    transformer : DoctypeTransformer
+    reporter : ~.ErrorReporter
 
     Examples
     --------
@@ -404,27 +452,37 @@ class DocstringAnnotations:
     ... ----------
     ... a : tuple of int
     ... b : some invalid syntax
-    ... c : unkown.symbol
+    ... c : unknown.symbol
     ... '''
     >>> transformer = DoctypeTransformer()
     >>> annotations = DocstringAnnotations(docstring, transformer=transformer)
     >>> annotations.parameters.keys()
+    Invalid syntax in docstring type annotation
+        some invalid syntax
+             ^
+    <BLANKLINE>
+    Unknown name in doctype: 'unknown.symbol'
+        unknown.symbol
+        ^^^^^^^^^^^^^^
+    <BLANKLINE>
     dict_keys(['a', 'b', 'c'])
     """
 
-    def __init__(self, docstring, *, transformer, ctx=None):
+    def __init__(self, docstring, *, transformer, reporter=None):
         """
         Parameters
         ----------
         docstring : str
         transformer : DoctypeTransformer
-        ctx : ~.ContextFormatter, optional
+        reporter : ~.ErrorReporter, optional
         """
         self.docstring = docstring
-        self.np_docstring = NumpyDocString(docstring)
+        self.np_docstring = npds.NumpyDocString(docstring)
         self.transformer = transformer
 
-        self._ctx: ContextFormatter = ctx
+        if reporter is None:
+            reporter = ErrorReporter(line=0)
+        self.reporter: ErrorReporter = reporter
 
     def _doctype_to_annotation(self, doctype, ds_line=0):
         """Convert a type description to a Python-ready type.
@@ -443,10 +501,7 @@ class DocstringAnnotations:
             The transformed type, ready to be inserted into a stub file, with
             necessary imports attached.
         """
-        if self._ctx is not None:
-            ctx = self._ctx.with_line(offset=ds_line)
-        else:
-            ctx = None
+        reporter = self.reporter.copy_with(line_offset=ds_line)
 
         try:
             annotation, unknown_qualnames = self.transformer.doctype_to_annotation(
@@ -458,17 +513,15 @@ class DocstringAnnotations:
             if hasattr(error, "get_context"):
                 details = error.get_context(doctype)
                 details = details.replace("^", click.style("^", fg="red", bold=True))
-            if ctx:
-                ctx.print_message("invalid syntax in doctype", details=details)
+            reporter.message(
+                "Invalid syntax in docstring type annotation", details=details
+            )
             return FallbackAnnotation
 
         except lark.visitors.VisitError as e:
             tb = "\n".join(traceback.format_exception(e.orig_exc))
             details = f"doctype: {doctype!r}\n\n{tb}"
-            if ctx:
-                ctx.print_message(
-                    "unexpected error while parsing doctype", details=details
-                )
+            reporter.message("unexpected error while parsing doctype", details=details)
             return FallbackAnnotation
 
         else:
@@ -476,16 +529,22 @@ class DocstringAnnotations:
                 width = stop_col - start_col
                 error_underline = click.style("^" * width, fg="red", bold=True)
                 details = f"{doctype}\n{' ' * start_col}{error_underline}\n"
-                if ctx:
-                    ctx.print_message(
-                        f"unknown name in doctype: {name!r}", details=details
-                    )
+                reporter.message(f"Unknown name in doctype: {name!r}", details=details)
             return annotation
 
     @cached_property
-    def attributes(self) -> dict[str, Annotation]:
+    def attributes(self):
+        """Return the attributes found in the docstring.
+
+        Returns
+        -------
+        attributes : dict[str, Annotation]
+            A dictionary mapping attribute names to their annotations.
+            Attributes without annotations fall back to :class:`_typeshed.Incomplete`.
+        """
         annotations = {}
         for attribute in self.np_docstring["Attributes"]:
+            self._handle_missing_whitespace(attribute)
             if not attribute.type:
                 continue
 
@@ -496,61 +555,185 @@ class DocstringAnnotations:
                     break
 
             if attribute.name in annotations:
-                logger.warning("duplicate parameter name %r, ignoring", attribute.name)
+                self.reporter.message(
+                    "duplicate attribute name in docstring",
+                    details=self.reporter.underline(attribute.name),
+                )
                 continue
 
             annotation = self._doctype_to_annotation(attribute.type, ds_line=ds_line)
-            annotations[attribute.name] = annotation
+            annotations[attribute.name.strip()] = annotation
 
         return annotations
 
     @cached_property
-    def parameters(self) -> dict[str, Annotation]:
-        all_params = chain(
-            self.np_docstring["Parameters"], self.np_docstring["Other Parameters"]
-        )
-        annotated_params = {}
-        for param in all_params:
-            if not param.type:
-                continue
+    def parameters(self):
+        """Return the parameters and "Other Parameters" found in the docstring.
 
-            ds_line = 0
-            for i, line in enumerate(self.docstring.split("\n")):
-                if param.name in line and param.type in line:
-                    ds_line = i
-                    break
+        Returns
+        -------
+        parameters : dict[str, Annotation]
+            A dictionary mapping parameters names to their annotations.
+            Parameters without annotations fall back to :class:`_typeshed.Incomplete`.
+        """
+        param_section = self._section_annotations("Parameters")
+        other_section = self._section_annotations("Other Parameters")
 
-            if param.name in annotated_params:
-                logger.warning("duplicate parameter name %r, ignoring", param.name)
-                continue
+        duplicates = param_section.keys() & other_section.keys()
+        for duplicate in duplicates:
+            self.reporter.message(
+                "duplicate attribute name in docstring",
+                details=self.reporter.underline(duplicate),
+            )
 
-            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
-            annotated_params[param.name] = annotation
-
-        return annotated_params
+        # Last takes priority
+        paramaters = other_section | param_section
+        # Normalize *args & **kwargs
+        paramaters = {name.strip(" *"): value for name, value in paramaters.items()}
+        return paramaters
 
     @cached_property
-    def returns(self) -> Annotation | None:
-        annotated_params = {}
-        for param in self.np_docstring["Returns"]:
-            # NumPyDoc always requires a doctype for returns,
-            assert param.type
+    def returns(self):
+        """Return annotation of the callable documented in the docstring.
 
-            ds_line = 0
-            for i, line in enumerate(self.docstring.split("\n")):
-                if param.name in line and param.type in line:
-                    ds_line = i
-                    break
+        Returns
+        -------
+        return_annotation : Annotation | None
+            The "return" annotation of a callable. If the docstring defines a
+            "Yield" section, this will be a :class:`typing.Generator`.
+        """
+        out = self._yields or self._returns
+        return out
 
-            if param.name in annotated_params:
-                logger.warning("duplicate parameter name %r, ignoring", param.name)
-                continue
+    @cached_property
+    def _returns(self):
+        """Annotation of the "Return" section in the docstring.
 
-            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
-            annotated_params[param.name] = annotation
-
-        if annotated_params:
-            out = Annotation.as_return_tuple(annotated_params.values())
+        Returns
+        -------
+        return_annotation : Annotation | None
+            The "return" annotation. If the section contains multiple entries,
+            they are concatenated inside a tuple.
+        """
+        out = self._section_annotations("Returns")
+        if out:
+            out = Annotation.many_as_tuple(out.values())
         else:
             out = None
         return out
+
+    @cached_property
+    def _yields(self):
+        """Annotations of the docstring's "Yields", "Receives" and "Returns" sections.
+
+        Returns
+        -------
+        yield_annotation : Annotation | None
+            The annotations from "Yields", "Receives" and "Returns" sections aggregated
+            in a :class`typing.Generator`.
+        """
+        yields = self._section_annotations("Yields")
+        if not yields:
+            return None
+
+        receive_types = self._section_annotations("Receives")
+
+        yield_annotation = Annotation.as_generator(
+            yield_types=yields.values(),
+            receive_types=receive_types.values(),
+            return_types=(self._returns,) if self._returns else (),
+        )
+        return yield_annotation
+
+    def _handle_missing_whitespace(self, param):
+        """Handle missing whitespace between parameter and colon.
+
+        In this case, NumPyDoc parses the entire thing as the parameter name and
+        no annotation is detected. Since this typo can lead to very subtle & confusing
+        bugs, let's warn users about it and attempt to handle it.
+
+        Parameters
+        ----------
+        param : numpydoc.docscrape.Parameter
+
+        Returns
+        -------
+        param : numpydoc.docscrape.Parameter
+        """
+        if ":" in param.name and param.type == "":
+            msg = "Possibly missing whitespace between parameter and colon in docstring"
+            underline = "".join("^" if c == ":" else " " for c in param.name)
+            underline = click.style(underline, fg="red", bold=True)
+            hint = (
+                f"{param.name}\n{underline}"
+                f"\nInclude whitespace so that the type is parsed properly!"
+            )
+
+            ds_line = 0
+            for i, line in enumerate(self.docstring.split("\n")):
+                if param.name in line:
+                    ds_line = i
+                    break
+            reporter = self.reporter.copy_with(line_offset=ds_line)
+            reporter.message(msg, details=hint)
+
+            new_name, new_type = param.name.split(":", maxsplit=1)
+            param = npds.Parameter(name=new_name, type=new_type, desc=param.desc)
+
+        return param
+
+    def _section_annotations(self, name):
+        """Return the parameters of a specific section found in the docstring.
+
+        Parameters
+        ----------
+        name : str
+            Name of the specific section.
+
+        Returns
+        -------
+        annotations : dict[str, Annotation]
+            A dictionary mapping names to their annotations.
+            Entries without annotations fall back to :class:`_typeshed.Incomplete`.
+        """
+        annotated_params = {}
+        for param in self.np_docstring[name]:
+            param = self._handle_missing_whitespace(param)  # noqa: PLW2901
+
+            if param.name in annotated_params:
+                # TODO make error
+                self.reporter.message(
+                    "duplicate parameter / attribute name in docstring",
+                    details=self.reporter.underline(param.name),
+                )
+                continue
+
+            if param.type:
+                ds_line = self._find_docstring_line(param.name, param.type)
+                annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
+            else:
+                annotation = FallbackAnnotation
+            annotated_params[param.name.strip()] = annotation
+
+        return annotated_params
+
+    def _find_docstring_line(self, *substrings):
+        """Find line with all given substrings.
+
+        Parameters
+        ----------
+        *substrings : str
+            Naive substrings to search for.
+
+        Returns
+        -------
+        line_number : int
+            The number of the first line that contains all given `substrings`.
+            Defaults to 0 if `substrings` never match.
+        """
+        line_number = 0
+        for i, line in enumerate(self.docstring.split("\n")):
+            if all(p in line for p in substrings):
+                line_number = i
+                break
+        return line_number

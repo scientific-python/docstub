@@ -15,6 +15,12 @@ env:
   # Many color libraries just need this to be set to any value, but at least
   # one distinguishes color depth, where "3" -> "256-bit color".
   FORCE_COLOR: 3
+  MYPYPATH: ${{ github.workspace }}/stubs
+
+defaults:
+  run:
+    # Make sure that bash specific stuff works on Windows
+    shell: bash
 
 jobs:
   lint:
@@ -67,6 +73,17 @@ jobs:
           python -m docstub -v --config=examples/docstub.toml examples/example_pkg
           git diff --exit-code examples/ && echo "Stubs for example_pkg did not change"
 
-      - name: Generate docstub stubs
+      - name: Generate stubs for docstub
         run: |
-          python -m docstub -v src/docstub
+          python -m docstub -v src/docstub -o ${MYPYPATH}/docstub
+
+      - name: Check with mypy.stubtest
+        run: |
+          python -m mypy.stubtest \
+            --mypy-config-file pyproject.toml \
+            --allowlist stubtest_allow.txt \
+            docstub
+
+      - name: Check tests/ with mypy
+        run: |
+          python -m mypy tests/

@@ -129,8 +129,8 @@ def pyfile_checksum(path):
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class ContextFormatter:
-    """Format messages in context of a location in a file.
+class ErrorReporter:
+    """Format error messages in context of a location in a file.
 
     Attributes
     ----------
@@ -144,107 +144,54 @@ class ContextFormatter:
     Examples
     --------
     >>> from pathlib import Path
-    >>> ctx = ContextFormatter(path=Path("file/with/problems.py"))
-    >>> ctx.format_message("Message")
-    'file...problems.py: Message'
-    >>> ctx.with_line(3).format_message("Message with line info")
-    'file...problems.py:3: Message with line info'
-    >>> ctx.with_line(3).with_column(2).print_message("Message with column info")
-    file...problems.py:3:2: Message with column info
-    >>> ctx.print_message("Summary", details="More details")
+    >>> rep = ErrorReporter()
+    >>> rep.message("Message")
+    Message
+    <BLANKLINE>
+    >>> rep = rep.copy_with(path=Path("file/with/problems.py"))
+    >>> rep.copy_with(line=3).message("Message with line info")
+    file...problems.py:3: Message with line info
+    <BLANKLINE>
+    >>> rep.copy_with(line=4, column=2).message("With line & column info")
+    file...problems.py:4:2: With line & column info
+    <BLANKLINE>
+    >>> rep.message("Summary", details="More details")
     file...problems.py: Summary
         More details
+    <BLANKLINE>
     """
 
-    path: Path = None
-    line: int = None
-    column: int = None
+    path: Path | None = None
+    line: int | None = None
+    column: int | None = None
 
-    def with_line(self, line=None, *, offset=0):
-        """Return a new copy with a modified line.
+    def copy_with(self, *, path=None, line=None, column=None, line_offset=None):
+        """Return a new copy with the modified attributes.
 
         Parameters
         ----------
+        path : Path, optional
         line : int, optional
-            The new line.
-        offset : int, optional
-            An offset added to the existing line, or the new one if `line` is provided.
-
-        Returns
-        -------
-        formatter : ContextFormatter
-        """
-        kwargs = dataclasses.asdict(self)
-        if line is None:
-            line = kwargs["line"]
-        if line is None:
-            raise ValueError("can't add offset if the line isn't known")
-        kwargs["line"] = line + offset
-        new = type(self)(**kwargs)
-        return new
-
-    def with_column(self, column=None, *, offset=0):
-        """Return a new copy with a modified column.
-
-        Parameters
-        ----------
         column : int, optional
-            The new column.
-        offset : int, optional
-            An offset added to the existing column, or the new one if `column` is
-            provided.
+        line_offset : int, optional
 
         Returns
         -------
-        formatter : ContextFormatter
+        new : Self
         """
         kwargs = dataclasses.asdict(self)
-        if column is None:
-            column = kwargs["column"]
-        if column is None:
-            raise ValueError("can't add offset if the column isn't known")
-        kwargs["column"] = column + offset
+        if path:
+            kwargs["path"] = path
+        if line:
+            kwargs["line"] = line
+        if line_offset:
+            kwargs["line"] += line_offset
+        if column:
+            kwargs["column"] = column
         new = type(self)(**kwargs)
         return new
 
-    def format_message(self, short, *, details=None, ansi_styles=False):
-        """Format a message in context of the saved location.
-
-        Parameters
-        ----------
-        short : str
-            A short summarizing message that shouldn't wrap over multiple lines.
-        details : str, optional
-            An optional multiline message with more details.
-        ansi_styles : bool, optional
-            Whether to format the output with ANSI escape codes.
-
-        Returns
-        -------
-        message : str
-        """
-
-        def style(x, **kwargs):
-            return x
-
-        if ansi_styles:
-            style = click.style
-
-        message = short
-        if self.path:
-            location = style(self.path, bold=True)
-            if self.line:
-                location = f"{location}:{self.line}"
-                if self.column:
-                    location = f"{location}:{self.column}"
-            message = f"{location}: {message}"
-
-        if details:
-            indented = indent(details, prefix="    ", predicate=lambda x: True)
-            message = f"{message}\n{indented}"
-        return message
-
-    def print_message(self, short, *, details=None):
+    def message(self, short, *, details=None):
         """Print a message in context of the saved location.
 
         Parameters
@@ -254,13 +201,156 @@ class ContextFormatter:
         details : str, optional
             An optional multiline message with more details.
         """
-        msg = self.format_message(short, details=details, ansi_styles=True)
-        click.echo(msg)
+        message = click.style(short, bold=True)
+        location = self.format_location(
+            path=self.path, line=self.line, column=self.column
+        )
+        if location:
+            message = f"{location}: {message}"
+
+        if details:
+            indented = indent(details, prefix="    ")
+            message = f"{message}\n{indented}"
+
+        message = f"{message.strip()}\n"
+        click.echo(message)
 
     def __post_init__(self):
         if self.path is not None and not isinstance(self.path, Path):
             msg = f"expected `path` to be of type `Path`, got {type(self.path)!r}"
             raise TypeError(msg)
+
+    @staticmethod
+    def format_location(*, path, line, column):
+        location = ""
+        if path:
+            location = path
+            if line:
+                location = f"{location}:{line}"
+                if column:
+                    location = f"{location}:{column}"
+        if location:
+            location = click.style(location, fg="magenta")
+        return location
+
+    @staticmethod
+    def underline(line):
+        underlined = f"{line}\n" f"{click.style('^' * len(line), fg='red', bold=True)}"
+        return underlined
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class GroupedErrorReporter(ErrorReporter):
+    """Format & group error messages in context of a location in a file.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> rep = GroupedErrorReporter()
+    >>> rep.message("Syntax error")
+    >>> rep = rep.copy_with(path=Path("file/with/problems.py"))
+    >>> rep.copy_with(line=3).message("Syntax error")
+    >>> rep.copy_with(line=4, column=2).message("Unknown doctype")
+    >>> rep.message("Unknown doctype")
+    >>> rep.print_grouped()
+    Syntax error (x2)
+        <unknown location>
+        ...problems.py:3
+    <BLANKLINE>
+    Unknown doctype (x2)
+        ...problems.py
+        ...problems.py:4:2
+    <BLANKLINE>
+    """
+
+    _messages: list = dataclasses.field(default_factory=list)
+
+    def copy_with(self, *, path=None, line=None, column=None, line_offset=None):
+        """Return a new copy with the modified attributes.
+
+        Parameters
+        ----------
+        path : Path, optional
+        line : int, optional
+        column : int, optional
+        line_offset : int, optional
+
+        Returns
+        -------
+        new : Self
+        """
+        new = super().copy_with(
+            path=path, line=line, column=column, line_offset=line_offset
+        )
+        # Explicitly override `_message` since super method relies on
+        # `dataclasses.asdict` which performs deep copies on lists, while
+        #  we want to collect all messages in one list
+        object.__setattr__(new, "_messages", self._messages)
+        return new
+
+    def message(self, short, *, details=None):
+        """Print a message in context of the saved location.
+
+        Parameters
+        ----------
+        short : str
+            A short summarizing message that shouldn't wrap over multiple lines.
+        details : str, optional
+            An optional multiline message with more details.
+        """
+        self._messages.append(
+            {
+                "short": short.strip(),
+                "details": details.strip() if details else details,
+                "path": self.path,
+                "line": self.line,
+                "column": self.column,
+            }
+        )
+
+    def print_grouped(self):
+        """Print all collected messages in groups."""
+
+        def key(message):
+            return (
+                message["short"] or "",
+                message["details"] or "",
+                message["path"] or Path(),
+                message["line"] or -1,
+                message["column"] or -1,
+            )
+
+        groups = {}
+        for message in sorted(self._messages, key=key):
+            group_name = (message["short"], message["details"])
+            if group_name not in groups:
+                groups[group_name] = []
+            groups[group_name].append(message)
+
+        for (short, details), group in groups.items():
+            formatted = click.style(short, bold=True)
+            if len(group) > 1:
+                formatted = f"{formatted} (x{len(group)})"
+            if details:
+                indented = indent(details, prefix="    ")
+                formatted = f"{formatted}\n{indented}"
+
+            occurrences = []
+            for message in group:
+                location = (
+                    self.format_location(
+                        path=message["path"],
+                        line=message["line"],
+                        column=message["column"],
+                    )
+                    or "<unknown location>"
+                )
+                occurrences.append(location)
+            occurrences = "\n".join(occurrences)
+            occurrences = indent(occurrences, prefix="    ")
+            formatted = f"{formatted}\n{occurrences}\n"
+
+            click.echo(formatted)
 
 
 class DocstubError(Exception):

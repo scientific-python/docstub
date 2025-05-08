@@ -71,10 +71,10 @@ class KnownImport:
     <KnownImport 'from numpy import uint8 as ui8'>
     """
 
-    import_name: str = None
-    import_path: str = None
-    import_alias: str = None
-    builtin_name: str = None
+    import_name: str | None = None
+    import_path: str | None = None
+    import_alias: str | None = None
+    builtin_name: str | None = None
 
     @classmethod
     @cache
@@ -194,7 +194,7 @@ class KnownImport:
         elif self.import_name is None:
             raise ValueError("non builtin must at least define an `import_name`")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.builtin_name:
             info = f"{self.target} (builtin)"
         else:
@@ -202,13 +202,22 @@ class KnownImport:
         out = f"<{type(self).__name__} {info}>"
         return out
 
-    def __str__(self):
+    def __str__(self) -> str:
         out = self.format_import()
         return out
 
 
-def _is_type(value) -> bool:
-    """Check if value is a type."""
+def _is_type(value):
+    """Check if value is a type.
+
+    Parameters
+    ----------
+    value : Any
+
+    Returns
+    -------
+    is_type : bool
+    """
     # Checking for isinstance(..., type) isn't enough, some types such as
     # typing.Literal don't pass that check. So combine with checking for a
     # __class__ attribute. Not sure about edge cases!
@@ -406,7 +415,10 @@ class TypesDatabase:
 
     Attributes
     ----------
-    current_source : ~.PackageFile | None
+    current_source : Path | None
+    source_pkgs : list[Path]
+    known_imports : dict[str, KnownImport]
+    stats : dict[str, Any]
 
     Examples
     --------
@@ -425,13 +437,15 @@ class TypesDatabase:
         """
         Parameters
         ----------
-        source_pkgs: list[Path], optional
-        known_imports: dict[str, KnownImport], optional
+        source_pkgs : list[Path], optional
+        known_imports : dict[str, KnownImport], optional
+            If not provided, defaults to imports returned by
+            :func:`common_known_imports`.
         """
         if source_pkgs is None:
             source_pkgs = []
         if known_imports is None:
-            known_imports = {}
+            known_imports = common_known_imports()
 
         self.current_source = None
         self.source_pkgs = source_pkgs
@@ -524,6 +538,6 @@ class TypesDatabase:
 
         return annotation_name, known_import
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         repr = f"{type(self).__name__}({self.source_pkgs})"
         return repr
