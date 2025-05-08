@@ -132,30 +132,46 @@ def report_execution_time():
 
 @click.command()
 @click.version_option(__version__)
-@click.argument("root_path", type=click.Path(exists=True))
+@click.argument("root_path", type=click.Path(exists=True), metavar="PACKAGE_PATH")
 @click.option(
     "-o",
     "--out-dir",
     type=click.Path(file_okay=False),
+    metavar="PATH",
     help="Set output directory explicitly.",
 )
 @click.option(
     "--config",
     "config_path",
     type=click.Path(exists=True, dir_okay=False),
+    metavar="PATH",
     help="Set configuration file explicitly.",
 )
 @click.option(
     "--group-errors",
     is_flag=True,
-    help="Group errors by type and content. "
-    "Will delay showing errors until all files have been processed.",
+    help="Group identical errors together and list where they occured. "
+    "Will delay showing errors until all files have been processed. "
+    "Otherwise, simply report errors as the occur.",
 )
-@click.option("-v", "--verbose", count=True, help="Log more details.")
+@click.option(
+    "--allow-errors",
+    type=click.IntRange(min=0),
+    default=0,
+    show_default=True,
+    metavar="INT",
+    help="Allow this many or fewer errors. "
+    "If docstub reports more, exit with error code '1'.",
+)
+@click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
 @click.help_option("-h", "--help")
 @report_execution_time()
-def main(root_path, out_dir, config_path, group_errors, verbose):
-    """Generate Python stub files from docstrings.
+def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
+    """Generate Python stub files with type annotations from docstrings.
+
+    Given a path `PACKAGE_PATH` to a Python package, generate stub files for it.
+    Type descriptions in docstrings will be used to fill in missing inline type
+    annotations or to override them.
     \f
 
     Parameters
@@ -163,6 +179,8 @@ def main(root_path, out_dir, config_path, group_errors, verbose):
     source_dir : Path
     out_dir : Path
     config_path : Path
+    group_errors : bool
+    allow_errors : int
     verbose : str
     """
 
@@ -232,10 +250,18 @@ def main(root_path, out_dir, config_path, group_errors, verbose):
 
     unknown_doctypes = types_db.stats["unknown_doctypes"]
     if unknown_doctypes:
-        click.secho(f"{len(unknown_doctypes)} unknown doctypes:", fg="red")
+        click.secho(f"{len(unknown_doctypes)} unknown doctypes", fg="red")
         counter = Counter(unknown_doctypes)
-        for item, count in sorted(counter.items(), key=lambda x: x[1]):
+        sorted_item_counts = sorted(counter.items(), key=lambda x: x[1], reverse=True)
+        for item, count in sorted_item_counts:
             click.echo(f"  {item} (x{count})")
 
-    if unknown_doctypes or syntax_error_count:
+    total_errors = len(unknown_doctypes) + syntax_error_count
+    total_msg = f"{total_errors} total errors"
+    if allow_errors:
+        total_msg = f"{total_msg} (allowed {allow_errors})"
+    click.secho(total_msg, bold=True)
+
+    if allow_errors < total_errors:
+        logger.debug("number of allowed errors %i was exceeded")
         sys.exit(1)
