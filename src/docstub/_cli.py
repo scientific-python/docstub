@@ -132,7 +132,7 @@ def report_execution_time():
 
 @click.command()
 @click.version_option(__version__)
-@click.argument("source_dir", type=click.Path(exists=True, file_okay=False))
+@click.argument("root_path", type=click.Path(exists=True))
 @click.option(
     "-o",
     "--out-dir",
@@ -154,7 +154,7 @@ def report_execution_time():
 @click.option("-v", "--verbose", count=True, help="Log more details.")
 @click.help_option("-h", "--help")
 @report_execution_time()
-def main(source_dir, out_dir, config_path, group_errors, verbose):
+def main(root_path, out_dir, config_path, group_errors, verbose):
     """Generate Python stub files from docstrings.
     \f
 
@@ -170,26 +170,29 @@ def main(source_dir, out_dir, config_path, group_errors, verbose):
 
     _setup_logging(verbose=verbose)
 
-    source_dir = Path(source_dir)
+    root_path = Path(root_path)
     config = _load_configuration(config_path)
-    known_imports = _build_import_map(config, source_dir)
+    known_imports = _build_import_map(config, root_path)
 
     reporter = GroupedErrorReporter() if group_errors else ErrorReporter()
     types_db = TypesDatabase(
-        source_pkgs=[source_dir.parent.resolve()], known_imports=known_imports
+        source_pkgs=[root_path.parent.resolve()], known_imports=known_imports
     )
     stub_transformer = Py2StubTransformer(
         types_db=types_db, replace_doctypes=config.replace_doctypes, reporter=reporter
     )
 
     if not out_dir:
-        out_dir = source_dir.parent / (source_dir.name + "-stubs")
+        if root_path.is_file():
+            out_dir = root_path.parent
+        else:
+            out_dir = root_path.parent / (root_path.name + "-stubs")
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Stub generation ---------------------------------------------------------
 
-    for source_path, stub_path in walk_source_and_targets(source_dir, out_dir):
+    for source_path, stub_path in walk_source_and_targets(root_path, out_dir):
         if source_path.suffix.lower() == ".pyi":
             logger.debug("using existing stub file %s", source_path)
             with source_path.open() as fo:

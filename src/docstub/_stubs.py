@@ -65,13 +65,13 @@ def walk_source(root_dir):
         yield path
 
 
-def walk_source_and_targets(root_dir, target_dir):
+def walk_source_and_targets(root_path, target_dir):
     """Iterate modules in a Python package and its target stub files.
 
     Parameters
     ----------
-    root_dir : Path
-        Root directory of a Python package.
+    root_path : Path
+        Root directory of a Python package or a single Python file.
     target_dir : Path
         Root directory in which a matching stub package will be created.
 
@@ -81,13 +81,14 @@ def walk_source_and_targets(root_dir, target_dir):
         Either a Python file or a stub file that takes precedence.
     stub_path : Path
         Target stub file.
-
-    Notes
-    -----
-    Files starting with "test_" are skipped entirely for now.
     """
-    for source_path in walk_source(root_dir):
-        stub_path = target_dir / source_path.with_suffix(".pyi").relative_to(root_dir)
+    if root_path.is_file():
+        stub_path = target_dir / root_path.with_suffix(".pyi").name
+        yield root_path, stub_path
+        return
+
+    for source_path in walk_source(root_path):
+        stub_path = target_dir / source_path.with_suffix(".pyi").relative_to(root_path)
         yield source_path, stub_path
 
 
