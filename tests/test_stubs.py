@@ -149,6 +149,28 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
+    def test_optional_without_default(self):
+        source = dedent(
+            '''
+            def foo(a):
+                """
+                Parameters
+                ----------
+                a : int, optional
+                """
+            '''
+        )
+        expected = dedent(
+            """
+            def foo(a: int) -> None: ...
+            """
+        )
+
+        transformer = Py2StubTransformer()
+        # TODO should warn about a required arg being marked "optional"
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
     # fmt: off
     @pytest.mark.parametrize(
         ("assign", "expected"),
@@ -376,7 +398,7 @@ class Test_Py2StubTransformer:
                 b: str = ""
                 # docstub: on
                 c: int = None
-                b: str = ""
+                d: str = ""
             """
         )
         expected = dedent(
@@ -387,7 +409,7 @@ class Test_Py2StubTransformer:
                 b: str = ""
 
                 c: int
-                b: str
+                d: str
             """
         )
         transformer = Py2StubTransformer()
