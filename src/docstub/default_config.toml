@@ -27,9 +27,12 @@ ArrayLike = { from = "numpy.typing" }
 # annotations.
 # TODO rename to qualname_alias or something
 [tool.docstub.replace_doctypes]
+iterable = "Iterable"
+callable = "Callable"
 function = "Callable"
 func = "Callable"
-callable = "Callable"
+sequence = "Sequence"
+mapping = "Mapping"
 
 numpy = "np"
 scalar = "np.ScalarType"
