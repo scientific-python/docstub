@@ -6,7 +6,7 @@ docstub --help
 ```
 will print
 
-<!--- Changes to the following block are overridden by the test suite --->
+<!--- The following block is checked by the test suite --->
 <!--- begin command-line-help --->
 
 ```plain

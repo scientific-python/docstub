@@ -20,8 +20,11 @@ If you want to pin to a certain commit you can append `@COMMIT_SHA` to the repo 
 
 Consider a simple example with the following documented function
 
+<!--- The following block is checked by the test suite --->
+<!--- begin example.py --->
+
 ```python
-# src/example.py
+# example.py
 
 def example_metric(image, *, mask=None, sigma=1.0, method='standard'):
     """Pretend to calculate a local metric between two images.
@@ -45,6 +48,8 @@ def example_metric(image, *, mask=None, sigma=1.0, method='standard'):
     pass
 ```
 
+<!--- end example.py --->
+
 Feeding this input to docstub with
 
 ```shell
@@ -53,6 +58,8 @@ docstub simple_script.py
 
 will create `example.pyi` in the same directory
 
+<!--- The following block is checked by the test suite --->
+<!--- begin example.pyi --->
 ```python
 # File generated with docstub
 
@@ -70,6 +77,7 @@ def example_metric(
     method: Literal["standard", "modified"] = ...
 ) -> NDArray[float]: ...
 ```
+<!--- end example.pyi --->
 
 There are several interesting things to note here:
 

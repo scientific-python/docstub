@@ -5,27 +5,67 @@ from pathlib import Path
 
 import click
 
-from docstub._cli import main
+from docstub._cli import main as docstub_main
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
+def test_getting_started_example(tmp_path):
+    # Load user guide
+    md_file = PROJECT_ROOT / "doc/user_guide.md"
+    with md_file.open("r") as io:
+        md_content = io.read()
+
+    # Extract code block for example.py
+    regex_py = (
+        r"<!--- begin example.py --->"
+        r"\n```python\n(.*)\n```\n"
+        r"<!--- end example.py --->"
+    )
+    matches_py = re.findall(regex_py, md_content, flags=re.DOTALL)
+    assert len(matches_py) == 1
+    py_source = matches_py[0]
+
+    # Create example.py and run docstub on it
+    py_file = tmp_path / "example.py"
+    with py_file.open("x") as io:
+        io.write(py_source)
+    docstub_main([str(py_file)], standalone_mode=False)
+
+    # Load created PYI file, this is what we expect to find in the user guide's
+    # code block for example.pyi
+    pyi_file = py_file.with_suffix(".pyi")
+    assert pyi_file.is_file()
+    with pyi_file.open("r") as io:
+        expected_pyi = io.read().strip()
+
+    # Extract code block for example.pyi from guide
+    regex_pyi = (
+        r"<!--- begin example.pyi --->"
+        r"\n```python\n(.*)\n```\n"
+        r"<!--- end example.pyi --->"
+    )
+    matches_pyi = re.findall(regex_pyi, md_content, flags=re.DOTALL)
+    assert len(matches_pyi) == 1
+    actual_pyi = matches_pyi[0].strip()
+
+    assert expected_pyi == actual_pyi
+
+
 def test_command_line_help():
-    ctx = click.Context(main, info_name="docstub")
+    ctx = click.Context(docstub_main, info_name="docstub")
     expected_help = f"""
-
 ```plain
-{main.get_help(ctx)}
+{docstub_main.get_help(ctx)}
 ```
-
-"""
+""".strip()
     md_file = PROJECT_ROOT / "doc/command_line_reference.md"
     with md_file.open("r") as io:
         md_content = io.read()
 
     regex = r"<!--- begin command-line-help --->(.*)<!--- end command-line-help --->"
-    match = re.findall(regex, md_content, flags=re.DOTALL)
-    assert len(match) == 1
+    matches = re.findall(regex, md_content, flags=re.DOTALL)
+    assert len(matches) == 1
 
-    actual_help = match[0]
+    actual_help = matches[0].strip()
     assert actual_help == expected_help
