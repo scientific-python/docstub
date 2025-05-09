@@ -295,6 +295,183 @@ class DoctypeTransformer(lark.visitors.Transformer):
             self._collected_imports = None
             self._unknown_qualnames = None
 
+    def annotation_with_meta(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : str
+        """
+        out = " | ".join(tree.children)
+        return out
+
+    def qualname(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : lark.Token
+        """
+        children = tree.children
+        _qualname = ".".join(children)
+
+        for partial_qualname in accumulate_qualname(_qualname):
+            replacement = self.replace_doctypes.get(partial_qualname)
+            if replacement:
+                _qualname = _qualname.replace(partial_qualname, replacement)
+                break
+
+        _qualname = self._match_import(_qualname, meta=tree.meta)
+
+        if _qualname in self.blacklisted_qualnames:
+            msg = (
+                f"qualname {_qualname!r} in docstring type description "
+                "is a reserved Python keyword and not allowed"
+            )
+            raise QualnameIsKeyword(msg)
+
+        _qualname = lark.Token(type="QUALNAME", value=_qualname)
+        return _qualname
+
+    def rst_role(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : lark.Token
+        """
+        qualname = _find_one_token(tree, name="QUALNAME")
+        return qualname
+
+    def or_expression(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : str
+        """
+        out = " | ".join(tree.children)
+        return out
+
+    def subscription_expression(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : str
+        """
+        _container, *_content = tree.children
+        _content = ", ".join(_content)
+        assert _content
+        out = f"{_container}[{_content}]"
+        return out
+
+    def literal_expression(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : str
+        """
+        out = ", ".join(tree.children)
+        out = f"Literal[{out}]"
+        if self.types_db is not None:
+            _, known_import = self.types_db.query("Literal")
+            if known_import:
+                self._collected_imports.add(known_import)
+        return out
+
+    def array_expression(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : str
+        """
+        name = _find_one_token(tree, name="ARRAY_NAME")
+        children = [child for child in tree.children if child != name]
+        if children:
+            name = f"{name}[{', '.join(children)}]"
+        return str(name)
+
+    def array_name(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : lark.Token
+        """
+        # Treat `array_name` as `qualname`, but mark it as an array name,
+        # so we know which one to treat as the container in `array_expression`
+        # This currently relies on a hack that only allows specific names
+        # in `array_expression` (see `ARRAY_NAME` terminal in gramar)
+        qualname = self.qualname(tree)
+        qualname = lark.Token("ARRAY_NAME", str(qualname))
+        return qualname
+
+    def shape(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : lark.visitors._DiscardType
+        """
+        logger.debug("dropping shape information")
+        return lark.Discard
+
+    def optional(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : lark.visitors._DiscardType
+        """
+        logger.debug("dropping optional / default info")
+        return lark.Discard
+
+    def extra_info(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : lark.visitors._DiscardType
+        """
+        logger.debug("dropping extra info")
+        return lark.Discard
+
     def __default__(self, data, children, meta):
         """Unpack children of rule nodes by default.
 
@@ -317,85 +494,6 @@ class DoctypeTransformer(lark.visitors.Transformer):
             out.type = data.upper()  # Turn rule into "token"
         else:
             out = children
-        return out
-
-    def annotation(self, tree):
-        out = " | ".join(tree.children)
-        return out
-
-    def types_or(self, tree):
-        out = " | ".join(tree.children)
-        return out
-
-    def optional(self, tree):
-        logger.debug("dropping optional / default info")
-        return lark.Discard
-
-    def extra_info(self, tree):
-        logger.debug("dropping extra info")
-        return lark.Discard
-
-    def sphinx_ref(self, tree):
-        qualname = _find_one_token(tree, name="QUALNAME")
-        return qualname
-
-    def container(self, tree):
-        _container, *_content = tree.children
-        _content = ", ".join(_content)
-        assert _content
-        out = f"{_container}[{_content}]"
-        return out
-
-    def qualname(self, tree):
-        children = tree.children
-        _qualname = ".".join(children)
-
-        for partial_qualname in accumulate_qualname(_qualname):
-            replacement = self.replace_doctypes.get(partial_qualname)
-            if replacement:
-                _qualname = _qualname.replace(partial_qualname, replacement)
-                break
-
-        _qualname = self._match_import(_qualname, meta=tree.meta)
-
-        if _qualname in self.blacklisted_qualnames:
-            msg = (
-                f"qualname {_qualname!r} in docstring type description "
-                "is a reserved Python keyword and not allowed"
-            )
-            raise QualnameIsKeyword(msg)
-
-        _qualname = lark.Token(type="QUALNAME", value=_qualname)
-        return _qualname
-
-    def array_name(self, tree):
-        qualname = self.qualname(tree)
-        qualname = lark.Token("ARRAY_NAME", str(qualname))
-        return qualname
-
-    def shape(self, tree):
-        logger.debug("dropping shape information")
-        return lark.Discard
-
-    def shape_n_dtype(self, tree):
-        name = _find_one_token(tree, name="ARRAY_NAME")
-        children = [child for child in tree.children if child != name]
-        if children:
-            name = f"{name}[{', '.join(children)}]"
-        return name
-
-    def contains(self, tree):
-        out = ", ".join(tree.children)
-        out = f"[{out}]"
-        return out
-
-    def literals(self, tree):
-        out = ", ".join(tree.children)
-        out = f"Literal[{out}]"
-        if self.types_db is not None:
-            _, known_import = self.types_db.query("Literal")
-            if known_import:
-                self._collected_imports.add(known_import)
         return out
 
     def _match_import(self, qualname, *, meta):

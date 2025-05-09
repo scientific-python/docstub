@@ -1,73 +1,121 @@
-?start : annotation
+// Grammar defining the syntax for docstring type descriptions
+//
+// Reading and introduction order of rules starts at the top of the tree.
 
-// ----------------------------------------------------------------------------
-annotation : types_or ("," optional)? ("," extra_info)?
 
-?types_or : type (("or" | "|") type)*
+?start : annotation_with_meta
 
-?type : qualname
-      | sphinx_ref
-      | container
-      | shape_n_dtype
-      | literals
 
-optional : "optional"
-         | "default" ("=" | ":")? literal
+// The basic structure of a full docstring annotation as it comes after the
+// `name : `. It includes additional meta information that is optional and
+// currently ignored.
+annotation_with_meta : type ("," optional)? ("," extra_info)?
 
-extra_info : /[^\r\n]+/
 
-sphinx_ref : (":" (NAME ":")? NAME ":")? "`" qualname "`"
+// Just the docstring type annotation without meta information.
+?type :
+    | qualname
+    | rst_role
+    | literal_expression
+    | subscription_expression
+    | array_expression
+    | or_expression
 
-container: qualname "[" types_or ("," types_or)* ("," PY_ELLIPSES)? "]"
-         | qualname "of" type   // TODO allow plural somehow, e.g. "list of int(s)"?
-         | qualname "of" "(" types_or ("," types_or)* ("," PY_ELLIPSES)? ")"
-         | qualname "of" "{" types_or ":" types_or "}"
 
 // Name with leading dot separated path
 qualname : (/~/ ".")? (NAME ".")* NAME
 
 
-// ----------------------------------------------------------------------------
-// Array-like form with dtype or shape information
+// A qualname can be wrapped in a reStructuredText role, e.g, as used by Sphinx.
+// https://docutils.sourceforge.io/docs/ref/rst/roles.html
+rst_role : (":" (NAME ":")? NAME ":")? "`" qualname "`"
 
-shape_n_dtype : shape? array_name ("of" dtype)?
-              | shape? array_name "of" dtype
-              | shape dtype array_name
-              | dtype array_name
-              | array_name "of shape" shape ("and dtype" dtype)?
-              | array_name "of dtype" dtype ("and shape" shape)?
-// Use rule and terminal to capture the array name and its context
-// TODO figure out way not to leak implementation here
+
+// An union of different types, joined either by "or" or "|"
+or_expression : type (("or" | "|") type)+
+
+
+// An expression where an object is subscribed with "A[v, ...]". We extend this
+// syntax with a natural language variant `A of (v, ...)` and `A of {k : v}`.
+subscription_expression:
+    | qualname "[" type ("," type)* ("," ELLIPSES)? "]"
+    | qualname "of" type   // TODO allow plural somehow, e.g. "list of int(s)"?
+    | qualname "of" "(" type ("," type)* ("," ELLIPSES)? ")"
+    | qualname "of" "{" type ":" type "}"
+
+
+// An expression combining multiple literals inside curly braces `{l1, l2, ...}`
+literal_expression : "{" literal_item ("," literal_item)* "}"
+
+
+// An single item in a literal expression (or `optional`). We must also allow
+// for qualified names, since a "class" can be used as a literal too.
+?literal_item :
+    | ELLIPSES
+    | STRING
+    | NUMBER
+    | qualname  // TODO should rst_role too? make combined `type qualname | rst_role`?
+
+
+// A natural language alternative to describe arrays with a dtype and shape
+array_expression :
+    | array_name "of dtype" dtype ("and shape" shape)?
+    | array_name "of shape" shape ("and dtype" dtype)?
+    | shape array_name ("of" dtype)?
+    | shape? array_name "of" dtype
+    | shape dtype array_name
+    | dtype array_name
+
+// Currently a bit of a hack. Since the `array_expression` is currently so
+// ambiguous, we want to make sure it only works for real arrays. For now, we
+// are using a hack here, that only allows specific names in `array_name`. In
+// the transformer we alias this to qualname.
+// TODO  figure out less hacky way & allow users to set other array names
 array_name : ARRAY_NAME
 ARRAY_NAME : "array" | "ndarray" | "array-like" | "array_like"
 
-dtype : qualname
-shape : "(" dim ",)"
-      | "(" leading_optional? dim (("," dim | insert_optional))* ")"
-      | NUMBER "-"? "D"
-leading_optional : "[" dim ("," dim)* ",]"
-insert_optional : "[," dim ("," dim)* "]"
-?dim : NUMBER
-     | PY_ELLIPSES
-     | NAME ("=" NUMBER)?
+// The dtype used in an array expression.
+?dtype : qualname
+
+// The shape used in an array expression. Possibly to liberal right now in
+// what it allows. Since there is currently no support to type the shape of
+// NumPy arrays, this information is dropped during the transformation.
+shape :
+    | "(" dim ",)"
+    | "(" leading_optional_dim? dim (("," dim | insert_optional_dim))* ")"
+    | NUMBER "-"? "D"
+
+// Optional dimensions in a `shape` expression placed at the start,
+// e.g., `([3 ,] N)`.
+?leading_optional_dim : "[" dim ("," dim)* ",]"
+
+// Optional dimensions in a `shape` expression placed anywhere but the start,
+// e.g., `(A[, B], C[, D])`.
+?insert_optional_dim : "[," dim ("," dim)* "]"
+
+// Dimension can be a number, ellipses ('...') or a simple name. A simple name
+// can be bound to a specific number, e.g. `N=3`.
+?dim : NUMBER | ELLIPSES | NAME ("=" NUMBER)?
 
 
-// ----------------------------------------------------------------------------
-// Python
-literals : "{" literal ("," literal)* "}"
+// Optional information about a parameter has a default value, added after the
+// docstring annotation. Currently dropped during transformation.
+optional :  "optional" | "default" ("=" | ":")? literal_item
 
-literal : PY_ELLIPSES
-        | STRING
-        | NUMBER
-        | qualname
 
-PY_ELLIPSES : "..."
+// Extra meta information added after the docstring annotation.
+// Currently dropped during transformation.
+extra_info : /[^\r\n]+/
 
+
+// Allow Python's ellipses object
+ELLIPSES : "..."
+
+// A simple name. Can start with a number or character. Can be delimited by "_"
+// or "-" but not by ".".
 NAME: /[^\W\d][\w-]*/
 
 
-// ----------------------------------------------------------------------------
-// imports
 %import python (STRING)
 %import common (NEWLINE, NUMBER, LETTER, TEXT, WS)
 

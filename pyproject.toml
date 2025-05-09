@@ -90,6 +90,7 @@ ignore = [
   "RET504",   # Assignment before `return` statement facilitates debugging
   "PTH123",   # Using builtin open() instead of Path.open() is fine
   "SIM108",   # Terniary operator is always more readable
+  "SIM103",   # Don't recommend returning the condition directly
 ]
 
 
