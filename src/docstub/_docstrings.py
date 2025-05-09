@@ -323,29 +323,6 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = " | ".join(tree.children)
         return out
 
-    def or_expression(self, tree):
-        out = " | ".join(tree.children)
-        return out
-
-    def optional(self, tree):
-        logger.debug("dropping optional / default info")
-        return lark.Discard
-
-    def extra_info(self, tree):
-        logger.debug("dropping extra info")
-        return lark.Discard
-
-    def rst_role(self, tree):
-        qualname = _find_one_token(tree, name="QUALNAME")
-        return qualname
-
-    def subscription_expression(self, tree):
-        _container, *_content = tree.children
-        _content = ", ".join(_content)
-        assert _content
-        out = f"{_container}[{_content}]"
-        return out
-
     def qualname(self, tree):
         children = tree.children
         _qualname = ".".join(children)
@@ -368,6 +345,37 @@ class DoctypeTransformer(lark.visitors.Transformer):
         _qualname = lark.Token(type="QUALNAME", value=_qualname)
         return _qualname
 
+    def rst_role(self, tree):
+        qualname = _find_one_token(tree, name="QUALNAME")
+        return qualname
+
+    def or_expression(self, tree):
+        out = " | ".join(tree.children)
+        return out
+
+    def subscription_expression(self, tree):
+        _container, *_content = tree.children
+        _content = ", ".join(_content)
+        assert _content
+        out = f"{_container}[{_content}]"
+        return out
+
+    def literal_expression(self, tree):
+        out = ", ".join(tree.children)
+        out = f"Literal[{out}]"
+        if self.types_db is not None:
+            _, known_import = self.types_db.query("Literal")
+            if known_import:
+                self._collected_imports.add(known_import)
+        return out
+
+    def array_expression(self, tree):
+        name = _find_one_token(tree, name="ARRAY_NAME")
+        children = [child for child in tree.children if child != name]
+        if children:
+            name = f"{name}[{', '.join(children)}]"
+        return name
+
     def array_name(self, tree):
         # Treat `array_name` as `qualname`, but mark it as an array name,
         # so we know which one to treat as the container in `array_expression`
@@ -381,21 +389,13 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping shape information")
         return lark.Discard
 
-    def array_expression(self, tree):
-        name = _find_one_token(tree, name="ARRAY_NAME")
-        children = [child for child in tree.children if child != name]
-        if children:
-            name = f"{name}[{', '.join(children)}]"
-        return name
+    def optional(self, tree):
+        logger.debug("dropping optional / default info")
+        return lark.Discard
 
-    def literal_expression(self, tree):
-        out = ", ".join(tree.children)
-        out = f"Literal[{out}]"
-        if self.types_db is not None:
-            _, known_import = self.types_db.query("Literal")
-            if known_import:
-                self._collected_imports.add(known_import)
-        return out
+    def extra_info(self, tree):
+        logger.debug("dropping extra info")
+        return lark.Discard
 
     def _match_import(self, qualname, *, meta):
         """Match `qualname` to known imports or alias to "Incomplete".
