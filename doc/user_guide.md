@@ -60,6 +60,7 @@ will create `example.pyi` in the same directory
 
 <!--- The following block is checked by the test suite --->
 <!--- begin example.pyi --->
+
 ```python
 # File generated with docstub
 
@@ -77,6 +78,7 @@ def example_metric(
     method: Literal["standard", "modified"] = ...
 ) -> NDArray[float]: ...
 ```
+
 <!--- end example.pyi --->
 
 There are several interesting things to note here:

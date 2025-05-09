@@ -19,7 +19,7 @@ def test_getting_started_example(tmp_path):
     # Extract code block for example.py
     regex_py = (
         r"<!--- begin example.py --->"
-        r"\n```python\n(.*)\n```\n"
+        r"\n+```python(.*)```\n+"
         r"<!--- end example.py --->"
     )
     matches_py = re.findall(regex_py, md_content, flags=re.DOTALL)
@@ -42,7 +42,7 @@ def test_getting_started_example(tmp_path):
     # Extract code block for example.pyi from guide
     regex_pyi = (
         r"<!--- begin example.pyi --->"
-        r"\n```python\n(.*)\n```\n"
+        r"\n+```python(.*)```\n+"
         r"<!--- end example.pyi --->"
     )
     matches_pyi = re.findall(regex_pyi, md_content, flags=re.DOTALL)
