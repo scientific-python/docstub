@@ -319,11 +319,11 @@ class DoctypeTransformer(lark.visitors.Transformer):
             out = children
         return out
 
-    def annotation(self, tree):
+    def annotation_with_meta(self, tree):
         out = " | ".join(tree.children)
         return out
 
-    def types_or(self, tree):
+    def or_expression(self, tree):
         out = " | ".join(tree.children)
         return out
 
@@ -335,11 +335,11 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping extra info")
         return lark.Discard
 
-    def sphinx_ref(self, tree):
+    def rst_role(self, tree):
         qualname = _find_one_token(tree, name="QUALNAME")
         return qualname
 
-    def container(self, tree):
+    def subscription_expression(self, tree):
         _container, *_content = tree.children
         _content = ", ".join(_content)
         assert _content
@@ -369,6 +369,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return _qualname
 
     def array_name(self, tree):
+        # Treat `array_name` as `qualname`, but mark it as an array name,
+        # so we know which one to treat as the container in `array_expression`
+        # This currently relies on a hack that only allows specific names
+        # in `array_expression` (see `ARRAY_NAME` terminal in gramar)
         qualname = self.qualname(tree)
         qualname = lark.Token("ARRAY_NAME", str(qualname))
         return qualname
@@ -377,19 +381,14 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping shape information")
         return lark.Discard
 
-    def shape_n_dtype(self, tree):
+    def array_expression(self, tree):
         name = _find_one_token(tree, name="ARRAY_NAME")
         children = [child for child in tree.children if child != name]
         if children:
             name = f"{name}[{', '.join(children)}]"
         return name
 
-    def contains(self, tree):
-        out = ", ".join(tree.children)
-        out = f"[{out}]"
-        return out
-
-    def literals(self, tree):
+    def literal_expression(self, tree):
         out = ", ".join(tree.children)
         out = f"Literal[{out}]"
         if self.types_db is not None:
