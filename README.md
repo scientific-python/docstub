@@ -27,8 +27,7 @@ Docstubs features and API is still being heavily extended and the internal struc
 That said, if that only entices you, feel free to open a PR.
 But please do check in with an issue before you do so.
 
-Our project follows the [SciPy code of
-conduct](https://github.com/scipy/scipy/blob/master/doc/source/dev/conduct/code_of_conduct.rst).
+Our project follows the [Scientific Python's Code of Conduct](https://scientific-python.org/code_of_conduct/).
 
 
 ## Acknowledgements
