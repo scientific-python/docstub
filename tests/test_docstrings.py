@@ -22,7 +22,7 @@ class Test_Annotation:
         sequence_anno = Annotation(
             value="Sequence",
             imports=frozenset(
-                {KnownImport(import_name="Sequence", import_path="typing")}
+                {KnownImport(import_name="Sequence", import_path="collections.abc")}
             ),
         )
         return_annotation = Annotation.many_as_tuple([path_anno, sequence_anno])
@@ -244,7 +244,7 @@ class Test_DocstringAnnotations:
         annotations = DocstringAnnotations(docstring, transformer=transformer)
         assert annotations.returns.value == "Generator[tuple[int, str]]"
         assert annotations.returns.imports == {
-            KnownImport(import_path="typing", import_name="Generator")
+            KnownImport(import_path="collections.abc", import_name="Generator")
         }
 
     def test_receives(self, caplog):
@@ -268,7 +268,7 @@ class Test_DocstringAnnotations:
             == "Generator[tuple[int, str], tuple[float, bytes]]"
         )
         assert annotations.returns.imports == {
-            KnownImport(import_path="typing", import_name="Generator")
+            KnownImport(import_path="collections.abc", import_name="Generator")
         }
 
     def test_full_generator(self, caplog):
@@ -295,7 +295,7 @@ class Test_DocstringAnnotations:
             "Generator[tuple[int, str], tuple[float, bytes], bool]"
         )
         assert annotations.returns.imports == {
-            KnownImport(import_path="typing", import_name="Generator")
+            KnownImport(import_path="collections.abc", import_name="Generator")
         }
 
     def test_yields_and_returns(self, caplog):
@@ -315,7 +315,7 @@ class Test_DocstringAnnotations:
         annotations = DocstringAnnotations(docstring, transformer=transformer)
         assert annotations.returns.value == ("Generator[tuple[int, str], None, bool]")
         assert annotations.returns.imports == {
-            KnownImport(import_path="typing", import_name="Generator")
+            KnownImport(import_path="collections.abc", import_name="Generator")
         }
 
     def test_duplicate_parameters(self, caplog):
