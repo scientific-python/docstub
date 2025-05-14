@@ -114,7 +114,7 @@ class Annotation:
             value = f"{value}, {return_annotation.value}"
 
         value = f"Generator[{value}]"
-        imports |= {KnownImport(import_path="typing", import_name="Generator")}
+        imports |= {KnownImport(import_path="collections.abc", import_name="Generator")}
         generator = cls(value=value, imports=imports)
         return generator
 
