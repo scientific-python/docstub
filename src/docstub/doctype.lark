@@ -3,13 +3,13 @@
 // Reading and introduction order of rules starts at the top of the tree.
 
 
-?start : annotation_with_meta
+?start: annotation_with_meta
 
 
 // The basic structure of a full docstring annotation as it comes after the
 // `name : `. It includes additional meta information that is optional and
 // currently ignored.
-annotation_with_meta : type ("," optional)? ("," extra_info)?
+annotation_with_meta: type ("," optional)? ("," extra_info)?
 
 
 // Just the docstring type annotation without meta information.
@@ -22,20 +22,20 @@ annotation_with_meta : type ("," optional)? ("," extra_info)?
 
 
 // Name with leading dot separated path
-qualname : (/~/ ".")? (NAME ".")* NAME
+qualname: (/~/ ".")? (NAME ".")* NAME
 
 
 // A qualname can be wrapped in a reStructuredText role, e.g, as used by Sphinx.
 // https://docutils.sourceforge.io/docs/ref/rst/roles.html
-rst_role : (":" (NAME ":")? NAME ":")? "`" qualname "`"
+rst_role: (":" (NAME ":")? NAME ":")? "`" qualname "`"
 
 
 // An union of different types, joined either by "or" or "|"
-or_expression : type (("or" | "|") type)+
+or_expression: type (("or" | "|") type)+
 
 
 // An expression where an object is subscribed with "A[v, ...]". We extend this
-// syntax with a natural language variant `A of (v, ...)` and `A of {k : v}`.
+// syntax with a natural language variants, e.g., `A of (v, ...)` and `A of {k : v}`.
 subscription_expression: qualname "[" type ("," type)* ("," ELLIPSES)? "]"
     | qualname "of" type   // TODO allow plural somehow, e.g. "list of int(s)"?
     | qualname "of" "(" type ("," type)* ("," ELLIPSES)? ")"
@@ -43,7 +43,7 @@ subscription_expression: qualname "[" type ("," type)* ("," ELLIPSES)? "]"
 
 
 // An expression combining multiple literals inside curly braces `{l1, l2, ...}`
-literal_expression : "{" literal_item ("," literal_item)* "}"
+literal_expression: "{" literal_item ("," literal_item)* "}"
 
 
 // An single item in a literal expression (or `optional`). We must also allow
@@ -67,11 +67,11 @@ array_expression: array_name "of dtype" dtype ("and shape" shape)?
 // are using a hack here, that only allows specific names in `array_name`. In
 // the transformer we alias this to qualname.
 // TODO  figure out less hacky way & allow users to set other array names
-array_name : ARRAY_NAME
-ARRAY_NAME : "array" | "ndarray" | "array-like" | "array_like"
+array_name: ARRAY_NAME
+ARRAY_NAME: "array" | "ndarray" | "array-like" | "array_like"
 
 // The dtype used in an array expression.
-?dtype : qualname
+?dtype: qualname
 
 // The shape used in an array expression. Possibly to liberal right now in
 // what it allows. Since there is currently no support to type the shape of
@@ -82,29 +82,29 @@ shape: "(" dim ",)"
 
 // Optional dimensions in a `shape` expression placed at the start,
 // e.g., `([3 ,] N)`.
-?leading_optional_dim : "[" dim ("," dim)* ",]"
+?leading_optional_dim: "[" dim ("," dim)* ",]"
 
 // Optional dimensions in a `shape` expression placed anywhere but the start,
 // e.g., `(A[, B], C[, D])`.
-?insert_optional_dim : "[," dim ("," dim)* "]"
+?insert_optional_dim: "[," dim ("," dim)* "]"
 
 // Dimension can be a number, ellipses ('...') or a simple name. A simple name
 // can be bound to a specific number, e.g. `N=3`.
-?dim : NUMBER | ELLIPSES | NAME ("=" NUMBER)?
+?dim: NUMBER | ELLIPSES | NAME ("=" NUMBER)?
 
 
 // Optional information about a parameter has a default value, added after the
 // docstring annotation. Currently dropped during transformation.
-optional :  "optional" | "default" ("=" | ":")? literal_item
+optional:  "optional" | "default" ("=" | ":")? literal_item
 
 
 // Extra meta information added after the docstring annotation.
 // Currently dropped during transformation.
-extra_info : /[^\r\n]+/
+extra_info: /[^\r\n]+/
 
 
 // Allow Python's ellipses object
-ELLIPSES : "..."
+ELLIPSES: "..."
 
 // A simple name. Can start with a number or character. Can be delimited by "_"
 // or "-" but not by ".".
