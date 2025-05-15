@@ -6,10 +6,15 @@
 
 ## Docstring annotation syntax
 
-The basic structure of to describe the type of a symbol is as follows:
+To extract type information in docstrings, docstub expects these to follow the NumPyDoc style:
+
 ```
+Section name
+------------
 name : type_description (, optional) (, extra_info)
+  Verbose
 ```
+
 - `name` might be the name of a parameter or attribute.
   But typing names in other sections like "Returns" or "Yields" is also supported.
 - `type_description`
@@ -20,11 +25,12 @@ name : type_description (, optional) (, extra_info)
 [Grammar reference](../src/docstub/doctype.lark)
 
 
-### Or
+### Or expression
 
 | Docstring type | Python type annotation |
 |----------------|------------------------|
 | `X or Y`       | `X \| Y`               |
+| `int or float` | `int \| float`         |
 
 
 ### Containers
@@ -67,7 +73,7 @@ name : type_description (, optional) (, extra_info)
 | `{X}`               | `Literal[X]`               |
 
 
-### Sphinx-like reference
+### reStructuredText role
 
 | Docstring type    | Python type annotation |
 |-------------------|------------------------|

@@ -59,7 +59,7 @@ def test_command_line_help():
 {docstub_main.get_help(ctx)}
 ```
 """.strip()
-    md_file = PROJECT_ROOT / "doc/command_line_reference.md"
+    md_file = PROJECT_ROOT / "doc/command_line.md"
     with md_file.open("r") as io:
         md_content = io.read()
 
