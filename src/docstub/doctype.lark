@@ -13,8 +13,7 @@ annotation_with_meta : type ("," optional)? ("," extra_info)?
 
 
 // Just the docstring type annotation without meta information.
-?type :
-    | qualname
+?type: qualname
     | rst_role
     | literal_expression
     | subscription_expression
@@ -37,8 +36,7 @@ or_expression : type (("or" | "|") type)+
 
 // An expression where an object is subscribed with "A[v, ...]". We extend this
 // syntax with a natural language variant `A of (v, ...)` and `A of {k : v}`.
-subscription_expression:
-    | qualname "[" type ("," type)* ("," ELLIPSES)? "]"
+subscription_expression: qualname "[" type ("," type)* ("," ELLIPSES)? "]"
     | qualname "of" type   // TODO allow plural somehow, e.g. "list of int(s)"?
     | qualname "of" "(" type ("," type)* ("," ELLIPSES)? ")"
     | qualname "of" "{" type ":" type "}"
@@ -50,16 +48,14 @@ literal_expression : "{" literal_item ("," literal_item)* "}"
 
 // An single item in a literal expression (or `optional`). We must also allow
 // for qualified names, since a "class" can be used as a literal too.
-?literal_item :
-    | ELLIPSES
+?literal_item: ELLIPSES
     | STRING
     | NUMBER
     | qualname  // TODO should rst_role too? make combined `type qualname | rst_role`?
 
 
 // A natural language alternative to describe arrays with a dtype and shape
-array_expression :
-    | array_name "of dtype" dtype ("and shape" shape)?
+array_expression: array_name "of dtype" dtype ("and shape" shape)?
     | array_name "of shape" shape ("and dtype" dtype)?
     | shape array_name ("of" dtype)?
     | shape? array_name "of" dtype
@@ -80,8 +76,7 @@ ARRAY_NAME : "array" | "ndarray" | "array-like" | "array_like"
 // The shape used in an array expression. Possibly to liberal right now in
 // what it allows. Since there is currently no support to type the shape of
 // NumPy arrays, this information is dropped during the transformation.
-shape :
-    | "(" dim ",)"
+shape: "(" dim ",)"
     | "(" leading_optional_dim? dim (("," dim | insert_optional_dim))* ")"
     | NUMBER "-"? "D"
 
