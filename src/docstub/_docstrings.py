@@ -24,7 +24,7 @@ grammar_path = here / "doctype.lark"
 with grammar_path.open() as file:
     _grammar = file.read()
 
-_lark = lark.Lark(_grammar, propagate_positions=True)
+_lark = lark.Lark(_grammar, propagate_positions=True, strict=True)
 
 
 def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token:
@@ -295,19 +295,6 @@ class DoctypeTransformer(lark.visitors.Transformer):
             self._collected_imports = None
             self._unknown_qualnames = None
 
-    def annotation_with_meta(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : str
-        """
-        out = " | ".join(tree.children)
-        return out
-
     def qualname(self, tree):
         """
         Parameters
@@ -352,7 +339,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         qualname = _find_one_token(tree, name="QUALNAME")
         return qualname
 
-    def or_expression(self, tree):
+    def union(self, tree):
         """
         Parameters
         ----------
@@ -365,7 +352,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = " | ".join(tree.children)
         return out
 
-    def subscription_expression(self, tree):
+    def subscription(self, tree):
         """
         Parameters
         ----------
@@ -381,7 +368,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = f"{_container}[{_content}]"
         return out
 
-    def literal_expression(self, tree):
+    def natlang_literal(self, tree):
         """
         Parameters
         ----------
@@ -393,13 +380,34 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         out = ", ".join(tree.children)
         out = f"Literal[{out}]"
+
+        if len(tree.children):
+            logger.warning(
+                "natural language literal with one item `%s`, "
+                "consider using `%s` to improve readability",
+                tree.children[0],
+                out,
+            )
+
         if self.types_db is not None:
             _, known_import = self.types_db.query("Literal")
             if known_import:
                 self._collected_imports.add(known_import)
         return out
 
-    def array_expression(self, tree):
+    def natlang_container(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : str
+        """
+        return self.subscription(tree)
+
+    def natlang_array(self, tree):
         """
         Parameters
         ----------
@@ -491,7 +499,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         if isinstance(children, list) and len(children) == 1:
             out = children[0]
-            out.type = data.upper()  # Turn rule into "token"
+            if hasattr(out, "type"):
+                out.type = data.upper()  # Turn rule into "token"
         else:
             out = children
         return out
