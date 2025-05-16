@@ -1,115 +1,145 @@
 // Grammar defining the syntax for docstring type descriptions
 //
 // Reading and introduction order of rules starts at the top of the tree.
+//
+// Reference for Lark grammars:
+// https://lark-parser.readthedocs.io/en/latest/grammar.html
 
 
-?start : annotation_with_meta
+?start: annotation_with_meta
 
 
 // The basic structure of a full docstring annotation as it comes after the
 // `name : `. It includes additional meta information that is optional and
 // currently ignored.
-annotation_with_meta : type ("," optional)? ("," extra_info)?
+?annotation_with_meta: type ("," optional)? ("," extra_info)?
 
 
-// Just the docstring type annotation without meta information.
-?type :
-    | qualname
-    | rst_role
-    | literal_expression
-    | subscription_expression
-    | array_expression
-    | or_expression
+// A type annotation. Can range from a simple qualified name to a complex
+// nested construct of types.
+?type: qualname
+    | union
+    | subscription
+    | natlang_literal
+    | natlang_container
+    | natlang_array
 
 
-// Name with leading dot separated path
-qualname : (/~/ ".")? (NAME ".")* NAME
+// A qualified name which can contain multiple parts separated by a ".".
+// Optionally, "~." can be prefixed to abbreviate a leading part of the name.
+// Optionally, a qualname can be wrapped in the style of a reStructuredText
+// role [1], e.g, as used by Sphinx.
+// [1] https://docutils.sourceforge.io/docs/ref/rst/roles.html
+//
+qualname: (/~/ ".")? (NAME ".")* NAME
+    | (":" (NAME ":")? NAME ":")? "`" qualname "`" -> rst_role
 
 
-// A qualname can be wrapped in a reStructuredText role, e.g, as used by Sphinx.
-// https://docutils.sourceforge.io/docs/ref/rst/roles.html
-rst_role : (":" (NAME ":")? NAME ":")? "`" qualname "`"
+// An union of different types, joined either by "or" or "|".
+union: type (_OR type)+
 
 
-// An union of different types, joined either by "or" or "|"
-or_expression : type (("or" | "|") type)+
+// Operator used in unions.
+_OR: "or" | "|"
 
 
-// An expression where an object is subscribed with "A[v, ...]". We extend this
-// syntax with a natural language variant `A of (v, ...)` and `A of {k : v}`.
-subscription_expression:
-    | qualname "[" type ("," type)* ("," ELLIPSES)? "]"
-    | qualname "of" type   // TODO allow plural somehow, e.g. "list of int(s)"?
-    | qualname "of" "(" type ("," type)* ("," ELLIPSES)? ")"
-    | qualname "of" "{" type ":" type "}"
+// An expression where an object is subscribed with "A[v, ...]".
+subscription: qualname "[" type ("," type)* ("," ELLIPSES)? "]"
 
 
-// An expression combining multiple literals inside curly braces `{l1, l2, ...}`
-literal_expression : "{" literal_item ("," literal_item)* "}"
+// Allow Python's ellipses object
+ELLIPSES: "..."
+
+
+// A natural language expression that combines one or multiple literals inside
+// curly braces `{l1, l2, ...}`
+natlang_literal: "{" literal_item ("," literal_item)* "}"
 
 
 // An single item in a literal expression (or `optional`). We must also allow
-// for qualified names, since a "class" can be used as a literal too.
-?literal_item :
-    | ELLIPSES
-    | STRING
-    | NUMBER
-    | qualname  // TODO should rst_role too? make combined `type qualname | rst_role`?
+// for qualified names, since a "class" or enum can be used as a literal too.
+?literal_item: ELLIPSES | STRING | NUMBER | qualname
 
 
-// A natural language alternative to describe arrays with a dtype and shape
-array_expression :
-    | array_name "of dtype" dtype ("and shape" shape)?
+// Natural language forms of the subscription expression for containers.
+// These forms allow nesting allow nesting in and with other expressions. But
+// it's discouraged to do so extensively to maintain readability.
+natlang_container: qualname "of" qualname _PLURAL_S?
+    | qualname "of" "(" union ")"
+    | _natlang_tuple
+    | _natlang_mapping
+
+
+// Indicate the plural version of a qualname by appending "(s)".
+// The negative lookbehind in this regex disallows whitespace directly in front
+// of this.
+_PLURAL_S: /(?<!\s)\(s\)/
+
+
+// Special behavior for tuples [1].
+// [1] https://typing.python.org/en/latest/spec/tuples.html#tuple-type-form
+_natlang_tuple: qualname "of" "(" type "," ELLIPSES ")"
+    | qualname "of" "(" type ("," type)+ ")"
+
+
+// Natural language container variant for mappings.
+_natlang_mapping: qualname "of" "{" type ":" (type | union) "}"
+
+
+// A natural language alternative to describe arrays with a dtype and shape.
+natlang_array: array_name "of dtype" dtype ("and shape" shape)?
     | array_name "of shape" shape ("and dtype" dtype)?
     | shape array_name ("of" dtype)?
     | shape? array_name "of" dtype
     | shape dtype array_name
     | dtype array_name
 
-// Currently a bit of a hack. Since the `array_expression` is currently so
-// ambiguous, we want to make sure it only works for real arrays. For now, we
-// are using a hack here, that only allows specific names in `array_name`. In
-// the transformer we alias this to qualname.
+
+// Currently a bit of a hack. Since the `array_expression` is ambiguous, we
+// want to make sure it only works for real arrays. For now, we are using a
+// hack here, that only allows specific names in `array_name`. In the
+// transformer we alias this to qualname.
+//
 // TODO  figure out less hacky way & allow users to set other array names
-array_name : ARRAY_NAME
-ARRAY_NAME : "array" | "ndarray" | "array-like" | "array_like"
+array_name: ARRAY_NAME
+ARRAY_NAME: "array" | "ndarray" | "array-like" | "array_like"
+
 
 // The dtype used in an array expression.
-?dtype : qualname
+?dtype: qualname | "(" union ")"
+
 
 // The shape used in an array expression. Possibly to liberal right now in
 // what it allows. Since there is currently no support to type the shape of
 // NumPy arrays, this information is dropped during the transformation.
-shape :
-    | "(" dim ",)"
+shape: "(" dim ",)"
     | "(" leading_optional_dim? dim (("," dim | insert_optional_dim))* ")"
     | NUMBER "-"? "D"
 
+
 // Optional dimensions in a `shape` expression placed at the start,
 // e.g., `([3 ,] N)`.
-?leading_optional_dim : "[" dim ("," dim)* ",]"
+?leading_optional_dim: "[" dim ("," dim)* ",]"
+
 
 // Optional dimensions in a `shape` expression placed anywhere but the start,
 // e.g., `(A[, B], C[, D])`.
-?insert_optional_dim : "[," dim ("," dim)* "]"
+?insert_optional_dim: "[," dim ("," dim)* "]"
+
 
 // Dimension can be a number, ellipses ('...') or a simple name. A simple name
 // can be bound to a specific number, e.g. `N=3`.
-?dim : NUMBER | ELLIPSES | NAME ("=" NUMBER)?
+?dim: NUMBER | ELLIPSES | NAME ("=" NUMBER)?
 
 
 // Optional information about a parameter has a default value, added after the
 // docstring annotation. Currently dropped during transformation.
-optional :  "optional" | "default" ("=" | ":")? literal_item
+optional:  "optional" | "default" ("=" | ":")? literal_item
 
 
 // Extra meta information added after the docstring annotation.
 // Currently dropped during transformation.
-extra_info : /[^\r\n]+/
-
-
-// Allow Python's ellipses object
-ELLIPSES : "..."
+extra_info: /[^\r\n]+/
 
 // A simple name. Can start with a number or character. Can be delimited by "_"
 // or "-" but not by ".".
@@ -117,6 +147,6 @@ NAME: /[^\W\d][\w-]*/
 
 
 %import python (STRING)
-%import common (NEWLINE, NUMBER, LETTER, TEXT, WS)
+%import common (NUMBER, WS_INLINE)
 
-%ignore WS
+%ignore WS_INLINE
