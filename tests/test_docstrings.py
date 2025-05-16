@@ -87,6 +87,7 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize(
         "doctype",
         [
+            "list of int (s)",
             "list of (float)",
             "list of (float,)",
             "list of (, )",

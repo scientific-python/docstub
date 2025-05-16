@@ -1,6 +1,9 @@
 // Grammar defining the syntax for docstring type descriptions
 //
 // Reading and introduction order of rules starts at the top of the tree.
+//
+// Reference for Lark grammars:
+// https://lark-parser.readthedocs.io/en/latest/grammar.html
 
 
 ?start: annotation_with_meta
@@ -12,7 +15,8 @@
 ?annotation_with_meta: type ("," optional)? ("," extra_info)?
 
 
-// Just the docstring type annotation without meta information.
+// A type annotation. Can range from a simple qualified name to a complex
+// nested construct of types.
 ?type: qualname
     | union
     | subscription
@@ -35,28 +39,41 @@ qualname: (/~/ ".")? (NAME ".")* NAME
 union: type (_OR type)+
 
 
+// Operator used in unions.
+_OR: "or" | "|"
+
+
 // An expression where an object is subscribed with "A[v, ...]".
 subscription: qualname "[" type ("," type)* ("," ELLIPSES)? "]"
 
 
-// A natural language version that combines one or multiple literals inside
+// Allow Python's ellipses object
+ELLIPSES: "..."
+
+
+// A natural language expression that combines one or multiple literals inside
 // curly braces `{l1, l2, ...}`
 natlang_literal: "{" literal_item ("," literal_item)* "}"
 
 
 // An single item in a literal expression (or `optional`). We must also allow
-// for qualified names, since a "class" can be used as a literal too.
+// for qualified names, since a "class" or enum can be used as a literal too.
 ?literal_item: ELLIPSES | STRING | NUMBER | qualname
 
 
-// A natural language form of the subscription expression for containers.
-// This variant explicitly doesn't allow nesting more complex types inside it
-// to maintain readability. However, unions with with simple qualnames are
-// allowed, e.g, `list of (int or float)`.
-natlang_container: qualname "of" qualname "(s)"?
+// Natural language forms of the subscription expression for containers.
+// These forms allow nesting allow nesting in and with other expressions. But
+// it's discouraged to do so extensively to maintain readability.
+natlang_container: qualname "of" qualname _PLURAL_S?
     | qualname "of" "(" union ")"
     | _natlang_tuple
     | _natlang_mapping
+
+
+// Indicate the plural version of a qualname by appending "(s)".
+// The negative lookbehind in this regex disallows whitespace directly in front
+// of this.
+_PLURAL_S: /(?<!\s)\(s\)/
 
 
 // Special behavior for tuples [1].
@@ -69,7 +86,7 @@ _natlang_tuple: qualname "of" "(" type "," ELLIPSES ")"
 _natlang_mapping: qualname "of" "{" type ":" (type | union) "}"
 
 
-// A natural language alternative to describe arrays with a dtype and shape
+// A natural language alternative to describe arrays with a dtype and shape.
 natlang_array: array_name "of dtype" dtype ("and shape" shape)?
     | array_name "of shape" shape ("and dtype" dtype)?
     | shape array_name ("of" dtype)?
@@ -87,8 +104,10 @@ natlang_array: array_name "of dtype" dtype ("and shape" shape)?
 array_name: ARRAY_NAME
 ARRAY_NAME: "array" | "ndarray" | "array-like" | "array_like"
 
+
 // The dtype used in an array expression.
 ?dtype: qualname | "(" union ")"
+
 
 // The shape used in an array expression. Possibly to liberal right now in
 // what it allows. Since there is currently no support to type the shape of
@@ -97,13 +116,16 @@ shape: "(" dim ",)"
     | "(" leading_optional_dim? dim (("," dim | insert_optional_dim))* ")"
     | NUMBER "-"? "D"
 
+
 // Optional dimensions in a `shape` expression placed at the start,
 // e.g., `([3 ,] N)`.
 ?leading_optional_dim: "[" dim ("," dim)* ",]"
 
+
 // Optional dimensions in a `shape` expression placed anywhere but the start,
 // e.g., `(A[, B], C[, D])`.
 ?insert_optional_dim: "[," dim ("," dim)* "]"
+
 
 // Dimension can be a number, ellipses ('...') or a simple name. A simple name
 // can be bound to a specific number, e.g. `N=3`.
@@ -119,20 +141,12 @@ optional:  "optional" | "default" ("=" | ":")? literal_item
 // Currently dropped during transformation.
 extra_info: /[^\r\n]+/
 
-
-// Operator used in unions.
-_OR: "or" | "|"
-
-
-// Allow Python's ellipses object
-ELLIPSES: "..."
-
 // A simple name. Can start with a number or character. Can be delimited by "_"
 // or "-" but not by ".".
 NAME: /[^\W\d][\w-]*/
 
 
 %import python (STRING)
-%import common (NEWLINE, NUMBER, LETTER, TEXT, WS)
+%import common (NUMBER, WS_INLINE)
 
-%ignore WS
+%ignore WS_INLINE
