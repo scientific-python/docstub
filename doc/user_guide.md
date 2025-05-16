@@ -1,8 +1,10 @@
 # User guide
 
-> [!NOTE]
-> In early development!
-> Expect to encounter bugs, missing features, and fatal errors.
+> [!NOTE] In early development!
+> Expect bugs, missing features, and incomplete documentation.
+> Docstub is still evaluating which features it needs to support as the community gives feedback.
+> Several features are experimental and included to make adoption of docstub easier.
+> Long-term, some of these might be discouraged or removed as docstub matures.
 
 
 ## Installation
@@ -85,21 +87,27 @@ There are several interesting things to note here:
 
 - Many existing conventions that the scientific Python ecosystem uses, will work out of the box.
   In this case, docstub knew how to translate `array-like`, `array of dtype uint8` into a valid type annotation in the stub file.
-
-- In a similar manner, `or` can be used as a "natural language" alternative to `|`.
+  In a similar manner, `or` can be used as a "natural language" alternative to `|`.
+  You can find more details in [Typing syntax in docstrings](typing_syntax.md).
 
 - Optional arguments that default to `None` are recognized and a `| None` is appended automatically if the type doesn't include it already.
 
-- Common container types such as `Iterable` can be used and a necessary import will be added automatically.
+- Common container types from Pythons standard library such as `Iterable` can be used and a necessary import will be added automatically.
 
 
 ## Importing types
 
+TBD
+
 
 ## Adding your own aliases for docstring descriptions
 
+TBD
+
 
 ## Adopting docstub gradually
+
+TBD
 
 `--group-errors`
 

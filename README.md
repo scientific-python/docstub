@@ -1,14 +1,16 @@
 # docstub
 
-> [!NOTE]
-> In early development!
-> Expect to encounter bugs, missing features, and fatal errors.
+> [!NOTE] In early development!
+> Expect bugs, missing features, and incomplete documentation.
+> Docstub is still evaluating which features it needs to support as the community gives feedback.
+> Several features are experimental and included to make adoption of docstub easier.
+> Long-term, some of these might be discouraged or removed as docstub matures.
 
-docstub is a command-line tool to generate [Python](https://www.python.org) stub files (i.e., PYI files) from type descriptions found in [numpydoc](https://numpydoc.readthedocs.io)-style docstrings.
+docstub is a command-line tool to generate [Python stub files](https://typing.python.org/en/latest/guides/writing_stubs.html) (i.e., PYI files) from type descriptions found in [numpydoc](https://numpydoc.readthedocs.io)-style docstrings.
 
 Many packages in the scientific Python ecosystem already describe expected parameter and return types in their docstrings.
 Docstub aims to take advantage of these and help with the adoption of type annotations.
-It does so by supporting widely used readable conventions such as `array of dtype` or `iterable of int` which it translates into valid type annotations.
+It does so by supporting widely used readable conventions such as `array of dtype` or `iterable of int(s)` which it translates into valid type annotations.
 
 
 ## Installation & getting started
@@ -23,7 +25,7 @@ Feedback to what features might still be missing or where it breaks for you woul
 Pointers to where the documentation is confusing and unclear.
 
 Since docstub is still in early development there isn't an official contribution guide yet.
-Docstubs features and API is still being heavily extended and the internal structure is still somewhat in flux.
+Features and API are still being heavily extended and the internal structure is still somewhat in flux.
 That said, if that only entices you, feel free to open a PR.
 But please do check in with an issue before you do so.
 
