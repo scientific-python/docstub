@@ -1,5 +1,6 @@
 from textwrap import dedent
 
+import lark
 import pytest
 
 from docstub._analysis import KnownImport
@@ -35,35 +36,84 @@ class Test_Annotation:
 
 
 class Test_DoctypeTransformer:
-    # fmt: off
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
+            # Conventional
             ("list[float]", "list[float]"),
             ("dict[str, Union[int, str]]", "dict[str, Union[int, str]]"),
             ("tuple[int, ...]", "tuple[int, ...]"),
-
-            ("list of int", "list[int]"),
-            ("tuple of float", "tuple[float]"),
-            ("tuple of (float, ...)", "tuple[float, ...]"),
-
             ("Sequence[int | float]", "Sequence[int | float]"),
-
+            # Natural language variant with "of" and optional plural "(s)"
+            ("list of int", "list[int]"),
+            ("list of int(s)", "list[int]"),
+            # Natural tuple variant
+            ("tuple of (float, int, str)", "tuple[float, int, str]"),
+            ("tuple of (float, ...)", "tuple[float, ...]"),
+            # Natural dict variant
             ("dict of {str: int}", "dict[str, int]"),
+            ("dict of {str: int | float}", "dict[str, int | float]"),
+            ("dict of {str: int or float}", "dict[str, int | float]"),
+            ("dict[list of str]", "dict[list[str]]"),
         ],
     )
-    def test_container(self, doctype, expected):
+    def test_subscription(self, doctype, expected):
         transformer = DoctypeTransformer()
         annotation, _ = transformer.doctype_to_annotation(doctype)
         assert annotation.value == expected
-    # fmt: on
 
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
+            # Natural language variant with "of" and optional plural "(s)"
+            ("list of int", "list[int]"),
+            ("list of int(s)", "list[int]"),
+            ("list of (int or float)", "list[int | float]"),
+            # Natural tuple variant
+            ("tuple of (float, int, str)", "tuple[float, int, str]"),
+            ("tuple of (float, ...)", "tuple[float, ...]"),
+            # Natural dict variant
+            ("dict of {str: int}", "dict[str, int]"),
+            ("dict of {str: int | float}", "dict[str, int | float]"),
+            ("dict of {str: int or float}", "dict[str, int | float]"),
+            ("dict[list of str]", "dict[list[str]]"),
+        ],
+    )
+    def test_natlang_container(self, doctype, expected):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(doctype)
+        assert annotation.value == expected
+
+    @pytest.mark.parametrize(
+        "doctype",
+        [
+            "list of int (s)",
+            "list of (float)",
+            "list of (float,)",
+            "list of (, )",
+            "list of ...",
+            "list of (..., ...)",
+            "dict of {}",
+            "dict of {:}",
+            "dict of {a:}",
+            "dict of {:b}",
+        ],
+    )
+    def test_subscription_error(self, doctype):
+        transformer = DoctypeTransformer()
+        with pytest.raises(lark.exceptions.UnexpectedInput):
+            transformer.doctype_to_annotation(doctype)
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("{0}", "Literal[0]"),
             ("{'a', 1, None, False}", "Literal['a', 1, None, False]"),
             ("dict[{'a', 'b'}, int]", "dict[Literal['a', 'b'], int]"),
             ("{SomeEnum.FIRST}", "Literal[SomeEnum_FIRST]"),
+            ("{`SomeEnum.FIRST`, 1}", "Literal[SomeEnum_FIRST, 1]"),
+            ("{:ref:`SomeEnum.FIRST`, 2}", "Literal[SomeEnum_FIRST, 2]"),
+            ("{:py:ref:`SomeEnum.FIRST`, 3}", "Literal[SomeEnum_FIRST, 3]"),
         ],
     )
     def test_literals(self, doctype, expected):
@@ -97,10 +147,12 @@ class Test_DoctypeTransformer:
             ("`Generator`", "Generator"),
             (":class:`Generator`", "Generator"),
             (":py:class:`Generator`", "Generator"),
+            (":py:class:`Generator`[int]", "Generator[int]"),
+            (":py:ref:`~.Foo`[int]", "_Foo[int]"),
             ("list[:py:class:`Generator`]", "list[Generator]"),
         ],
     )
-    def test_sphinx_ref(self, doctype, expected):
+    def test_rst_role(self, doctype, expected):
         transformer = DoctypeTransformer()
         annotation, _ = transformer.doctype_to_annotation(doctype)
         assert annotation.value == expected
@@ -120,7 +172,7 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize("name", ["array", "ndarray", "array-like", "array_like"])
     @pytest.mark.parametrize("dtype", ["int", "np.int8"])
     @pytest.mark.parametrize("shape", ["(2, 3)", "(N, m)", "3D", "2-D", "(N, ...)"])
-    def test_shape_n_dtype(self, fmt, expected_fmt, name, dtype, shape):
+    def test_natlang_array(self, fmt, expected_fmt, name, dtype, shape):
 
         def escape(name: str) -> str:
             return name.replace("-", "_").replace(".", "_")
