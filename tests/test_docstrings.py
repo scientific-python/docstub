@@ -107,6 +107,7 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
+            ("{0}", "Literal[0]"),
             ("{'a', 1, None, False}", "Literal['a', 1, None, False]"),
             ("dict[{'a', 'b'}, int]", "dict[Literal['a', 'b'], int]"),
             ("{SomeEnum.FIRST}", "Literal[SomeEnum_FIRST]"),
