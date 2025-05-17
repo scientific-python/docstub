@@ -532,6 +532,32 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return matched_qualname
 
 
+def _uncombine_numpydoc_params(params):
+    """Split combined NumPyDoc parameters.
+
+    NumPyDoc allows joining multiple parameters with shared type on one line.
+    This function helps with iterating them one-by-one regardless.
+
+    Parameters
+    ----------
+    params : list[numpydoc.docsrape.Parameter]
+
+    Yields
+    ------
+    param : numpydoc.docscrape.Parameter
+    """
+    for param in params:
+        if "," in param.name:
+            # Multiple parameters on one line, split and yield separately
+            names = [p.strip() for p in param.name.split(",")]
+            for name in names:
+                # Uncombined parameter re-uses shared type and description
+                uncombined = npds.Parameter(name=name, type=param.type, desc=param.desc)
+                yield uncombined
+        else:
+            yield param
+
+
 class DocstringAnnotations:
     """Collect annotations in a given docstring.
 
@@ -793,7 +819,10 @@ class DocstringAnnotations:
             Entries without annotations fall back to :class:`_typeshed.Incomplete`.
         """
         annotated_params = {}
-        for param in self.np_docstring[name]:
+
+        params = self.np_docstring[name]
+        params = list(_uncombine_numpydoc_params(params))
+        for param in params:
             param = self._handle_missing_whitespace(param)  # noqa: PLW2901
 
             if param.name in annotated_params:
