@@ -430,3 +430,28 @@ class Test_DocstringAnnotations:
         assert annotations.parameters["a"].value == "int"
         captured = capsys.readouterr()
         assert "Possibly missing whitespace" in captured.out
+
+    def test_combined_numpydoc_params(self):
+        docstring = dedent(
+            """
+            Parameters
+            ----------
+            a, b, c : bool
+            d, e :
+            """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert len(annotations.parameters) == 5
+        assert annotations.parameters["a"].value == "bool"
+        assert annotations.parameters["b"].value == "bool"
+        assert annotations.parameters["c"].value == "bool"
+
+        assert annotations.parameters["d"].value == "Incomplete"
+        assert annotations.parameters["e"].value == "Incomplete"
+        assert annotations.parameters["d"].imports == {
+            KnownImport.typeshed_Incomplete()
+        }
+        assert annotations.parameters["e"].imports == {
+            KnownImport.typeshed_Incomplete()
+        }
