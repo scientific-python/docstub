@@ -381,7 +381,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = ", ".join(tree.children)
         out = f"Literal[{out}]"
 
-        if len(tree.children):
+        if len(tree.children) == 1:
             logger.warning(
                 "natural language literal with one item `%s`, "
                 "consider using `%s` to improve readability",
