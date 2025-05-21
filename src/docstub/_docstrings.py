@@ -11,6 +11,10 @@ import lark
 import lark.visitors
 import numpydoc.docscrape as npds
 
+# TODO Uncouple docstrings & analysis module
+#   It should be possible to transform docstrings without matching to valid
+#   types and imports. I think that could very well be done at a higher level,
+#   e.g. in the stubs module.
 from ._analysis import KnownImport, TypesDatabase
 from ._utils import DocstubError, ErrorReporter, accumulate_qualname, escape_qualname
 
