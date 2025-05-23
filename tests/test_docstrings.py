@@ -108,12 +108,26 @@ class Test_DoctypeTransformer:
         ("doctype", "expected"),
         [
             ("{0}", "Literal[0]"),
-            ("{'a', 1, None, False}", "Literal['a', 1, None, False]"),
-            ("dict[{'a', 'b'}, int]", "dict[Literal['a', 'b'], int]"),
+            ("{-1, 1}", "Literal[-1, 1]"),
+            ("{None}", "Literal[None]"),
+            ("{True, False}", "Literal[True, False]"),
+            ("""{'a', "bar"}""", """Literal['a', "bar"]"""),
+            # Enum
             ("{SomeEnum.FIRST}", "Literal[SomeEnum_FIRST]"),
             ("{`SomeEnum.FIRST`, 1}", "Literal[SomeEnum_FIRST, 1]"),
             ("{:ref:`SomeEnum.FIRST`, 2}", "Literal[SomeEnum_FIRST, 2]"),
             ("{:py:ref:`SomeEnum.FIRST`, 3}", "Literal[SomeEnum_FIRST, 3]"),
+            # Nesting
+            ("dict[{'a', 'b'}, int]", "dict[Literal['a', 'b'], int]"),
+            # These aren't officially valid as an argument to `Literal` (yet)
+            # https://typing.python.org/en/latest/spec/literal.html
+            # TODO figure out how docstub should deal with these
+            ("{-2., 1.}", "Literal[-2., 1.]"),
+            pytest.param(
+                "{-inf, inf, nan}",
+                "Literal[, 1.]",
+                marks=pytest.mark.xfail(reason="unsure how to support"),
+            ),
         ],
     )
     def test_literals(self, doctype, expected):
