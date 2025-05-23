@@ -202,6 +202,13 @@ class Test_DoctypeTransformer:
         assert annotation.value == expected
     # fmt: on
 
+    @pytest.mark.parametrize("shape", ["(-1, 3)", "(1.0, 2)", "-3D", "-2-D"])
+    def test_natlang_array_invalid_shape(self, shape):
+        doctype = f"array of shape {shape}"
+        transformer = DoctypeTransformer()
+        with pytest.raises(lark.exceptions.UnexpectedInput):
+            transformer.doctype_to_annotation(doctype)
+
     def test_unknown_name(self):
         # Simple unknown name is aliased to typing.Any
         transformer = DoctypeTransformer()
