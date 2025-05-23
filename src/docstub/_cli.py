@@ -126,7 +126,10 @@ def report_execution_time():
         click.echo(f"Finished in {formated_duration}")
 
 
+# Preserve click.command below to keep type checker happy
+# docstub: off
 @click.command()
+# docstub: on
 @click.version_option(__version__)
 @click.argument("root_path", type=click.Path(exists=True), metavar="PACKAGE_PATH")
 @click.option(

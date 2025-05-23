@@ -1,4 +1,3 @@
 docstub\._version\..*
 docstub\..*\.__match_args__$
 docstub._cache.FuncSerializer.__type_params__
-docstub._cli.main

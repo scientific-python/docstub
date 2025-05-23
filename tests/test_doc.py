@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 import click
+from click.testing import CliRunner
 
 from docstub._cli import main as docstub_main
 
@@ -30,7 +31,9 @@ def test_getting_started_example(tmp_path):
     py_file = tmp_path / "example.py"
     with py_file.open("x") as io:
         io.write(py_source)
-    docstub_main([str(py_file)], standalone_mode=False)
+    runner = CliRunner()
+    result = runner.invoke(docstub_main, [str(py_file)])
+    assert result.exit_code == 0
 
     # Load created PYI file, this is what we expect to find in the user guide's
     # code block for example.pyi
