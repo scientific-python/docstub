@@ -105,10 +105,10 @@ testpaths = [
 [tool.coverage]
 run.source = ["docstub"]
 
-[tool.docstub.known_imports]
-cst = {import = "libcst", as="cst"}
-lark = {import = "lark"}
-numpydoc = {import = "numpydoc"}
+[tool.docstub.type_prefixes]
+cst = "libcst"
+lark = "lark"
+numpydoc = "numpydoc"
 
 
 [tool.mypy]

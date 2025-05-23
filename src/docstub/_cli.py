@@ -10,7 +10,7 @@ import click
 from ._analysis import (
     KnownImport,
     TypeCollector,
-    TypesDatabase,
+    TypeMatcher,
     common_known_imports,
 )
 from ._cache import FileCache
@@ -76,19 +76,18 @@ def _setup_logging(*, verbose):
     )
 
 
-def _build_import_map(config, root_path):
-    """Build a map of known imports.
+def _collect_types(root_path):
+    """Collect types.
 
     Parameters
     ----------
-    config : ~.Config
     root_path : Path
 
     Returns
     -------
-    imports : dict[str, ~.KnownImport]
+    types : dict[str, ~.KnownImport]
     """
-    known_imports = common_known_imports()
+    types = common_known_imports()
 
     collect_cached_types = FileCache(
         func=TypeCollector.collect,
@@ -99,12 +98,10 @@ def _build_import_map(config, root_path):
     if root_path.is_dir():
         for source_path in walk_python_package(root_path):
             logger.info("collecting types in %s", source_path)
-            known_imports_in_source = collect_cached_types(source_path)
-            known_imports.update(known_imports_in_source)
+            types_in_source = collect_cached_types(source_path)
+            types.update(types_in_source)
 
-    known_imports.update(KnownImport.many_from_config(config.known_imports))
-
-    return known_imports
+    return types
 
 
 @contextmanager
@@ -195,15 +192,26 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
         )
 
     config = _load_configuration(config_path)
-    known_imports = _build_import_map(config, root_path)
+
+    types = common_known_imports()
+    types |= _collect_types(root_path)
+    types |= {
+        type_name: KnownImport(import_path=module, import_name=type_name)
+        for type_name, module in config.types.items()
+    }
+
+    prefixes = {
+        prefix: (
+            KnownImport(import_name=module, import_alias=prefix)
+            if module != prefix
+            else KnownImport(import_name=prefix)
+        )
+        for prefix, module in config.type_prefixes.items()
+    }
 
     reporter = GroupedErrorReporter() if group_errors else ErrorReporter()
-    types_db = TypesDatabase(
-        source_pkgs=[root_path.parent.resolve()], known_imports=known_imports
-    )
-    stub_transformer = Py2StubTransformer(
-        types_db=types_db, replace_doctypes=config.replace_doctypes, reporter=reporter
-    )
+    matcher = TypeMatcher(types=types, prefixes=prefixes, aliases=config.type_aliases)
+    stub_transformer = Py2StubTransformer(matcher=matcher, reporter=reporter)
 
     if not out_dir:
         if root_path.is_file():
@@ -246,22 +254,22 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
         reporter.print_grouped()
 
     # Report basic statistics
-    successful_queries = types_db.stats["successful_queries"]
+    successful_queries = matcher.successful_queries
     click.secho(f"{successful_queries} matched annotations", fg="green")
 
     syntax_error_count = stub_transformer.transformer.stats["syntax_errors"]
     if syntax_error_count:
         click.secho(f"{syntax_error_count} syntax errors", fg="red")
 
-    unknown_doctypes = types_db.stats["unknown_doctypes"]
-    if unknown_doctypes:
-        click.secho(f"{len(unknown_doctypes)} unknown doctypes", fg="red")
-        counter = Counter(unknown_doctypes)
+    unknown_qualnames = matcher.unknown_qualnames
+    if unknown_qualnames:
+        click.secho(f"{len(unknown_qualnames)} unknown type names", fg="red")
+        counter = Counter(unknown_qualnames)
         sorted_item_counts = sorted(counter.items(), key=lambda x: x[1], reverse=True)
         for item, count in sorted_item_counts:
             click.echo(f"  {item} (x{count})")
 
-    total_errors = len(unknown_doctypes) + syntax_error_count
+    total_errors = len(unknown_qualnames) + syntax_error_count
     total_msg = f"{total_errors} total errors"
     if allow_errors:
         total_msg = f"{total_msg} (allowed {allow_errors})"

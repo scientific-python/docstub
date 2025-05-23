@@ -1,32 +1,43 @@
 [tool.docstub]
 
-# TODO not implemented and used yet
-extend_grammar = """
-
-"""
-
-# Import information for type annotations, declared ahead of time.
-#
-# Each item maps an annotation name on the left side to a dictionary on the
+# Types and their external modules to use in docstrings.
+# Docstub can't yet automatically discover where to import types from other
+# packages from. Instead, you can provide this information explicitly.
+# Any type on the left side will be associated with the given "module" on the
 # right side.
 #
-# Import information can be declared with the following fields:
-#     from : Indicate that the DocType can be imported from this path.
-#     import : Import this object, defaults to the DocType.
-#     as : Use this alias for the imported object
-#     is_builtin : Indicate that this DocType doesn't need to be imported,
-#         defaults to "false"
-[tool.docstub.known_imports]
-Path = { from = "pathlib" }
-Callable = { from = "collections.abc" }
-np = { import = "numpy", as = "np" }
-NDArray = { from = "numpy.typing" }
-ArrayLike = { from = "numpy.typing" }
+# Examples:
+# Path = "pathlib"
+#     Will allow using "Path" and use "from pathlib import Path".
+#
+# NDArray = "numpy.typing"
+#     Will allow "NDarray" and use "from numpy.typing import NDArray".
+[tool.docstub.types]
+Path = "pathlib"
+NDArray = "numpy.typing"
+ArrayLike = "numpy.typing"
 
-# Specify human-friendly aliases that can be used instead of Python-parsable
-# annotations.
-# TODO rename to qualname_alias or something
-[tool.docstub.replace_doctypes]
+
+# Prefixes for external modules to match types in docstrings.
+# Docstub can't yet automatically discover where to import types from other
+# packages from. Instead, you can provide this information explicitly.
+# Any type in a docstring whose prefix matches the name given on the left side,
+# will be associated with the given "module" on the right side.
+#
+# Examples:
+# np = "numpy"
+#     Will match `np.uint8` and `np.typing.NDarray` and use "import numpy as np".
+#
+# plt = "matplotlib.pyplot
+#     Will match `plt.Figure` use `import matplotlib.pyplot as plt`.
+[tool.docstub.type_prefixes]
+np = "numpy"
+numpy = "numpy"
+
+
+# Specify human-friendly aliases that can be used in docstrings to describe
+# valid Python types or annotations.
+[tool.docstub.type_aliases]
 iterable = "Iterable"
 callable = "Callable"
 function = "Callable"
@@ -34,14 +45,14 @@ func = "Callable"
 sequence = "Sequence"
 mapping = "Mapping"
 
-numpy = "np"
+# NumPy
 scalar = "np.ScalarType"
 integer = "np.integer"
 signedinteger = "np.signedinteger"
-byte ="np.byte"
-short = "np.short"
+#byte ="np.byte"
+#short = "np.short"
 intc = "np.intc"
-int_ = "np.int_"
+#int_ = "np.int_"
 longlong = "np.longlong"
 int8 = "np.int8"
 int16 = "np.int16"
@@ -76,13 +87,13 @@ complex64 = "np.complex64"
 complex128 = "np.complex128"
 complex192 = "np.complex192"
 complex256 = "np.complex256"
-bool_ = "np.bool_"
+#bool_ = "np.bool_"
 datetime64 = "np.datetime64"
 timedelta64 = "np.timedelta64"
-object_ = "np.object_"
+#object_ = "np.object_"
 #flexible = "np.flexible"
 #character = "np.character"
-bytes_ = "np.bytes_"
+#bytes_ = "np.bytes_"
 #str_ = "np.str_"
 #void = "np.void"
 ndarray = "NDArray"
