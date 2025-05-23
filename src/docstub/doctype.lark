@@ -62,8 +62,8 @@ natlang_literal: "{" literal_item ("," literal_item)* "}"
 
 
 // Natural language forms of the subscription expression for containers.
-// These forms allow nesting allow nesting in and with other expressions. But
-// it's discouraged to do so extensively to maintain readability.
+// These forms allow nesting with other expressions. But it's discouraged to do
+// so extensively to maintain readability.
 natlang_container: qualname "of" qualname _PLURAL_S?
     | qualname "of" "(" union ")"
     | _natlang_tuple
