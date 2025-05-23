@@ -2,7 +2,7 @@ from textwrap import dedent
 
 import pytest
 
-from docstub._analysis import KnownImport, TypeCollector, TypesDatabase
+from docstub._analysis import KnownImport, TypeCollector, TypeMatcher
 
 
 @pytest.fixture
@@ -91,10 +91,14 @@ class Test_TypeCollector:
         assert len(imports) == 0
 
 
-class Test_TypesDatabase:
-    known_imports = {  # noqa: RUF012
-        "dict": KnownImport(builtin_name="dict"),
+class Test_TypeMatcher:
+    type_prefixes = {  # noqa: RUF012
         "np": KnownImport(import_name="numpy", import_alias="np"),
+        "foo.bar.Baz": KnownImport(import_path="foo.bar", import_name="Baz"),
+    }
+
+    types = {  # noqa: RUF012
+        "dict": KnownImport(builtin_name="dict"),
         "foo.bar": KnownImport(import_path="foo", import_name="bar"),
         "foo.bar.Baz": KnownImport(import_path="foo.bar", import_name="Baz"),
         "foo.bar.Baz.Bix": KnownImport(import_path="foo.bar", import_name="Baz"),
@@ -103,12 +107,8 @@ class Test_TypesDatabase:
 
     # fmt: off
     @pytest.mark.parametrize(
-        ("name", "exp_annotation", "exp_import_line"),
+        ("search_name", "expected_name", "expected_origin"),
         [
-            ("np", "np", "import numpy as np"),
-            # Finds imports whose import target matches the start of `name`
-            ("np.doesnt_exist", "np.doesnt_exist", "import numpy as np"),
-
             ("foo.bar.Baz", "Baz", "from foo.bar import Baz"),
             # Finds "Baz" with abbreviated form as well
             (  "~.bar.Baz", "Baz", "from foo.bar import Baz"),
@@ -120,10 +120,8 @@ class Test_TypesDatabase:
             (      "~.Baz.Bix", "Baz.Bix", "from foo.bar import Baz"),
             (          "~.Bix", "Baz.Bix", "from foo.bar import Baz"),
 
-            # Finds nested class "Baz.Gul" that's not explicitly defined, but
-            # whose import target matches "Baz"
-            ("foo.bar.Baz.Gul", "Baz.Gul", "from foo.bar import Baz"),
-            # but abbreviated form doesn't work
+            # Abbreviated form with not explicitly defined class "Baz.Gul"
+            # never matches
             (  "~.bar.Baz.Gul",      None,                      None),
             (      "~.Baz.Gul",      None,                      None),
             (          "~.Gul",      None,                      None),
@@ -135,16 +133,42 @@ class Test_TypesDatabase:
             (          "~.Qux", "bar.Baz.Qux", "from foo import bar"),
         ]
     )
-    def test_query(self, name, exp_annotation, exp_import_line):
-        db = TypesDatabase(known_imports=self.known_imports.copy())
+    def test_query_types(self, search_name, expected_name, expected_origin):
+        db = TypeMatcher(types=self.types.copy())
 
-        annotation, known_import = db.query(name)
+        type_name, type_origin = db.match(search_name)
 
-        if exp_annotation is None and exp_import_line is None:
-            assert exp_annotation is annotation
-            assert exp_import_line is known_import
+        if expected_name is None and expected_origin is None:
+            assert expected_name is type_name
+            assert expected_origin is type_origin
         else:
-            assert str(known_import) == exp_import_line
-            assert annotation.startswith(known_import.target)
-            assert annotation == exp_annotation
+            assert str(type_origin) == expected_origin
+            assert type_name.startswith(type_origin.target)
+            assert type_name == expected_name
+    # fmt: on
+
+    # fmt: off
+    @pytest.mark.parametrize(
+        ("search_name", "expected_name", "expected_origin"),
+        [
+            ("np", "np", "import numpy as np"),
+            # Finds imports whose import target matches the start of `name`
+            ("np.doesnt_exist", "np.doesnt_exist", "import numpy as np"),
+            # Finds nested class "Baz.Gul" that's not explicitly defined, but
+            # whose import target matches "Baz"
+            ("foo.bar.Baz.Gul", "Baz.Gul", "from foo.bar import Baz"),
+        ]
+    )
+    def test_query_prefix(self, search_name, expected_name, expected_origin):
+        db = TypeMatcher(prefixes=self.type_prefixes.copy())
+
+        type_name, type_origin = db.match(search_name)
+
+        if expected_name is None and expected_origin is None:
+            assert expected_name is type_name
+            assert expected_origin is type_origin
+        else:
+            assert str(type_origin) == expected_origin
+            assert type_name.startswith(type_origin.target)
+            assert type_name == expected_name
     # fmt: on

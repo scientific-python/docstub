@@ -58,7 +58,7 @@ def func_use_from_elsewhere(a1, a2, a3, a4):
     ----------
     a1 : example_pkg.CustomException
     a2 : ExampleClass
-    a3 : example_pkg.CustomException.NestedClass
+    a3 : example_pkg._basic.ExampleClass.NestedClass
     a4 : ExampleClass.NestedClass
 
     Returns
