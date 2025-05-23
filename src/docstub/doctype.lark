@@ -58,12 +58,12 @@ natlang_literal: "{" literal_item ("," literal_item)* "}"
 
 // An single item in a literal expression (or `optional`). We must also allow
 // for qualified names, since a "class" or enum can be used as a literal too.
-?literal_item: ELLIPSES | STRING | NUMBER | qualname
+?literal_item: ELLIPSES | STRING | SIGNED_NUMBER | qualname
 
 
 // Natural language forms of the subscription expression for containers.
-// These forms allow nesting allow nesting in and with other expressions. But
-// it's discouraged to do so extensively to maintain readability.
+// These forms allow nesting with other expressions. But it's discouraged to do
+// so extensively to maintain readability.
 natlang_container: qualname "of" qualname _PLURAL_S?
     | qualname "of" "(" union ")"
     | _natlang_tuple
@@ -114,7 +114,7 @@ ARRAY_NAME: "array" | "ndarray" | "array-like" | "array_like"
 // NumPy arrays, this information is dropped during the transformation.
 shape: "(" dim ",)"
     | "(" leading_optional_dim? dim (("," dim | insert_optional_dim))* ")"
-    | NUMBER "-"? "D"
+    | INT "-"? "D"
 
 
 // Optional dimensions in a `shape` expression placed at the start,
@@ -129,7 +129,7 @@ shape: "(" dim ",)"
 
 // Dimension can be a number, ellipses ('...') or a simple name. A simple name
 // can be bound to a specific number, e.g. `N=3`.
-?dim: NUMBER | ELLIPSES | NAME ("=" NUMBER)?
+?dim: INT | ELLIPSES | NAME ("=" INT)?
 
 
 // Optional information about a parameter has a default value, added after the
@@ -147,6 +147,6 @@ NAME: /[^\W\d][\w-]*/
 
 
 %import python (STRING)
-%import common (NUMBER, WS_INLINE)
+%import common (SIGNED_NUMBER, INT, WS_INLINE)
 
 %ignore WS_INLINE
