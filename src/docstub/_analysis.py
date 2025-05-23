@@ -410,69 +410,63 @@ class TypeCollector(cst.CSTVisitor):
         self.known_imports[qualname] = known_import
 
 
-class TypesDatabase:
-    """A static database of collected types usable as an annotation.
+class TypeMatcher:
+    """Match strings to collected type information.
 
     Attributes
     ----------
-    current_source : Path | None
-    source_pkgs : list[Path]
-    known_imports : dict[str, KnownImport]
-    stats : dict[str, Any]
+    types : dict[str, KnownImport]
+    prefixes : dict[str, KnownImport]
+    aliases : dict[str, str]
+    successful_queries : int
+    unknown_qualnames : list
+    current_module : Path | None
 
     Examples
     --------
-    >>> from docstub._analysis import TypesDatabase, common_known_imports
-    >>> db = TypesDatabase(known_imports=common_known_imports())
-    >>> db.query("Any")
+    >>> from docstub._analysis import TypeMatcher, common_known_imports
+    >>> db = TypeMatcher()
+    >>> db.match("Any")
     ('Any', <KnownImport 'from typing import Any'>)
     """
 
     def __init__(
         self,
         *,
-        source_pkgs=None,
-        known_imports=None,
+        types=None,
+        prefixes=None,
+        aliases=None,
     ):
         """
         Parameters
         ----------
-        source_pkgs : list[Path], optional
-        known_imports : dict[str, KnownImport], optional
-            If not provided, defaults to imports returned by
-            :func:`common_known_imports`.
+        types : dict[str, KnownImport]
+        prefixes : dict[str, KnownImport]
+        aliases : dict[str, str]
         """
-        if source_pkgs is None:
-            source_pkgs = []
-        if known_imports is None:
-            known_imports = common_known_imports()
+        self.types = types or common_known_imports()
+        self.prefixes = prefixes or {}
+        self.aliases = aliases or {}
+        self.successful_queries = 0
+        self.unknown_qualnames = []
 
-        self.current_source = None
-        self.source_pkgs = source_pkgs
+        self.current_module = None
 
-        self.known_imports = known_imports
-
-        self.stats = {
-            "successful_queries": 0,
-            "unknown_doctypes": [],
-        }
-
-    def query(self, search_name):
+    def match(self, search_name):
         """Search for a known annotation name.
 
         Parameters
         ----------
         search_name : str
+        current_module : Path, optional
 
         Returns
         -------
-        annotation_name : str | None
-            If it was found, the name of the annotation that matches the `known_import`.
-        known_import : KnownImport | None
-            If it was found, import information matching the `annotation_name`.
+        type_name : str | None
+        type_origin : KnownImport | None
         """
-        annotation_name = None
-        known_import = None
+        type_name = None
+        type_origin = None
 
         if search_name.startswith("~."):
             # Sphinx like matching with abbreviated name
@@ -481,63 +475,64 @@ class TypesDatabase:
             regex = re.compile(pattern + "$")
             # Might be slow, but works for now
             matches = {
-                key: value
-                for key, value in self.known_imports.items()
-                if regex.match(key)
+                key: value for key, value in self.types.items() if regex.match(key)
             }
             if len(matches) > 1:
                 shortest_key = sorted(matches.keys(), key=lambda x: len(x))[0]
-                known_import = matches[shortest_key]
-                annotation_name = shortest_key
+                type_origin = matches[shortest_key]
+                type_name = shortest_key
                 logger.warning(
                     "%r in %s matches multiple types %r, using %r",
                     search_name,
-                    self.current_source,
+                    self.current_module or "<file not known>",
                     matches.keys(),
                     shortest_key,
                 )
             elif len(matches) == 1:
-                annotation_name, known_import = matches.popitem()
+                type_name, type_origin = matches.popitem()
             else:
                 search_name = search_name[2:]
                 logger.debug(
-                    "couldn't match %r in %s", search_name, self.current_source
+                    "couldn't match %r in %s",
+                    search_name,
+                    self.current_module or "<file not known>",
                 )
 
-        if known_import is None and self.current_source:
-            # Try scope of current module
-            module_name = module_name_from_path(self.current_source)
-            try_qualname = f"{module_name}.{search_name}"
-            known_import = self.known_imports.get(try_qualname)
-            if known_import:
-                annotation_name = search_name
+        # Replace alias
+        search_name = self.aliases.get(search_name, search_name)
 
-        if known_import is None:
+        if type_origin is None and self.current_module:
+            # Try scope of current module
+            module_name = module_name_from_path(self.current_module)
+            try_qualname = f"{module_name}.{search_name}"
+            type_origin = self.types.get(try_qualname)
+            if type_origin:
+                type_name = search_name
+
+        if type_origin is None and search_name in self.types:
+            type_name = search_name
+            type_origin = self.types[search_name]
+
+        if type_origin is None:
             # Try a subset of the qualname (first 'a.b.c', then 'a.b' and 'a')
             for partial_qualname in reversed(accumulate_qualname(search_name)):
-                known_import = self.known_imports.get(partial_qualname)
-                if known_import:
-                    annotation_name = search_name
+                type_origin = self.prefixes.get(partial_qualname)
+                if type_origin:
+                    type_name = search_name
                     break
 
         if (
-            known_import is not None
-            and annotation_name is not None
-            and annotation_name != known_import.target
-            and not annotation_name.startswith(known_import.target)
+            type_origin is not None
+            and type_name is not None
+            and type_name != type_origin.target
+            and not type_name.startswith(type_origin.target)
         ):
             # Ensure that the annotation matches the import target
-            annotation_name = annotation_name[
-                annotation_name.find(known_import.target) :
-            ]
+            type_name = type_name[type_name.find(type_origin.target) :]
 
-        if annotation_name is not None:
-            self.stats["successful_queries"] += 1
+        if type_name is not None:
+            self.successful_queries += 1
         else:
-            self.stats["unknown_doctypes"].append(search_name)
+            self.unknown_qualnames.append(search_name)
 
-        return annotation_name, known_import
-
-    def __repr__(self) -> str:
-        repr = f"{type(self).__name__}({self.source_pkgs})"
-        return repr
+        return type_name, type_origin

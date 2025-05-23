@@ -11,8 +11,12 @@ import lark
 import lark.visitors
 import numpydoc.docscrape as npds
 
-from ._analysis import KnownImport, TypesDatabase
-from ._utils import DocstubError, ErrorReporter, accumulate_qualname, escape_qualname
+# TODO Uncouple docstrings & analysis module
+#   It should be possible to transform docstrings without matching to valid
+#   types and imports. I think that could very well be done at a higher level,
+#   e.g. in the stubs module.
+from ._analysis import KnownImport, TypeMatcher
+from ._utils import DocstubError, ErrorReporter, escape_qualname
 
 logger = logging.getLogger(__name__)
 
@@ -171,8 +175,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
     Attributes
     ----------
-    types_db : ~.TypesDatabase
-    replace_doctypes : dict[str, str]
+    matcher : ~.TypeMatcher
     stats : dict[str, Any]
     blacklisted_qualnames : ClassVar[frozenset[str]]
         All Python keywords [1]_ are blacklisted from use in qualnames except for ``True``
@@ -231,26 +234,18 @@ class DoctypeTransformer(lark.visitors.Transformer):
         }
     )
 
-    def __init__(self, *, types_db=None, replace_doctypes=None, **kwargs):
+    def __init__(self, *, matcher=None, **kwargs):
         """
         Parameters
         ----------
-        types_db : ~.TypesDatabase, optional
-            A static database of collected types usable as an annotation. If
-            not given, defaults to a database with common types from the
-            standard library (see :func:`~.common_known_imports`).
-        replace_doctypes : dict[str, str], optional
-            Replacements for human-friendly aliases.
+        matcher : ~.TypeMatcher, optional
         kwargs : dict[Any, Any], optional
             Keyword arguments passed to the init of the parent class.
         """
-        if replace_doctypes is None:
-            replace_doctypes = {}
-        if types_db is None:
-            types_db = TypesDatabase()
+        if matcher is None:
+            matcher = TypeMatcher()
 
-        self.types_db = types_db
-        self.replace_doctypes = replace_doctypes
+        self.matcher = matcher
 
         self._collected_imports = None
         self._unknown_qualnames = None
@@ -307,12 +302,6 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         children = tree.children
         _qualname = ".".join(children)
-
-        for partial_qualname in accumulate_qualname(_qualname):
-            replacement = self.replace_doctypes.get(partial_qualname)
-            if replacement:
-                _qualname = _qualname.replace(partial_qualname, replacement)
-                break
 
         _qualname = self._match_import(_qualname, meta=tree.meta)
 
@@ -381,7 +370,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = ", ".join(tree.children)
         out = f"Literal[{out}]"
 
-        if len(tree.children):
+        if len(tree.children) == 1:
             logger.warning(
                 "natural language literal with one item `%s`, "
                 "consider using `%s` to improve readability",
@@ -389,8 +378,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
                 out,
             )
 
-        if self.types_db is not None:
-            _, known_import = self.types_db.query("Literal")
+        if self.matcher is not None:
+            _, known_import = self.matcher.match("Literal")
             if known_import:
                 self._collected_imports.add(known_import)
         return out
@@ -519,8 +508,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         matched_qualname : str
             Possibly modified or normalized qualname.
         """
-        if self.types_db is not None:
-            annotation_name, known_import = self.types_db.query(qualname)
+        if self.matcher is not None:
+            annotation_name, known_import = self.matcher.match(qualname)
         else:
             annotation_name = None
             known_import = None
@@ -541,6 +530,32 @@ class DoctypeTransformer(lark.visitors.Transformer):
             )
             self._collected_imports.add(any_alias)
         return matched_qualname
+
+
+def _uncombine_numpydoc_params(params):
+    """Split combined NumPyDoc parameters.
+
+    NumPyDoc allows joining multiple parameters with shared type on one line.
+    This function helps with iterating them one-by-one regardless.
+
+    Parameters
+    ----------
+    params : list[numpydoc.docsrape.Parameter]
+
+    Yields
+    ------
+    param : numpydoc.docscrape.Parameter
+    """
+    for param in params:
+        if "," in param.name:
+            # Multiple parameters on one line, split and yield separately
+            names = [p.strip() for p in param.name.split(",")]
+            for name in names:
+                # Uncombined parameter re-uses shared type and description
+                uncombined = npds.Parameter(name=name, type=param.type, desc=param.desc)
+                yield uncombined
+        else:
+            yield param
 
 
 class DocstringAnnotations:
@@ -804,7 +819,10 @@ class DocstringAnnotations:
             Entries without annotations fall back to :class:`_typeshed.Incomplete`.
         """
         annotated_params = {}
-        for param in self.np_docstring[name]:
+
+        params = self.np_docstring[name]
+        params = list(_uncombine_numpydoc_params(params))
+        for param in params:
             param = self._handle_missing_whitespace(param)  # noqa: PLW2901
 
             if param.name in annotated_params:

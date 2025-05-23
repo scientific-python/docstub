@@ -11,9 +11,9 @@ logger = logging.getLogger(__name__)
 class Config:
     DEFAULT_CONFIG_PATH: ClassVar[Path] = Path(__file__).parent / "default_config.toml"
 
-    extend_grammar: str = ""
-    known_imports: dict[str, dict[str, str]] = dataclasses.field(default_factory=dict)
-    replace_doctypes: dict[str, str] = dataclasses.field(default_factory=dict)
+    types: dict[str, str] = dataclasses.field(default_factory=dict)
+    type_prefixes: dict[str, str] = dataclasses.field(default_factory=dict)
+    type_aliases: dict[str, str] = dataclasses.field(default_factory=dict)
 
     _source: tuple[Path, ...] = ()
 
@@ -61,9 +61,9 @@ class Config:
         if not isinstance(other, type(self)):
             return NotImplemented
         new = Config(
-            extend_grammar=self.extend_grammar + other.extend_grammar,
-            known_imports=self.known_imports | other.known_imports,
-            replace_doctypes=self.replace_doctypes | other.replace_doctypes,
+            types=self.types | other.types,
+            type_prefixes=self.type_prefixes | other.type_prefixes,
+            type_aliases=self.type_aliases | other.type_aliases,
             _source=self._source + other._source,
         )
         logger.debug("merged Config from %s", new._source)
@@ -73,14 +73,19 @@ class Config:
         return dataclasses.asdict(self)
 
     def __post_init__(self):
-        if not isinstance(self.extend_grammar, str):
-            raise TypeError("extended_grammar must be a string")
-        if not isinstance(self.known_imports, dict):
-            raise TypeError("known_imports must be a dict")
-        if not isinstance(self.replace_doctypes, dict):
-            raise TypeError("replace_doctypes must be a string")
+        self.validate(self.to_dict())
 
     def __repr__(self) -> str:
         sources = " | ".join(str(s) for s in self._source)
         formatted = f"<{type(self).__name__}: {sources}>"
         return formatted
+
+    @staticmethod
+    def validate(mapping):
+        for name in ["types", "type_prefixes", "type_aliases"]:
+            table = mapping[name]
+            if not isinstance(table, dict):
+                raise TypeError(f"{name} must be a dict")
+            for key, value in table.items():
+                if not isinstance(key, str) or not isinstance(value, str):
+                    raise TypeError(f"`{key} = {value}` in {name} must both be a str")

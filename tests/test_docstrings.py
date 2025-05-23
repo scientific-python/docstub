@@ -108,12 +108,26 @@ class Test_DoctypeTransformer:
         ("doctype", "expected"),
         [
             ("{0}", "Literal[0]"),
-            ("{'a', 1, None, False}", "Literal['a', 1, None, False]"),
-            ("dict[{'a', 'b'}, int]", "dict[Literal['a', 'b'], int]"),
+            ("{-1, 1}", "Literal[-1, 1]"),
+            ("{None}", "Literal[None]"),
+            ("{True, False}", "Literal[True, False]"),
+            ("""{'a', "bar"}""", """Literal['a', "bar"]"""),
+            # Enum
             ("{SomeEnum.FIRST}", "Literal[SomeEnum_FIRST]"),
             ("{`SomeEnum.FIRST`, 1}", "Literal[SomeEnum_FIRST, 1]"),
             ("{:ref:`SomeEnum.FIRST`, 2}", "Literal[SomeEnum_FIRST, 2]"),
             ("{:py:ref:`SomeEnum.FIRST`, 3}", "Literal[SomeEnum_FIRST, 3]"),
+            # Nesting
+            ("dict[{'a', 'b'}, int]", "dict[Literal['a', 'b'], int]"),
+            # These aren't officially valid as an argument to `Literal` (yet)
+            # https://typing.python.org/en/latest/spec/literal.html
+            # TODO figure out how docstub should deal with these
+            ("{-2., 1.}", "Literal[-2., 1.]"),
+            pytest.param(
+                "{-inf, inf, nan}",
+                "Literal[, 1.]",
+                marks=pytest.mark.xfail(reason="unsure how to support"),
+            ),
         ],
     )
     def test_literals(self, doctype, expected):
@@ -187,6 +201,13 @@ class Test_DoctypeTransformer:
 
         assert annotation.value == expected
     # fmt: on
+
+    @pytest.mark.parametrize("shape", ["(-1, 3)", "(1.0, 2)", "-3D", "-2-D"])
+    def test_natlang_array_invalid_shape(self, shape):
+        doctype = f"array of shape {shape}"
+        transformer = DoctypeTransformer()
+        with pytest.raises(lark.exceptions.UnexpectedInput):
+            transformer.doctype_to_annotation(doctype)
 
     def test_unknown_name(self):
         # Simple unknown name is aliased to typing.Any
@@ -430,3 +451,28 @@ class Test_DocstringAnnotations:
         assert annotations.parameters["a"].value == "int"
         captured = capsys.readouterr()
         assert "Possibly missing whitespace" in captured.out
+
+    def test_combined_numpydoc_params(self):
+        docstring = dedent(
+            """
+            Parameters
+            ----------
+            a, b, c : bool
+            d, e :
+            """
+        )
+        transformer = DoctypeTransformer()
+        annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert len(annotations.parameters) == 5
+        assert annotations.parameters["a"].value == "bool"
+        assert annotations.parameters["b"].value == "bool"
+        assert annotations.parameters["c"].value == "bool"
+
+        assert annotations.parameters["d"].value == "Incomplete"
+        assert annotations.parameters["e"].value == "Incomplete"
+        assert annotations.parameters["d"].imports == {
+            KnownImport.typeshed_Incomplete()
+        }
+        assert annotations.parameters["e"].imports == {
+            KnownImport.typeshed_Incomplete()
+        }

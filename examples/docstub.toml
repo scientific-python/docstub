@@ -1,20 +1,16 @@
 [tool.docstub]
 
-# TODO not implemented and used yet
-extend_grammar = """
-
-"""
-
-# Import information for type annotations, declared ahead of time.
+# Prefixes for external modules to match types in docstrings.
+# Docstub can't yet automatically discover where to import types from other
+# packages from. Instead, you can provide this information explicitly.
+# Any type in a docstring whose prefix matches the name given on the left side,
+# will be associated with the given "module" on the right side.
 #
-# Each item maps an annotation name on the left side to a dictionary on the
-# right side.
+# Examples:
+# np = "numpy"
+#     Will match `np.uint8` and `np.typing.NDarray` and use "import numpy as np".
 #
-# Import information can be declared with the following fields:
-#     from : Indicate that the DocType can be imported from this path.
-#     import : Import this object, defaults to the DocType.
-#     as : Use this alias for the imported object
-#     is_builtin : Indicate that this DocType doesn't need to be imported,
-#         defaults to "false"
-[tool.docstub.known_imports]
-configparser = {import = "configparser"}
+# plt = "matplotlib.pyplot
+#     Will match `plt.Figure` use `import matplotlib.pyplot as plt`.
+[tool.docstub.type_prefixes]
+configparser = "configparser"

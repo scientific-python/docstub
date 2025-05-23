@@ -350,8 +350,6 @@ class Py2StubTransformer(cst.CSTTransformer):
 
     Attributes
     ----------
-    types_db : ~.TypesDatabase | None
-    replace_doctypes : dict[str, str] | None
     transformer : ~.DoctypeTransformer
 
     References
@@ -381,22 +379,17 @@ class Py2StubTransformer(cst.CSTTransformer):
     )
     _Annotation_None: ClassVar[cst.Annotation] = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, *, types_db=None, replace_doctypes=None, reporter=None):
+    def __init__(self, *, matcher=None, reporter=None):
         """
         Parameters
         ----------
-        types_db : ~.TypesDatabase
-        replace_doctypes : dict[str, str]
+        matcher : ~.TypeMatcher
         reporter : ~.ErrorReporter
         """
         if reporter is None:
             reporter = ErrorReporter()
 
-        self.types_db = types_db
-        self.replace_doctypes = replace_doctypes
-        self.transformer = DoctypeTransformer(
-            types_db=types_db, replace_doctypes=replace_doctypes
-        )
+        self.transformer = DoctypeTransformer(matcher=matcher)
         self.reporter = reporter
         # Relevant docstring for the current context
         self._scope_stack = None  # Entered module, class or function scopes
@@ -423,8 +416,10 @@ class Py2StubTransformer(cst.CSTTransformer):
         value : Path
         """
         self._current_source = value
-        if self.types_db is not None:
-            self.types_db.current_source = value
+        # TODO pass current_source directly when using the transformer / matcher
+        #   instead of assigning it here!
+        if self.transformer is not None and self.transformer.matcher is not None:
+            self.transformer.matcher.current_module = value
 
     @property
     def is_inside_function_def(self):
@@ -585,8 +580,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                 )
                 replaced = _inline_node_as_code(original_node.returns.annotation)
                 details = (
-                    f"{replaced}\n"
-                    f"{reporter.underline(replaced)} -> {annotation_value}"
+                    f"{replaced}\n{reporter.underline(replaced)} -> {annotation_value}"
                 )
                 reporter.message(
                     short="Replacing existing inline return annotation",
