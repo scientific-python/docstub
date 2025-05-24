@@ -9,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class Config:
-    DEFAULT_CONFIG_PATH: ClassVar[Path] = Path(__file__).parent / "default_config.toml"
+    TEMPLATE_PATH: ClassVar[Path] = Path(__file__).parent / "config_template.toml"
+    NUMPY_PATH: ClassVar[Path] = Path(__file__).parent / "numpy_config.toml"
 
     types: dict[str, str] = dataclasses.field(default_factory=dict)
     type_prefixes: dict[str, str] = dataclasses.field(default_factory=dict)
@@ -34,17 +35,6 @@ class Config:
             raw = tomllib.load(fp)
         config = cls(**raw.get("tool", {}).get("docstub", {}), _source=(path,))
         logger.debug("created Config from %s", path)
-        return config
-
-    @classmethod
-    def from_default(cls):
-        """Create a configuration with default values.
-
-        Returns
-        -------
-        config : Self
-        """
-        config = cls.from_toml(cls.DEFAULT_CONFIG_PATH)
         return config
 
     def merge(self, other):

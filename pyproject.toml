@@ -105,6 +105,9 @@ testpaths = [
 [tool.coverage]
 run.source = ["docstub"]
 
+[tool.docstub.types]
+Path = "pathlib"
+
 [tool.docstub.type_prefixes]
 cst = "libcst"
 lark = "lark"

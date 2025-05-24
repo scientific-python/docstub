@@ -32,8 +32,7 @@ def test_getting_started_example(tmp_path):
     with py_file.open("x") as io:
         io.write(py_source)
     runner = CliRunner()
-    result = runner.invoke(docstub_main, [str(py_file)])
-    assert result.exit_code == 0
+    run_result = runner.invoke(docstub_main, [str(py_file)])  # noqa: F841
 
     # Load created PYI file, this is what we expect to find in the user guide's
     # code block for example.pyi

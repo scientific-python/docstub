@@ -39,7 +39,9 @@ def _load_configuration(config_paths=None):
     -------
     config : ~.Config
     """
-    config = Config.from_toml(Config.DEFAULT_CONFIG_PATH)
+    config = Config.from_toml(Config.TEMPLATE_PATH)
+    numpy_config = Config.from_toml(Config.NUMPY_PATH)
+    config = config.merge(numpy_config)
 
     pyproject_toml = Path.cwd() / "pyproject.toml"
     if pyproject_toml.is_file():
