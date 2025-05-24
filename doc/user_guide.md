@@ -91,18 +91,57 @@ There are several interesting things to note here:
   You can find more details in [Typing syntax in docstrings](typing_syntax.md).
 
 - Optional arguments that default to `None` are recognized and a `| None` is appended automatically if the type doesn't include it already.
+  The `optional` or `default = ...` part don't influence the annotation.
 
-- Common container types from Pythons standard library such as `Iterable` can be used and a necessary import will be added automatically.
-
-
-## Importing types
-
-TBD
+- Common container types from Python's standard library such as `Iterable` can be used and a necessary import will be added automatically.
 
 
-## Adding your own aliases for docstring descriptions
+## Using types & nicknames
 
-TBD
+To translate a type from a docstring into a valid type annotation, docstub needs to know where that type originates from and how to import it.
+Out of the box, docstub will know about builtin types such as `int` or `bool` that don't need an import, and types in `typing`, `collections.abc` from Python's standard library.
+It will source these from the Python environment it is installed in.
+In addition to that, docstub will collect all types in the package directory you are running it on.
+
+However, if you want to use types from third-party libraries you can tell docstub about them in a configuration file.
+Docstub will look for a `pyproject.toml` or `docstub.toml` in the current working directory.
+Or, you can point docstub at TOML file(s) explicitly using the `--config` option.
+In these configuration file(s) you can declare external types directly with
+
+```toml
+[tool.docstub.types]
+Path = "pathlib"
+Figure = "matplotlib.pyplot"
+```
+
+This will enable using `Path` and `Figure` anywhere in docstrings.
+Alternatively, you can declare an entire prefix with
+
+```toml
+[tool.docstub.type_prefixes]
+ski = "skimage"
+"sklearn.tree" = "sklearn.tree"
+```
+
+which will enable any type that is prefixed with `ski.` or `sklearn.tree.`, e.g. `ski.transform.AffineTransform` or `sklearn.tree.DecisionTreeClassifier`.
+
+In both of these cases, docstub doesn't check that these types actually exist.
+Testing the generated stubs with a type checker is recommended.
+
+> [!TIP] Limitations & roadmap
+> Docstub currently collects types statically.
+> So it won't see compiled modules and won't be able to generate stubs for them.
+> For now, you can add stubs for compiled modules yourself and docstub will include these in the generated output.
+> Support for dynamic type collection is on the roadmap.
+
+
+The codebase docstub is running on may already use existing conventions to refer to common types (or you may want to do so).
+Docstub refers to these alternatives as "type nicknames".
+You can declare type nicknames in a configuration file with
+```toml
+[tool.docstub.type_nicknames]
+func = "Callable"
+```
 
 
 ## Adopting docstub gradually
