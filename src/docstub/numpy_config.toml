@@ -1,51 +1,20 @@
 [tool.docstub]
 
 # Types and their external modules to use in docstrings.
-# Docstub can't yet automatically discover where to import types from other
-# packages from. Instead, you can provide this information explicitly.
-# Any type on the left side will be associated with the given "module" on the
-# right side.
-#
-# Examples:
-# Path = "pathlib"
-#     Will allow using "Path" and use "from pathlib import Path".
-#
-# NDArray = "numpy.typing"
-#     Will allow "NDarray" and use "from numpy.typing import NDArray".
 [tool.docstub.types]
-Path = "pathlib"
 NDArray = "numpy.typing"
 ArrayLike = "numpy.typing"
 
 
 # Prefixes for external modules to match types in docstrings.
-# Docstub can't yet automatically discover where to import types from other
-# packages from. Instead, you can provide this information explicitly.
-# Any type in a docstring whose prefix matches the name given on the left side,
-# will be associated with the given "module" on the right side.
-#
-# Examples:
-# np = "numpy"
-#     Will match `np.uint8` and `np.typing.NDarray` and use "import numpy as np".
-#
-# plt = "matplotlib.pyplot
-#     Will match `plt.Figure` use `import matplotlib.pyplot as plt`.
 [tool.docstub.type_prefixes]
 np = "numpy"
 numpy = "numpy"
 
 
-# Specify human-friendly aliases that can be used in docstrings to describe
-# valid Python types or annotations.
-[tool.docstub.type_aliases]
-iterable = "Iterable"
-callable = "Callable"
-function = "Callable"
-func = "Callable"
-sequence = "Sequence"
-mapping = "Mapping"
-
-# NumPy
+# Nicknames for types that can be used in docstrings to describe valid Python
+# types or annotations.
+[tool.docstub.type_nicknames]
 scalar = "np.ScalarType"
 integer = "np.integer"
 signedinteger = "np.signedinteger"

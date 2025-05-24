@@ -327,7 +327,10 @@ class GroupedErrorReporter(ErrorReporter):
                 groups[group_name] = []
             groups[group_name].append(message)
 
-        for (short, details), group in groups.items():
+        # Show largest groups last
+        groups_by_size = sorted(groups.items(), key=lambda x: len(x[1]))
+
+        for (short, details), group in groups_by_size:
             formatted = click.style(short, bold=True)
             if len(group) > 1:
                 formatted = f"{formatted} (x{len(group)})"

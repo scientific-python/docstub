@@ -28,18 +28,20 @@ from ._version import __version__
 logger = logging.getLogger(__name__)
 
 
-def _load_configuration(config_path=None):
+def _load_configuration(config_paths=None):
     """Load and merge configuration from CWD and optional files.
 
     Parameters
     ----------
-    config_path : Path
+    config_paths : list[Path]
 
     Returns
     -------
     config : ~.Config
     """
-    config = Config.from_toml(Config.DEFAULT_CONFIG_PATH)
+    config = Config.from_toml(Config.TEMPLATE_PATH)
+    numpy_config = Config.from_toml(Config.NUMPY_PATH)
+    config = config.merge(numpy_config)
 
     pyproject_toml = Path.cwd() / "pyproject.toml"
     if pyproject_toml.is_file():
@@ -53,9 +55,9 @@ def _load_configuration(config_path=None):
         add_config = Config.from_toml(docstub_toml)
         config = config.merge(add_config)
 
-    if config_path:
-        logger.info("using %s", config_path)
-        add_config = Config.from_toml(config_path)
+    for path in config_paths:
+        logger.info("using %s", path)
+        add_config = Config.from_toml(path)
         config = config.merge(add_config)
 
     return config
@@ -126,7 +128,10 @@ def report_execution_time():
         click.echo(f"Finished in {formated_duration}")
 
 
+# Preserve click.command below to keep type checker happy
+# docstub: off
 @click.command()
+# docstub: on
 @click.version_option(__version__)
 @click.argument("root_path", type=click.Path(exists=True), metavar="PACKAGE_PATH")
 @click.option(
@@ -134,19 +139,25 @@ def report_execution_time():
     "--out-dir",
     type=click.Path(file_okay=False),
     metavar="PATH",
-    help="Set output directory explicitly. Otherwise, stubs are generated inplace.",
+    help="Set output directory explicitly. "
+    "Stubs will be directly written into that directory while preserving the directory "
+    "structure under `PACKAGE_PATH`. "
+    "Otherwise, stubs are generated inplace.",
 )
 @click.option(
     "--config",
-    "config_path",
+    "config_paths",
     type=click.Path(exists=True, dir_okay=False),
     metavar="PATH",
-    help="Set configuration file explicitly.",
+    multiple=True,
+    help="Set one or more configuration file(s) explicitly. "
+    "Otherwise, it will look for a `pyproject.toml` or `docstub.toml` in the "
+    "current directory.",
 )
 @click.option(
     "--group-errors",
     is_flag=True,
-    help="Group identical errors together and list where they occured. "
+    help="Group identical errors together and list where they occurred. "
     "Will delay showing errors until all files have been processed. "
     "Otherwise, simply report errors as the occur.",
 )
@@ -157,12 +168,13 @@ def report_execution_time():
     show_default=True,
     metavar="INT",
     help="Allow this many or fewer errors. "
-    "If docstub reports more, exit with error code '1'.",
+    "If docstub reports more, exit with error code '1'. "
+    "This is useful to adopt docstub gradually.",
 )
 @click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
 @click.help_option("-h", "--help")
 @report_execution_time()
-def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
+def main(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
     """Generate Python stub files with type annotations from docstrings.
 
     Given a path `PACKAGE_PATH` to a Python package, generate stub files for it.
@@ -174,7 +186,7 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
     ----------
     root_path : Path
     out_dir : Path
-    config_path : Path
+    config_paths : list[Path]
     group_errors : bool
     allow_errors : int
     verbose : str
@@ -191,7 +203,7 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
             "or type references won't work."
         )
 
-    config = _load_configuration(config_path)
+    config = _load_configuration(config_paths)
 
     types = common_known_imports()
     types |= _collect_types(root_path)
@@ -200,7 +212,7 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
         for type_name, module in config.types.items()
     }
 
-    prefixes = {
+    type_prefixes = {
         prefix: (
             KnownImport(import_name=module, import_alias=prefix)
             if module != prefix
@@ -210,7 +222,9 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
     }
 
     reporter = GroupedErrorReporter() if group_errors else ErrorReporter()
-    matcher = TypeMatcher(types=types, prefixes=prefixes, aliases=config.type_aliases)
+    matcher = TypeMatcher(
+        types=types, type_prefixes=type_prefixes, type_nicknames=config.type_nicknames
+    )
     stub_transformer = Py2StubTransformer(matcher=matcher, reporter=reporter)
 
     if not out_dir:

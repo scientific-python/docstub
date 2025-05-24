@@ -9,11 +9,12 @@ logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class Config:
-    DEFAULT_CONFIG_PATH: ClassVar[Path] = Path(__file__).parent / "default_config.toml"
+    TEMPLATE_PATH: ClassVar[Path] = Path(__file__).parent / "config_template.toml"
+    NUMPY_PATH: ClassVar[Path] = Path(__file__).parent / "numpy_config.toml"
 
     types: dict[str, str] = dataclasses.field(default_factory=dict)
     type_prefixes: dict[str, str] = dataclasses.field(default_factory=dict)
-    type_aliases: dict[str, str] = dataclasses.field(default_factory=dict)
+    type_nicknames: dict[str, str] = dataclasses.field(default_factory=dict)
 
     _source: tuple[Path, ...] = ()
 
@@ -36,17 +37,6 @@ class Config:
         logger.debug("created Config from %s", path)
         return config
 
-    @classmethod
-    def from_default(cls):
-        """Create a configuration with default values.
-
-        Returns
-        -------
-        config : Self
-        """
-        config = cls.from_toml(cls.DEFAULT_CONFIG_PATH)
-        return config
-
     def merge(self, other):
         """Merge contents with other and return a copy_with Config instance.
 
@@ -63,7 +53,7 @@ class Config:
         new = Config(
             types=self.types | other.types,
             type_prefixes=self.type_prefixes | other.type_prefixes,
-            type_aliases=self.type_aliases | other.type_aliases,
+            type_nicknames=self.type_nicknames | other.type_nicknames,
             _source=self._source + other._source,
         )
         logger.debug("merged Config from %s", new._source)
@@ -82,7 +72,7 @@ class Config:
 
     @staticmethod
     def validate(mapping):
-        for name in ["types", "type_prefixes", "type_aliases"]:
+        for name in ["types", "type_prefixes", "type_nicknames"]:
             table = mapping[name]
             if not isinstance(table, dict):
                 raise TypeError(f"{name} must be a dict")
