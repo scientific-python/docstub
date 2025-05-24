@@ -416,8 +416,8 @@ class TypeMatcher:
     Attributes
     ----------
     types : dict[str, KnownImport]
-    prefixes : dict[str, KnownImport]
-    aliases : dict[str, str]
+    type_prefixes : dict[str, KnownImport]
+    type_nicknames : dict[str, str]
     successful_queries : int
     unknown_qualnames : list
     current_module : Path | None
@@ -434,19 +434,19 @@ class TypeMatcher:
         self,
         *,
         types=None,
-        prefixes=None,
-        aliases=None,
+        type_prefixes=None,
+        type_nicknames=None,
     ):
         """
         Parameters
         ----------
         types : dict[str, KnownImport]
-        prefixes : dict[str, KnownImport]
-        aliases : dict[str, str]
+        type_prefixes : dict[str, KnownImport]
+        type_nicknames : dict[str, str]
         """
         self.types = types or common_known_imports()
-        self.prefixes = prefixes or {}
-        self.aliases = aliases or {}
+        self.type_prefixes = type_prefixes or {}
+        self.type_nicknames = type_nicknames or {}
         self.successful_queries = 0
         self.unknown_qualnames = []
 
@@ -499,7 +499,7 @@ class TypeMatcher:
                 )
 
         # Replace alias
-        search_name = self.aliases.get(search_name, search_name)
+        search_name = self.type_nicknames.get(search_name, search_name)
 
         if type_origin is None and self.current_module:
             # Try scope of current module
@@ -516,7 +516,7 @@ class TypeMatcher:
         if type_origin is None:
             # Try a subset of the qualname (first 'a.b.c', then 'a.b' and 'a')
             for partial_qualname in reversed(accumulate_qualname(search_name)):
-                type_origin = self.prefixes.get(partial_qualname)
+                type_origin = self.type_prefixes.get(partial_qualname)
                 if type_origin:
                     type_name = search_name
                     break

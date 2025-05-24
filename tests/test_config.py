@@ -6,4 +6,4 @@ class Test_Config:
         config = Config.from_default()
         assert len(config.types) > 0
         assert len(config.type_prefixes) > 0
-        assert len(config.type_aliases) > 0
+        assert len(config.type_nicknames) > 0

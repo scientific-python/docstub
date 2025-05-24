@@ -13,7 +13,7 @@ class Config:
 
     types: dict[str, str] = dataclasses.field(default_factory=dict)
     type_prefixes: dict[str, str] = dataclasses.field(default_factory=dict)
-    type_aliases: dict[str, str] = dataclasses.field(default_factory=dict)
+    type_nicknames: dict[str, str] = dataclasses.field(default_factory=dict)
 
     _source: tuple[Path, ...] = ()
 
@@ -63,7 +63,7 @@ class Config:
         new = Config(
             types=self.types | other.types,
             type_prefixes=self.type_prefixes | other.type_prefixes,
-            type_aliases=self.type_aliases | other.type_aliases,
+            type_nicknames=self.type_nicknames | other.type_nicknames,
             _source=self._source + other._source,
         )
         logger.debug("merged Config from %s", new._source)
@@ -82,7 +82,7 @@ class Config:
 
     @staticmethod
     def validate(mapping):
-        for name in ["types", "type_prefixes", "type_aliases"]:
+        for name in ["types", "type_prefixes", "type_nicknames"]:
             table = mapping[name]
             if not isinstance(table, dict):
                 raise TypeError(f"{name} must be a dict")

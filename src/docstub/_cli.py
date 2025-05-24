@@ -206,7 +206,7 @@ def main(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
         for type_name, module in config.types.items()
     }
 
-    prefixes = {
+    type_prefixes = {
         prefix: (
             KnownImport(import_name=module, import_alias=prefix)
             if module != prefix
@@ -216,7 +216,9 @@ def main(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
     }
 
     reporter = GroupedErrorReporter() if group_errors else ErrorReporter()
-    matcher = TypeMatcher(types=types, prefixes=prefixes, aliases=config.type_aliases)
+    matcher = TypeMatcher(
+        types=types, type_prefixes=type_prefixes, type_nicknames=config.type_nicknames
+    )
     stub_transformer = Py2StubTransformer(matcher=matcher, reporter=reporter)
 
     if not out_dir:

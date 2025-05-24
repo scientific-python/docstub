@@ -35,9 +35,9 @@ np = "numpy"
 numpy = "numpy"
 
 
-# Specify human-friendly aliases that can be used in docstrings to describe
-# valid Python types or annotations.
-[tool.docstub.type_aliases]
+# Specify human-friendly nicknames for types that can be used in docstrings to
+# describe valid Python types or annotations.
+[tool.docstub.type_nicknames]
 iterable = "Iterable"
 callable = "Callable"
 function = "Callable"

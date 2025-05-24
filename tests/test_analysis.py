@@ -160,7 +160,7 @@ class Test_TypeMatcher:
         ]
     )
     def test_query_prefix(self, search_name, expected_name, expected_origin):
-        db = TypeMatcher(prefixes=self.type_prefixes.copy())
+        db = TypeMatcher(type_prefixes=self.type_prefixes.copy())
 
         type_name, type_origin = db.match(search_name)
 
