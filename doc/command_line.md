@@ -20,15 +20,20 @@ Usage: docstub [OPTIONS] PACKAGE_PATH
 
 Options:
   --version           Show the version and exit.
-  -o, --out-dir PATH  Set output directory explicitly. Otherwise, stubs are
-                      generated inplace.
-  --config PATH       Set configuration file explicitly.
+  -o, --out-dir PATH  Set output directory explicitly. Stubs will be directly
+                      written into that directory while preserving the
+                      directory structure under `PACKAGE_PATH`. Otherwise,
+                      stubs are generated inplace.
+  --config PATH       Set one or more configuration file(s) explicitly.
+                      Otherwise, it will look for a `pyproject.toml` or
+                      `docstub.toml` in the current directory.
   --group-errors      Group identical errors together and list where they
-                      occured. Will delay showing errors until all files have
+                      occurred. Will delay showing errors until all files have
                       been processed. Otherwise, simply report errors as the
                       occur.
   --allow-errors INT  Allow this many or fewer errors. If docstub reports
-                      more, exit with error code '1'.  [default: 0; x>=0]
+                      more, exit with error code '1'. This is useful to adopt
+                      docstub gradually.  [default: 0; x>=0]
   -v, --verbose       Print more details (repeatable).
   -h, --help          Show this message and exit.
 ```
