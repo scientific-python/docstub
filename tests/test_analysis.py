@@ -5,6 +5,12 @@ import pytest
 from docstub._analysis import KnownImport, TypeCollector, TypeMatcher
 
 
+class Test_KnownImport:
+    def test_dot_in_alias(self):
+        with pytest.raises(ValueError, match=".*can't contain a '\.'"):
+            KnownImport(import_name="foo.bar.baz", import_alias="bar.baz")
+
+
 @pytest.fixture
 def module_factory(tmp_path):
     """Fixture to help with creating adhoc modules with a given source.
