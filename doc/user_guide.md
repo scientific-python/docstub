@@ -37,15 +37,15 @@ def example_metric(image, *, mask=None, sigma=1.0, method='standard'):
         First image.
     mask : array of dtype uint8, optional
         Second image.
-    sigma : float or Iterable of float, optional
+    sigma : float or Iterable of float, default: 1.0
         Sigma value for each dimension in `image`. A single value is broadcast
         to all dimensions.
-    method : {'standard', 'modified'}, optional, default = 'standard'
+    method : {'standard', 'modified'}, default: 'standard'
         The method to use for calculating the metric.
 
     Returns
     -------
-    met : ndarray of dtype float
+    metric : ndarray of dtype float
     """
     pass
 ```
@@ -55,7 +55,7 @@ def example_metric(image, *, mask=None, sigma=1.0, method='standard'):
 Feeding this input to docstub with
 
 ```shell
-docstub simple_script.py
+docstub example.py
 ```
 
 will create `example.pyi` in the same directory
