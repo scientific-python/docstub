@@ -10,13 +10,19 @@
 
 ## Installation
 
-While a docstub package is already available on PyPI, we recommend trying out docstub by installing directly from GitHub with
+Docstub is available as a [package on PyPI](https://pypi.org/project/docstub/) and can be installed from there with your favorite package manager. E.g.:
 
 ```shell
-pip install 'docstub [optional] @ git+https://github.com/scientific-python/docstub'
+pip install docstub
 ```
 
-If you want to pin to a certain commit you can append `@COMMIT_SHA` to the repo URL above.
+In case you want to check out an unreleased version you can install directly from the repository with:
+
+```shell
+pip install docstub @ git+https://github.com/scientific-python/docstub'
+```
+
+To pin to a specific commit you can append `@COMMIT_SHA` to the repository URL above.
 
 
 ## Getting started
