@@ -105,6 +105,16 @@ testpaths = [
 [tool.coverage]
 run.source = ["docstub"]
 
+
+[tool.changelist.label_section_map]
+".*enhancement.*" = "Enhancement"
+".*performance.*" = "Performance"
+".*fix.*" = "Bug Fixes"
+".*documentation.*" = "Documentation"
+".*devops.*" = "DevOps"
+".*maintenance.*" = "Maintenance"
+
+
 [tool.docstub.types]
 Path = "pathlib"
 
