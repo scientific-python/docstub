@@ -96,7 +96,7 @@ class FileCache:
         """
         Parameters
         ----------
-        func : callable
+        func : Callable
             The function whose output shall be cached.
         serializer : FuncSerializer
             An interface that matches the given `func`. It must implement the
