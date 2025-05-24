@@ -148,6 +148,8 @@ class Test_TypeMatcher:
             assert expected_name is type_name
             assert expected_origin is type_origin
         else:
+            assert type_name is not None
+            assert type_origin is not None
             assert str(type_origin) == expected_origin
             assert type_name.startswith(type_origin.target)
             assert type_name == expected_name
@@ -174,6 +176,8 @@ class Test_TypeMatcher:
             assert expected_name is type_name
             assert expected_origin is type_origin
         else:
+            assert type_name is not None
+            assert type_origin is not None
             assert str(type_origin) == expected_origin
             assert type_name.startswith(type_origin.target)
             assert type_name == expected_name

@@ -207,7 +207,7 @@ class Test_DoctypeTransformer:
         doctype = f"array of shape {shape}"
         transformer = DoctypeTransformer()
         with pytest.raises(lark.exceptions.UnexpectedInput):
-            transformer.doctype_to_annotation(doctype)
+            _ = transformer.doctype_to_annotation(doctype)
 
     def test_unknown_name(self):
         # Simple unknown name is aliased to typing.Any
@@ -302,6 +302,7 @@ class Test_DocstringAnnotations:
         ).format(*doctypes)
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns is not None
         assert annotations.returns.value == expected
 
     def test_yields(self, caplog):
@@ -315,6 +316,7 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns is not None
         assert annotations.returns.value == "Generator[tuple[int, str]]"
         assert annotations.returns.imports == {
             KnownImport(import_path="collections.abc", import_name="Generator")
@@ -336,6 +338,7 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns is not None
         assert (
             annotations.returns.value
             == "Generator[tuple[int, str], tuple[float, bytes]]"
@@ -364,6 +367,7 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns is not None
         assert annotations.returns.value == (
             "Generator[tuple[int, str], tuple[float, bytes], bool]"
         )
@@ -386,6 +390,7 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns is not None
         assert annotations.returns.value == ("Generator[tuple[int, str], None, bool]")
         assert annotations.returns.imports == {
             KnownImport(import_path="collections.abc", import_name="Generator")
@@ -416,6 +421,8 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
+        assert annotations.returns is not None
+        assert annotations.returns is not None
         assert annotations.returns.value == "int"
 
     def test_args_kwargs(self):

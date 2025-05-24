@@ -7,7 +7,7 @@ name = "docstub"
 authors = [
   {name = "Lars Grüter"},
 ]
-description = "Generate Python stub files (PYI) from docstrings"
+description = "Generate Python stub files from docstrings"
 readme = "README.md"
 license.file = "LICENSE"
 requires-python = ">=3.12"
@@ -46,6 +46,7 @@ test = [
   "pytest >=5.0.0",
   "pytest-cov >= 5.0.0",
   "mypy",
+  "basedpyright",
 ]
 
 [project.urls]
@@ -129,3 +130,8 @@ disable_error_code = ["var-annotated", "union-attr"]
 [[tool.mypy.overrides]]
 module = ["numpydoc.*"]
 ignore_missing_imports = true
+
+
+[tool.basedpyright]
+stubPath = "stubs/"
+typeCheckingMode = "standard"
