@@ -28,12 +28,12 @@ from ._version import __version__
 logger = logging.getLogger(__name__)
 
 
-def _load_configuration(config_path=None):
+def _load_configuration(config_paths=None):
     """Load and merge configuration from CWD and optional files.
 
     Parameters
     ----------
-    config_path : Path
+    config_paths : list[Path]
 
     Returns
     -------
@@ -53,9 +53,9 @@ def _load_configuration(config_path=None):
         add_config = Config.from_toml(docstub_toml)
         config = config.merge(add_config)
 
-    if config_path:
-        logger.info("using %s", config_path)
-        add_config = Config.from_toml(config_path)
+    for path in config_paths:
+        logger.info("using %s", path)
+        add_config = Config.from_toml(path)
         config = config.merge(add_config)
 
     return config
@@ -141,10 +141,13 @@ def report_execution_time():
 )
 @click.option(
     "--config",
-    "config_path",
+    "config_paths",
     type=click.Path(exists=True, dir_okay=False),
     metavar="PATH",
-    help="Set configuration file explicitly.",
+    multiple=True,
+    help="Set one or more configuration file(s) explicitly. "
+    "Otherwise, it will look for a `pyproject.toml` or `docstub.toml` in the "
+    "current directory.",
 )
 @click.option(
     "--group-errors",
@@ -165,7 +168,7 @@ def report_execution_time():
 @click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
 @click.help_option("-h", "--help")
 @report_execution_time()
-def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
+def main(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
     """Generate Python stub files with type annotations from docstrings.
 
     Given a path `PACKAGE_PATH` to a Python package, generate stub files for it.
@@ -177,7 +180,7 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
     ----------
     root_path : Path
     out_dir : Path
-    config_path : Path
+    config_paths : list[Path]
     group_errors : bool
     allow_errors : int
     verbose : str
@@ -194,7 +197,7 @@ def main(root_path, out_dir, config_path, group_errors, allow_errors, verbose):
             "or type references won't work."
         )
 
-    config = _load_configuration(config_path)
+    config = _load_configuration(config_paths)
 
     types = common_known_imports()
     types |= _collect_types(root_path)
