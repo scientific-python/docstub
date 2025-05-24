@@ -1,25 +1,41 @@
 # Command line reference
 
-Running
-```
-docstub --help
-```
-will print
+## Command `docstub`
 
 <!--- The following block is checked by the test suite --->
-<!--- begin command-line-help --->
+<!--- begin cli-docstub --->
 
 ```plain
-Usage: docstub [OPTIONS] PACKAGE_PATH
+Usage: docstub [OPTIONS] COMMAND [ARGS]...
 
-  Generate Python stub files with type annotations from docstrings.
+  Generate Python stub files from docstrings.
 
-  Given a path `PACKAGE_PATH` to a Python package, generate stub files for it.
-  Type descriptions in docstrings will be used to fill in missing inline type
+Options:
+  --version   Show the version and exit.
+  -h, --help  Show this message and exit.
+
+Commands:
+  run  Generate Python stub files.
+```
+
+<!--- end cli-docstub --->
+
+
+## Command `docstub run`
+
+<!--- The following block is checked by the test suite --->
+<!--- begin cli-docstub-run --->
+
+```plain
+Usage: docstub run [OPTIONS] PACKAGE_PATH
+
+  Generate Python stub files.
+
+  Given a `PACKAGE_PATH` to a Python package, generate stub files for it. Type
+  descriptions in docstrings will be used to fill in missing inline type
   annotations or to override them.
 
 Options:
-  --version           Show the version and exit.
   -o, --out-dir PATH  Set output directory explicitly. Stubs will be directly
                       written into that directory while preserving the
                       directory structure under `PACKAGE_PATH`. Otherwise,
@@ -38,4 +54,4 @@ Options:
   -h, --help          Show this message and exit.
 ```
 
-<!--- end command-line-help --->
+<!--- end cli-docstub-run --->

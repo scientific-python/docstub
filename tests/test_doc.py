@@ -4,14 +4,15 @@ import re
 from pathlib import Path
 
 import click
+import pytest
 from click.testing import CliRunner
 
-from docstub._cli import main as docstub_main
+from docstub import _cli
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
-def test_getting_started_example(tmp_path):
+def test_user_guide_example(tmp_path):
     # Load user guide
     md_file = PROJECT_ROOT / "doc/user_guide.md"
     with md_file.open("r") as io:
@@ -32,7 +33,7 @@ def test_getting_started_example(tmp_path):
     with py_file.open("x") as io:
         io.write(py_source)
     runner = CliRunner()
-    run_result = runner.invoke(docstub_main, [str(py_file)])  # noqa: F841
+    run_result = runner.invoke(_cli.run, [str(py_file)])  # noqa: F841
 
     # Load created PYI file, this is what we expect to find in the user guide's
     # code block for example.pyi
@@ -54,18 +55,22 @@ def test_getting_started_example(tmp_path):
     assert expected_pyi == actual_pyi
 
 
-def test_command_line_help():
-    ctx = click.Context(docstub_main, info_name="docstub")
+@pytest.mark.parametrize(
+    ("command", "name"), [(_cli.cli, "docstub"), (_cli.run, "docstub run")]
+)
+def test_command_line_reference(command, name):
+    ctx = click.Context(command, info_name=name)
     expected_help = f"""
 ```plain
-{docstub_main.get_help(ctx)}
+{command.get_help(ctx)}
 ```
 """.strip()
     md_file = PROJECT_ROOT / "doc/command_line.md"
     with md_file.open("r") as io:
         md_content = io.read()
 
-    regex = r"<!--- begin command-line-help --->(.*)<!--- end command-line-help --->"
+    guard_name = f"cli-{name.replace(" ", "-")}"
+    regex = rf"<!--- begin {guard_name} --->(.*)<!--- end {guard_name} --->"
     matches = re.findall(regex, md_content, flags=re.DOTALL)
     assert len(matches) == 1
 

@@ -7,7 +7,7 @@ from docstub._analysis import KnownImport, TypeCollector, TypeMatcher
 
 class Test_KnownImport:
     def test_dot_in_alias(self):
-        with pytest.raises(ValueError, match=".*can't contain a '\.'"):
+        with pytest.raises(ValueError, match=r".*can't contain a '\.'"):
             KnownImport(import_name="foo.bar.baz", import_alias="bar.baz")
 
 

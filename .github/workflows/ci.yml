@@ -60,7 +60,10 @@ jobs:
           allow-prereleases: true
 
       - name: Install package
-        run: python -m pip install .[test,optional]
+        run: |
+          python -m pip install .[test,optional]
+          python -m docstub --version
+          docstub --help
 
       - name: Run pytest
         run: >-
@@ -70,12 +73,12 @@ jobs:
 
       - name: Compare example stubs
         run: |
-          python -m docstub -v --config=examples/docstub.toml examples/example_pkg
+          python -m docstub run -v --config=examples/docstub.toml examples/example_pkg
           git diff --exit-code examples/ && echo "Stubs for example_pkg did not change"
 
       - name: Generate stubs for docstub
         run: |
-          python -m docstub -v src/docstub -o ${MYPYPATH}/docstub
+          python -m docstub run -v src/docstub -o ${MYPYPATH}/docstub
 
       - name: Check with mypy.stubtest
         run: |
