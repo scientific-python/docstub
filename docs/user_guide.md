@@ -159,4 +159,4 @@ Two command line options can help addressing these errors gradually:
 
 > [!TIP]
 > If you are trying out docstub and have feedback or problems, we'd love to hear from you!
-> Feel welcome to [open an issue](https://github.com/scientific-python/docstub/issues/new/choose) 🚀.
+> Feel welcome to [open an issue](https://github.com/scientific-python/docstub/issues/new/choose). 🚀

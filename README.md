@@ -23,12 +23,16 @@ Please refer to the [user guide](docs/user_guide.md) to get started with docstub
 
 The best way you can help and contribute right now is by trying docstub out!
 Feedback to what features might still be missing or where it breaks for you would be greatly appreciated.
-Pointers to where the documentation is confusing and unclear.
+As well as pointers to where the documentation is confusing and unclear.
+Feel welcome to [open an issue](https://github.com/scientific-python/docstub/issues/new/choose)! 🚀
 
 Since docstub is still in early development there isn't an official contribution guide yet.
 Features and API are still being heavily extended and the internal structure is still somewhat in flux.
-That said, if that only entices you, feel free to open a PR.
-But please do check in with an issue before you do so.
+The development is, in part, motivated by an effort to add type annotations to the [scikit-image project](https://scikit-image.org).
+This may inform some short-term priorities and the roadmap.
+
+That said, docstub is a project for the community and welcomes contributions in any form!
+Please do check in with an issue if you are interested in working on something.
 
 Our project follows the [Scientific Python's Code of Conduct](https://scientific-python.org/code_of_conduct/).
 
