@@ -61,7 +61,7 @@ jobs:
 
       - name: Install package
         run: |
-          python -m pip install .[test,optional]
+          python -m pip install .[test]
           python -m docstub --version
           docstub --help
 
