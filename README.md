@@ -16,7 +16,7 @@ It does so by supporting widely used readable conventions such as `array of dtyp
 
 ## Installation & getting started
 
-Please refer to the [user guide](doc/user_guide.md) to get started with docstub.
+Please refer to the [user guide](docs/user_guide.md) to get started with docstub.
 
 
 ## Contributing

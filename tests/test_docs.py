@@ -1,4 +1,4 @@
-"""Test documentation in doc/."""
+"""Test documentation in docs/."""
 
 import re
 from pathlib import Path
@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 def test_user_guide_example(tmp_path):
     # Load user guide
-    md_file = PROJECT_ROOT / "doc/user_guide.md"
+    md_file = PROJECT_ROOT / "docs/user_guide.md"
     with md_file.open("r") as io:
         md_content = io.read()
 
@@ -65,7 +65,7 @@ def test_command_line_reference(command, name):
 {command.get_help(ctx)}
 ```
 """.strip()
-    md_file = PROJECT_ROOT / "doc/command_line.md"
+    md_file = PROJECT_ROOT / "docs/command_line.md"
     with md_file.open("r") as io:
         md_content = io.read()
 
