@@ -107,8 +107,16 @@ TBD
 
 ## Adopting docstub gradually
 
-TBD
+Adopting docstub on a large codebase may initially generate many errors.
+Two command line options can help addressing these errors gradually:
 
-`--group-errors`
+* `--group-errors` will group identical errors together.
+  This helps identifying common groups of errors that may be addressed in one go.
 
-`--allow-errors`
+* `--allow-errors` puts an upper limit (["ratchet"](https://qntm.org/ratchet)) on the number of allowed errors.
+  This way you can adjust the upper bound of allowed errors as they are addressed.
+  Useful, if you are running in docstub in continuous integration.
+
+> [!TIP] Get in touch!
+> If you are trying out docstub and have feedback or problems, we'd love to hear from you!
+> Feel welcome to [open an issue](https://github.com/scientific-python/docstub/issues/new/choose) 🚀.
