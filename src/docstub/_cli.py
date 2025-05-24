@@ -139,7 +139,10 @@ def report_execution_time():
     "--out-dir",
     type=click.Path(file_okay=False),
     metavar="PATH",
-    help="Set output directory explicitly. Otherwise, stubs are generated inplace.",
+    help="Set output directory explicitly. "
+    "Stubs will be directly written into that directory while preserving the directory "
+    "structure under `PACKAGE_PATH`. "
+    "Otherwise, stubs are generated inplace.",
 )
 @click.option(
     "--config",
@@ -154,7 +157,7 @@ def report_execution_time():
 @click.option(
     "--group-errors",
     is_flag=True,
-    help="Group identical errors together and list where they occured. "
+    help="Group identical errors together and list where they occurred. "
     "Will delay showing errors until all files have been processed. "
     "Otherwise, simply report errors as the occur.",
 )
@@ -165,7 +168,8 @@ def report_execution_time():
     show_default=True,
     metavar="INT",
     help="Allow this many or fewer errors. "
-    "If docstub reports more, exit with error code '1'.",
+    "If docstub reports more, exit with error code '1'. "
+    "This is useful to adopt docstub gradually.",
 )
 @click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
 @click.help_option("-h", "--help")
