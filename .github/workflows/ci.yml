@@ -90,3 +90,7 @@ jobs:
       - name: Check tests/ with mypy
         run: |
           python -m mypy tests/
+
+      - name: Check tests/ with basedpyright
+        run: |
+          basedpyright tests/

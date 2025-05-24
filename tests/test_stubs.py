@@ -52,6 +52,7 @@ class Test_get_docstring_node:
         assert isinstance(func_def, cst.FunctionDef)
         docstring_node = _get_docstring_node(func_def)
 
+        assert isinstance(docstring_node, cst.SimpleString)
         assert docstring_node.value == docstring
 
     def test_func_without_docstring(self):
@@ -196,7 +197,8 @@ class Test_Py2StubTransformer:
             src = MODULE_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype="")
         elif scope == "class":
             src = CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype="")
-        elif scope == "nested class":
+        else:
+            assert scope == "nested class"
             src = NESTED_CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype="")
 
         transformer = Py2StubTransformer()
@@ -234,7 +236,8 @@ class Test_Py2StubTransformer:
             src = MODULE_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype=doctype)
         elif scope == "class":
             src = CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype=doctype)
-        elif scope == "nested class":
+        else:
+            assert scope == "nested class"
             src = NESTED_CLASS_ATTRIBUTE_TEMPLATE.format(assign=assign, doctype=doctype)
 
         transformer = Py2StubTransformer()
