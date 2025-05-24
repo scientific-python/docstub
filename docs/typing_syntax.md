@@ -102,14 +102,20 @@ This expression allows adding shape and datatype information for data structures
 [Literals](https://typing.python.org/en/latest/spec/literal.html#literals) indicate a concrete value instead of type.
 Instead of using [`typing.Literal`](https://docs.python.org/3/library/typing.html#typing.Literal), you can enclose literal values in `{...}` in docstrings.
 
-| Docstring type | Python type annotation |
-|----------------|------------------------|
-| `{1, 2, 3}`    | `Literal[1, 2, 3]`     |
-| `{1, 2, 3}`    | `Literal[1, 2, 3]`     |
+| Docstring type            | Python type annotation           |
+|---------------------------|----------------------------------|
+| `{-1, 0, 3, True, False}` | `Literal[-1, 0, 3, True, False]` |
+| `{"red", "blue", None}`   | `Literal["red", "blue", None]`   |
 
 > [!TIP]
 > Enclosing a single value `{X}` is currently allowed but discouraged.
 > Instead consider the more explicit `Literal[X]`.
+
+> [!WARNING]
+> Python's `typing.Literal` only supports a restricted set of parameters.
+> E.g., `float` literals are not yet supported by the type system but are allowed by docstub.
+> Addressing this use case is on the roadmap.
+> See [issue 47](https://github.com/scientific-python/docstub/issues/47) for more details.
 
 
 ## reStructuredText role
