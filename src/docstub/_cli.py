@@ -128,11 +128,19 @@ def report_execution_time():
         click.echo(f"Finished in {formated_duration}")
 
 
-# Preserve click.command below to keep type checker happy
 # docstub: off
-@click.command()
+@click.group()
 # docstub: on
 @click.version_option(__version__)
+@click.help_option("-h", "--help")
+def cli():
+    """Generate Python stub files from docstrings."""
+
+
+# Preserve click.command below to keep type checker happy
+# docstub: off
+@cli.command()
+# docstub: on
 @click.argument("root_path", type=click.Path(exists=True), metavar="PACKAGE_PATH")
 @click.option(
     "-o",
@@ -174,10 +182,10 @@ def report_execution_time():
 @click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
 @click.help_option("-h", "--help")
 @report_execution_time()
-def main(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
-    """Generate Python stub files with type annotations from docstrings.
+def run(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
+    """Generate Python stub files.
 
-    Given a path `PACKAGE_PATH` to a Python package, generate stub files for it.
+    Given a `PACKAGE_PATH` to a Python package, generate stub files for it.
     Type descriptions in docstrings will be used to fill in missing inline type
     annotations or to override them.
     \f

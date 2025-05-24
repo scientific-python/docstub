@@ -56,7 +56,7 @@ def example_metric(image, *, mask=None, sigma=1.0, method='standard'):
 Feeding this input to docstub with
 
 ```shell
-docstub example.py
+docstub run example.py
 ```
 
 will create `example.pyi` in the same directory

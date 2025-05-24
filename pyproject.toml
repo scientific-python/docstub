@@ -52,7 +52,7 @@ test = [
 Home = "https://github.com/lagru/docstub"
 
 [project.scripts]
-docstub = "docstub.__main__:main"
+docstub = "docstub.__main__:cli"
 
 
 [tool.setuptools_scm]
