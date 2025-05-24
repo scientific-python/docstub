@@ -1,6 +1,7 @@
 # docstub
 
-> [!NOTE] In early development!
+> [!NOTE]
+> **In early development!**
 > Expect bugs, missing features, and incomplete documentation.
 > Docstub is still evaluating which features it needs to support as the community gives feedback.
 > Several features are experimental and included to make adoption of docstub easier.

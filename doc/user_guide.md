@@ -1,6 +1,7 @@
 # User guide
 
-> [!NOTE] In early development!
+> [!NOTE]
+> **In early development!**
 > Expect bugs, missing features, and incomplete documentation.
 > Docstub is still evaluating which features it needs to support as the community gives feedback.
 > Several features are experimental and included to make adoption of docstub easier.
@@ -128,7 +129,7 @@ which will enable any type that is prefixed with `ski.` or `sklearn.tree.`, e.g.
 In both of these cases, docstub doesn't check that these types actually exist.
 Testing the generated stubs with a type checker is recommended.
 
-> [!TIP] Limitations & roadmap
+> [!TIP]
 > Docstub currently collects types statically.
 > So it won't see compiled modules and won't be able to generate stubs for them.
 > For now, you can add stubs for compiled modules yourself and docstub will include these in the generated output.
@@ -156,6 +157,6 @@ Two command line options can help addressing these errors gradually:
   This way you can adjust the upper bound of allowed errors as they are addressed.
   Useful, if you are running in docstub in continuous integration.
 
-> [!TIP] Get in touch!
+> [!TIP]
 > If you are trying out docstub and have feedback or problems, we'd love to hear from you!
 > Feel welcome to [open an issue](https://github.com/scientific-python/docstub/issues/new/choose) 🚀.
