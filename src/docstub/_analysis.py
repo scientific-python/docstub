@@ -1,11 +1,10 @@
 """Collect type information."""
 
 import builtins
-import collections.abc
+import importlib
 import json
 import logging
 import re
-import typing
 from dataclasses import asdict, dataclass
 from functools import cache
 from pathlib import Path
@@ -227,7 +226,7 @@ def _is_type(value):
     return is_type
 
 
-def _builtin_imports():
+def _builtin_types():
     """Return known imports for all builtins (in the current runtime).
 
     Returns
@@ -248,45 +247,24 @@ def _builtin_imports():
     return known_imports
 
 
-def _typing_imports():
-    """Return known imports for public types in the `typing` module.
-
-    Returns
-    -------
-    known_imports : dict[str, KnownImport]
-    """
-    known_imports = {}
-    for name in typing.__all__:
+def _runtime_types_in_module(module_name):
+    module = importlib.import_module(module_name)
+    types = {}
+    for name in module.__all__:
         if name.startswith("_"):
             continue
-        value = getattr(typing, name)
+        value = getattr(module, name)
         if not _is_type(value):
             continue
-        known_imports[name] = KnownImport.one_from_config(name, info={"from": "typing"})
-    return known_imports
+
+        import_ = KnownImport(import_path=module_name, import_name=name)
+        types[name] = import_
+        types[f"{module_name}.{name}"] = import_
+
+    return types
 
 
-def _collections_abc_imports():
-    """Return known imports for public types in the `collections.abc` module.
-
-    Returns
-    -------
-    known_imports : dict[str, KnownImport]
-    """
-    known_imports = {}
-    for name in collections.abc.__all__:
-        if name.startswith("_"):
-            continue
-        value = getattr(collections.abc, name)
-        if not _is_type(value):
-            continue
-        known_imports[name] = KnownImport.one_from_config(
-            name, info={"from": "collections.abc"}
-        )
-    return known_imports
-
-
-def common_known_imports():
+def common_known_types():
     """Return known imports for commonly supported types.
 
     This includes builtin types, and types from the `typing` or
@@ -295,10 +273,21 @@ def common_known_imports():
     Returns
     -------
     known_imports : dict[str, KnownImport]
+
+    Examples
+    --------
+    >>> types = common_known_types()
+    >>> types["str"]
+    <KnownImport str (builtin)>
+    >>> types["Iterable"]
+    <KnownImport 'from collections.abc import Iterable'>
+    >>> types["collections.abc.Iterable"]
+    <KnownImport 'from collections.abc import Iterable'>
     """
-    known_imports = _builtin_imports()
-    known_imports |= _typing_imports()
-    known_imports |= _collections_abc_imports()  # Overrides containers from typing
+    known_imports = _builtin_types()
+    known_imports |= _runtime_types_in_module("typing")
+    # Overrides containers from typing
+    known_imports |= _runtime_types_in_module("collections.abc")
     return known_imports
 
 
@@ -426,7 +415,7 @@ class TypeMatcher:
 
     Examples
     --------
-    >>> from docstub._analysis import TypeMatcher, common_known_imports
+    >>> from docstub._analysis import TypeMatcher, common_known_types
     >>> db = TypeMatcher()
     >>> db.match("Any")
     ('Any', <KnownImport 'from typing import Any'>)
@@ -446,7 +435,7 @@ class TypeMatcher:
         type_prefixes : dict[str, KnownImport]
         type_nicknames : dict[str, str]
         """
-        self.types = types or common_known_imports()
+        self.types = types or common_known_types()
         self.type_prefixes = type_prefixes or {}
         self.type_nicknames = type_nicknames or {}
         self.successful_queries = 0

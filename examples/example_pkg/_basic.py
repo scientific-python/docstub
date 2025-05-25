@@ -33,7 +33,7 @@ def func_contains(a1, a2, a3, a4, a5, a6, a7):
     ----------
     a1 : list[float]
     a2 : dict[str, Union[int, str]]
-    a3 : Sequence[int | float]
+    a3 : collections.abc.Sequence[int | float]
     a4 : frozenset[bytes]
     a5 : tuple of int
     a6 : list of (int, str)

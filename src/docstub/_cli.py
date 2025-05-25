@@ -11,7 +11,7 @@ from ._analysis import (
     KnownImport,
     TypeCollector,
     TypeMatcher,
-    common_known_imports,
+    common_known_types,
 )
 from ._cache import FileCache
 from ._config import Config
@@ -89,7 +89,7 @@ def _collect_types(root_path):
     -------
     types : dict[str, ~.KnownImport]
     """
-    types = common_known_imports()
+    types = common_known_types()
 
     collect_cached_types = FileCache(
         func=TypeCollector.collect,
@@ -213,7 +213,7 @@ def run(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
 
     config = _load_configuration(config_paths)
 
-    types = common_known_imports()
+    types = common_known_types()
     types |= _collect_types(root_path)
     types |= {
         type_name: KnownImport(import_path=module, import_name=type_name)
