@@ -166,3 +166,30 @@ Two command line options can help addressing these errors gradually:
 > [!TIP]
 > If you are trying out docstub and have feedback or problems, we'd love to hear from you!
 > Feel welcome to [open an issue](https://github.com/scientific-python/docstub/issues/new/choose). 🚀
+
+
+## Dealing with typing problems
+
+Docstub may not fully or correctly implement a particular part of Python's typing system yet.
+
+In some cases, you can use a comment directive to selectively disable docstub for a specific block of lines:
+```python
+class Foo:
+    # docstub: off
+    a: int = None
+    b: str = ""
+    # docstub: on
+    c: int = None
+    d: str = ""
+```
+will leave the parameters within the `# docstub` guards untouched in the resulting stub file:
+```python
+class Foo:
+    a: int = None
+    b: str = ""
+    c: int
+    d: str
+```
+
+If that is not possible, you can – for now – fallback to writing a correct stub file by hand.
+Docstub will preserve this file and integrated it with other automatically generated stubs.

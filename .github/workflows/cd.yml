@@ -1,0 +1,41 @@
+name: CD
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+
+env:
+  # Many color libraries just need this to be set to any value, but at least
+  # one distinguishes color depth, where "3" -> "256-bit color".
+  FORCE_COLOR: 3
+
+
+jobs:
+  pypi-publish:
+    name: Build & publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://pypi.org/p/docstub
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build wheel & sdist
+        run: |
+          git clean -fxd
+          pip install -U build twine wheel
+          python -m build --sdist --wheel
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc # v1.12.4
