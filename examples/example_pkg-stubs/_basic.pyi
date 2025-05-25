@@ -32,7 +32,7 @@ def func_literals(
 def func_use_from_elsewhere(
     a1: CustomException,
     a2: ExampleClass,
-    a3: CustomException.NestedClass,
+    a3: ExampleClass.NestedClass,
     a4: ExampleClass.NestedClass,
 ) -> tuple[CustomException, ExampleClass.NestedClass]: ...
 

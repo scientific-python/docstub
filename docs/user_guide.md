@@ -100,7 +100,9 @@ There are several interesting things to note here:
 - Optional arguments that default to `None` are recognized and a `| None` is appended automatically if the type doesn't include it already.
   The `optional` or `default = ...` part don't influence the annotation.
 
-- Common container types from Python's standard library such as `Iterable` can be used and a necessary import will be added automatically.
+- Referencing the `float` and `Iterable` types worked out of the box.
+  All builtin types as well as types from the standard libraries `typing` and `collections.abc` module can be used.
+  Necessary imports will be added automatically to the stub file.
 
 
 ## Using types & nicknames

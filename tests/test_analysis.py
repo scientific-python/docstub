@@ -2,7 +2,11 @@ from textwrap import dedent
 
 import pytest
 
-from docstub._analysis import KnownImport, TypeCollector, TypeMatcher
+from docstub._analysis import (
+    KnownImport,
+    TypeCollector,
+    TypeMatcher,
+)
 
 
 class Test_KnownImport:
@@ -182,3 +186,20 @@ class Test_TypeMatcher:
             assert type_name.startswith(type_origin.target)
             assert type_name == expected_name
     # fmt: on
+
+    @pytest.mark.parametrize(
+        ("search_name", "import_path"),
+        [
+            ("Iterable", "collections.abc"),
+            ("collections.abc.Iterable", "collections.abc"),
+            ("Literal", "typing"),
+            ("typing.Literal", "typing"),
+        ],
+    )
+    def test_common_known_types(self, search_name, import_path):
+        matcher = TypeMatcher()
+        type_name, type_origin = matcher.match(search_name)
+
+        assert type_name == search_name.split(".")[-1]
+        assert type_origin is not None
+        assert type_origin.import_path == import_path
