@@ -32,8 +32,23 @@ _lark = lark.Lark(_grammar, propagate_positions=True, strict=True)
 
 
 def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token:
-    """Find token with a specific type name in tree."""
-    tokens = [child for child in tree.children if child.type == name]
+    """Find token with a specific type name in tree.
+
+    Parameters
+    ----------
+    tree : lark.Tree
+    name : str
+        Name of the token to find in the children of `tree`.
+
+    Returns
+    -------
+    token : lark.Token
+    """
+    tokens = [
+        child
+        for child in tree.children
+        if hasattr(child, "type") and child.type == name
+    ]
     if len(tokens) != 1:
         msg = f"expected exactly one Token of type {name}, found {len(tokens)}"
         raise ValueError(msg)
