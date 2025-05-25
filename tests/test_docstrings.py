@@ -185,7 +185,9 @@ class Test_DoctypeTransformer:
     )
     @pytest.mark.parametrize("name", ["array", "ndarray", "array-like", "array_like"])
     @pytest.mark.parametrize("dtype", ["int", "np.int8"])
-    @pytest.mark.parametrize("shape", ["(2, 3)", "(N, m)", "3D", "2-D", "(N, ...)"])
+    @pytest.mark.parametrize("shape",
+        ["(2, 3)", "(N, m)", "3D", "2-D", "(N, ...)", "([P,] M, N)"]
+     )
     def test_natlang_array(self, fmt, expected_fmt, name, dtype, shape):
 
         def escape(name: str) -> str:
@@ -201,6 +203,18 @@ class Test_DoctypeTransformer:
 
         assert annotation.value == expected
     # fmt: on
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("ndarray of dtype (int or float)", "ndarray[int | float]"),
+            ("([P,] M, N) (int or float) array", "array[int | float]"),
+        ],
+    )
+    def test_natlang_array_specific(self, doctype, expected):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(doctype)
+        assert annotation.value == expected
 
     @pytest.mark.parametrize("shape", ["(-1, 3)", "(1.0, 2)", "-3D", "-2-D"])
     def test_natlang_array_invalid_shape(self, shape):
