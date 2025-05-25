@@ -9,14 +9,15 @@ maintainers = [
 ]
 description = "Generate Python stub files from docstrings"
 readme = "README.md"
-license = {file = "LICENSE"}
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+keywords = ["typing", "stub files", "docstings", "numpydoc"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: BSD License",
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
@@ -49,7 +50,7 @@ test = [
 ]
 
 [project.urls]
-Home = "https://github.com/lagru/docstub"
+Homepage = "https://github.com/lagru/docstub"
 
 [project.scripts]
 docstub = "docstub.__main__:cli"
