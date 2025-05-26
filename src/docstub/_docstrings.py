@@ -2,6 +2,7 @@
 
 import logging
 import traceback
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -31,7 +32,7 @@ with grammar_path.open() as file:
 _lark = lark.Lark(_grammar, propagate_positions=True, strict=True)
 
 
-def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token:
+def _find_one_token(tree, *, name):
     """Find token with a specific type name in tree.
 
     Parameters
@@ -285,25 +286,13 @@ class DoctypeTransformer(lark.visitors.Transformer):
             A set containing tuples. Each tuple contains a qualname, its start and its
             end index relative to the given `doctype`.
         """
-        try:
-            self._collected_imports = set()
-            self._unknown_qualnames = []
+        with self._prepare_transformation():
             tree = _lark.parse(doctype)
             value = super().transform(tree=tree)
             annotation = Annotation(
                 value=value, imports=frozenset(self._collected_imports)
             )
             return annotation, self._unknown_qualnames
-        except (
-            lark.exceptions.LexError,
-            lark.exceptions.ParseError,
-            QualnameIsKeyword,
-        ):
-            self.stats["syntax_errors"] += 1
-            raise
-        finally:
-            self._collected_imports = None
-            self._unknown_qualnames = None
 
     def qualname(self, tree):
         """
@@ -508,6 +497,29 @@ class DoctypeTransformer(lark.visitors.Transformer):
         else:
             out = children
         return out
+
+    @contextmanager
+    def _prepare_transformation(self):
+        """Reset transformation state before entering context and restore it on exit."""
+        collected_imports = self._collected_imports
+        unknown_qualnames = self._unknown_qualnames
+
+        try:
+            self._collected_imports = set()
+            self._unknown_qualnames = []
+            yield
+
+        except (
+            lark.exceptions.LexError,
+            lark.exceptions.ParseError,
+            QualnameIsKeyword,
+        ):
+            self.stats["syntax_errors"] += 1
+            raise
+
+        finally:
+            self._collected_imports = collected_imports
+            self._unknown_qualnames = unknown_qualnames
 
     def _match_import(self, qualname, *, meta):
         """Match `qualname` to known imports or alias to "Incomplete".
