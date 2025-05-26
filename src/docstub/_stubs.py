@@ -418,8 +418,12 @@ class Py2StubTransformer(cst.CSTTransformer):
         self._current_source = value
         # TODO pass current_source directly when using the transformer / matcher
         #   instead of assigning it here!
-        if self.transformer is not None and self.transformer.matcher is not None:
-            self.transformer.matcher.current_module = value
+        if (
+            value is not None
+            and self.transformer is not None
+            and self.transformer.matcher is not None
+        ):
+            self.transformer.matcher.current_module = module_name_from_path(value)
 
     @property
     def is_inside_function_def(self):

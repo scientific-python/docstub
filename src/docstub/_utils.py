@@ -90,12 +90,14 @@ def module_name_from_path(path):
         raise FileNotFoundError(f"`path` is not an existing file: {path!r}")
 
     name_parts = []
-    if path.name != "__init__.py":
+    if path.name not in ("__init__.py", "__init__.pyi"):
         name_parts.insert(0, path.stem)
 
     directory = path.parent
     while True:
-        is_in_package = (directory / "__init__.py").is_file()
+        is_in_package = (directory / "__init__.py").is_file() or (
+            directory / "__init__.pyi"
+        ).is_file()
         if is_in_package:
             name_parts.insert(0, directory.name)
             directory = directory.parent
@@ -235,7 +237,7 @@ class ErrorReporter:
 
     @staticmethod
     def underline(line):
-        underlined = f"{line}\n" f"{click.style('^' * len(line), fg='red', bold=True)}"
+        underlined = f"{line}\n{click.style('^' * len(line), fg='red', bold=True)}"
         return underlined
 
 
