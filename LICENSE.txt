@@ -5,7 +5,7 @@ License: BSD 3-Clause
 
 -------------------------------------------------------------------------------
 
-Files: src/docstub/_vendored/glob.py
+Files: src/docstub/_vendored/stdlib.py
 Copyright: 2001-2025, Python Software Foundation
 License: PSF-2.0
 

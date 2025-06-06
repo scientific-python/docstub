@@ -2,9 +2,14 @@
 
 import logging
 import re
+import sys
 from functools import lru_cache
 
-from ._vendored.glob import translate as glob_translate
+if sys.version_info >= (3, 13):
+    from glob import translate as glob_translate
+else:
+    from ._vendored.stdlib import glob_translate
+
 
 logger = logging.getLogger(__name__)
 
