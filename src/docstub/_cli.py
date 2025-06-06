@@ -207,7 +207,8 @@ def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, ve
     ----------
     root_path : Path
     out_dir : Path
-    config_paths : list[Path]
+    config_paths : Sequence[Path]
+    ignore : Sequence[str]
     group_errors : bool
     allow_errors : int
     verbose : str
