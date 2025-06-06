@@ -6,13 +6,20 @@
 import fnmatch
 import os
 import re
+from collections.abc import Sequence
 
 # Vendored `glob.translate` from Python 3.13.4 because it isn't available in
 # earlier Python versions. Copied from
 # https://github.com/python/cpython/blob/8a526ec7cbea8fafc9dae4b3dd6371906b9be342/Lib/glob.py#L267-L319
 
 
-def translate(pat, *, recursive=False, include_hidden=False, seps=None):
+def translate(
+    pat: str,
+    *,
+    recursive: bool = False,
+    include_hidden: bool = False,
+    seps: Sequence[str] | None = None,
+) -> str:
     """Translate a pathname with shell wildcards to a regular expression.
 
     If `recursive` is true, the pattern segment '**' will match any number of
