@@ -42,8 +42,13 @@ def _load_configuration(config_paths=None):
     numpy_config = Config.from_toml(Config.NUMPY_PATH)
     config = config.merge(numpy_config)
 
-    if config_paths is None:
+    if config_paths:
+        for path in config_paths:
+            logger.info("using %s", path)
+            add_config = Config.from_toml(path)
+            config = config.merge(add_config)
 
+    else:
         pyproject_toml = Path.cwd() / "pyproject.toml"
         if pyproject_toml.is_file():
             logger.info("using %s", pyproject_toml)
@@ -54,12 +59,6 @@ def _load_configuration(config_paths=None):
         if docstub_toml.is_file():
             logger.info("using %s", docstub_toml)
             add_config = Config.from_toml(docstub_toml)
-            config = config.merge(add_config)
-
-    else:
-        for path in config_paths:
-            logger.info("using %s", path)
-            add_config = Config.from_toml(path)
             config = config.merge(add_config)
 
     return config
