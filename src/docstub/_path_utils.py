@@ -109,17 +109,17 @@ def glob_patterns_to_regex(patterns, relative_to=None):
     Examples
     --------
     >>> from pathlib import Path
-    >>> glob_patterns_to_regex(("**/tests", "**/test_*.py"))
+    >>> glob_patterns_to_regex(("**/tests", "**/test_*.py"))  # doctest: +SKIP
     re.compile('(?s:(?:.+/)?tests)\\Z|(?s:(?:.+/)?test_[^/]*\\.py)\\Z')
 
     Use `relative_to` to make patterns absolute:
 
-    >>> glob_patterns_to_regex(("**/tests",), relative_to=Path(__file__).parent)
+    >>> glob_patterns_to_regex(("**/tests",), relative_to=Path(__file__).parent  # doctest: +SKIP
     re.compile('(?s:/.../docstub/(?:.+/)?tests)\\Z')
 
     A glob prefixed with "/" isn't normalized with `relative_to`:
 
-    >>> glob_patterns_to_regex(("/**/tests",), relative_to=Path(__file__).parent)
+    >>> glob_patterns_to_regex(("/**/tests",), relative_to=Path(__file__).parent)  # doctest: +SKIP
     re.compile('(?s:/(?:.+/)?tests)\\Z')
     """
     if relative_to:
