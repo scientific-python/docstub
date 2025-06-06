@@ -1,9 +1,10 @@
 """Utilities to work with Python packages on the file system."""
 
-import glob
 import logging
 import re
 from functools import lru_cache
+
+from ._vendored.glob import translate as glob_translate
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ def glob_patterns_to_regex(patterns, relative_to=None):
     if len(patterns) == 0:
         return None
     translated = (
-        glob.translate(pattern, recursive=True, include_hidden=True)
+        glob_translate(pattern, recursive=True, include_hidden=True)
         for pattern in patterns
     )
     joined = "|".join(translated)

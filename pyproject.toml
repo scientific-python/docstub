@@ -10,7 +10,7 @@ maintainers = [
 description = "Generate Python stub files from docstrings"
 readme = "README.md"
 license = "BSD-3-Clause"
-license-files = ["LICENSE"]
+license-files = ["LICENSE.txt"]
 requires-python = ">=3.12"
 keywords = ["typing", "stub files", "docstings", "numpydoc"]
 classifiers = [
