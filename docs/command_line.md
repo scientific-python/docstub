@@ -43,6 +43,8 @@ Options:
   --config PATH       Set one or more configuration file(s) explicitly.
                       Otherwise, it will look for a `pyproject.toml` or
                       `docstub.toml` in the current directory.
+  --ignore GLOB       Ignore files matching this glob-style pattern. Can be
+                      used multiple times.
   --group-errors      Group identical errors together and list where they
                       occurred. Will delay showing errors until all files have
                       been processed. Otherwise, simply report errors as the

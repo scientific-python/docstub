@@ -1,32 +1,27 @@
 [tool.docstub]
 
+
+# Ignore files and directories matching these glob-style patterns.
+# Patterns that don't start with "/" are interpreted as relative to the
+# directory that contains the Python package for which stubs are generated.
+ignore_files = []
+
+
 # Types and their external modules to use in docstrings.
 # Docstub can't yet automatically discover where to import types from other
 # packages from. Instead, you can provide this information explicitly.
 # Any type on the left side will be associated with the given "module" on the
 # right side.
-#
-# Examples:
-# Path = "pathlib"
-#     Will allow using "Path" and use "from pathlib import Path".
-#
-# NDArray = "numpy.typing"
-#     Will allow "NDarray" and use "from numpy.typing import NDArray".
 [tool.docstub.types]
+
 
 # Prefixes for external modules to match types in docstrings.
 # Docstub can't yet automatically discover where to import types from other
 # packages from. Instead, you can provide this information explicitly.
 # Any type in a docstring whose prefix matches the name given on the left side,
 # will be associated with the given "module" on the right side.
-#
-# Examples:
-# np = "numpy"
-#     Will match `np.uint8` and `np.typing.NDarray` and use "import numpy as np".
-#
-# plt = "matplotlib.pyplot
-#     Will match `plt.Figure` use `import matplotlib.pyplot as plt`.
 [tool.docstub.type_prefixes]
+
 
 # Nicknames for types that can be used in docstrings to describe valid Python
 # types or annotations.
