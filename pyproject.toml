@@ -120,6 +120,7 @@ run.source = ["docstub"]
 Path = "pathlib"
 
 [tool.docstub.type_prefixes]
+re = "re"
 cst = "libcst"
 lark = "lark"
 numpydoc = "numpydoc"

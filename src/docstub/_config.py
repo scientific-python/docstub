@@ -15,8 +15,9 @@ class Config:
     types: dict[str, str] = dataclasses.field(default_factory=dict)
     type_prefixes: dict[str, str] = dataclasses.field(default_factory=dict)
     type_nicknames: dict[str, str] = dataclasses.field(default_factory=dict)
+    ignore_files: list[str] = dataclasses.field(default_factory=list)
 
-    _source: tuple[Path, ...] = ()
+    config_paths: tuple[Path, ...] = ()
 
     @classmethod
     def from_toml(cls, path):
@@ -33,7 +34,7 @@ class Config:
         path = Path(path)
         with open(path, "rb") as fp:
             raw = tomllib.load(fp)
-        config = cls(**raw.get("tool", {}).get("docstub", {}), _source=(path,))
+        config = cls(**raw.get("tool", {}).get("docstub", {}), config_paths=(path,))
         logger.debug("created Config from %s", path)
         return config
 
@@ -54,9 +55,10 @@ class Config:
             types=self.types | other.types,
             type_prefixes=self.type_prefixes | other.type_prefixes,
             type_nicknames=self.type_nicknames | other.type_nicknames,
-            _source=self._source + other._source,
+            ignore_files=self.ignore_files + other.ignore_files,
+            config_paths=self.config_paths + other.config_paths,
         )
-        logger.debug("merged Config from %s", new._source)
+        logger.debug("merged Config from %s", new.config_paths)
         return new
 
     def to_dict(self):
@@ -66,7 +68,7 @@ class Config:
         self.validate(self.to_dict())
 
     def __repr__(self) -> str:
-        sources = " | ".join(str(s) for s in self._source)
+        sources = " | ".join(str(s) for s in self.config_paths)
         formatted = f"<{type(self).__name__}: {sources}>"
         return formatted
 
@@ -79,3 +81,11 @@ class Config:
             for key, value in table.items():
                 if not isinstance(key, str) or not isinstance(value, str):
                     raise TypeError(f"`{key} = {value}` in {name} must both be a str")
+
+        for name in ["ignore_files"]:
+            sequence = mapping[name]
+            if not isinstance(sequence, list):
+                raise TypeError(f"{name} must be a list")
+            for value in sequence:
+                if not isinstance(value, str):
+                    raise TypeError(f"`{value}` in {name} must be a str")

@@ -15,13 +15,12 @@ from ._analysis import (
 )
 from ._cache import FileCache
 from ._config import Config
-from ._stubs import (
+from ._path_utils import (
     STUB_HEADER_COMMENT,
-    Py2StubTransformer,
-    try_format_stub,
     walk_python_package,
     walk_source_and_targets,
 )
+from ._stubs import Py2StubTransformer, try_format_stub
 from ._utils import ErrorReporter, GroupedErrorReporter
 from ._version import __version__
 
@@ -43,22 +42,25 @@ def _load_configuration(config_paths=None):
     numpy_config = Config.from_toml(Config.NUMPY_PATH)
     config = config.merge(numpy_config)
 
-    pyproject_toml = Path.cwd() / "pyproject.toml"
-    if pyproject_toml.is_file():
-        logger.info("using %s", pyproject_toml)
-        add_config = Config.from_toml(pyproject_toml)
-        config = config.merge(add_config)
+    if config_paths is None:
 
-    docstub_toml = Path.cwd() / "docstub.toml"
-    if docstub_toml.is_file():
-        logger.info("using %s", docstub_toml)
-        add_config = Config.from_toml(docstub_toml)
-        config = config.merge(add_config)
+        pyproject_toml = Path.cwd() / "pyproject.toml"
+        if pyproject_toml.is_file():
+            logger.info("using %s", pyproject_toml)
+            add_config = Config.from_toml(pyproject_toml)
+            config = config.merge(add_config)
 
-    for path in config_paths:
-        logger.info("using %s", path)
-        add_config = Config.from_toml(path)
-        config = config.merge(add_config)
+        docstub_toml = Path.cwd() / "docstub.toml"
+        if docstub_toml.is_file():
+            logger.info("using %s", docstub_toml)
+            add_config = Config.from_toml(docstub_toml)
+            config = config.merge(add_config)
+
+    else:
+        for path in config_paths:
+            logger.info("using %s", path)
+            add_config = Config.from_toml(path)
+            config = config.merge(add_config)
 
     return config
 
@@ -78,12 +80,17 @@ def _setup_logging(*, verbose):
     )
 
 
-def _collect_types(root_path):
+def _collect_types(root_path, *, ignore=()):
     """Collect types.
 
     Parameters
     ----------
     root_path : Path
+    ignore : Sequence[str], optional
+        Don't yield files matching these glob-like patterns. The pattern is
+        interpreted relative to the root of the Python package unless it starts
+        with "/". See :ref:`glob.translate(..., recursive=True, include_hidden=True)`
+        for more details on the precise implementation.
 
     Returns
     -------
@@ -98,7 +105,7 @@ def _collect_types(root_path):
         name=f"{__version__}/collected_types",
     )
     if root_path.is_dir():
-        for source_path in walk_python_package(root_path):
+        for source_path in walk_python_package(root_path, ignore=ignore):
             logger.info("collecting types in %s", source_path)
             types_in_source = collect_cached_types(source_path)
             types.update(types_in_source)
@@ -163,6 +170,13 @@ def cli():
     "current directory.",
 )
 @click.option(
+    "--ignore",
+    type=str,
+    multiple=True,
+    metavar="GLOB",
+    help="Ignore files matching this glob-style pattern. Can be used multiple times.",
+)
+@click.option(
     "--group-errors",
     is_flag=True,
     help="Group identical errors together and list where they occurred. "
@@ -182,7 +196,7 @@ def cli():
 @click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
 @click.help_option("-h", "--help")
 @report_execution_time()
-def run(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
+def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, verbose):
     """Generate Python stub files.
 
     Given a `PACKAGE_PATH` to a Python package, generate stub files for it.
@@ -212,9 +226,10 @@ def run(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
         )
 
     config = _load_configuration(config_paths)
+    config = config.merge(Config(ignore_files=list(ignore)))
 
     types = common_known_types()
-    types |= _collect_types(root_path)
+    types |= _collect_types(root_path, ignore=config.ignore_files)
     types |= {
         type_name: KnownImport(import_path=module, import_name=type_name)
         for type_name, module in config.types.items()
@@ -245,7 +260,9 @@ def run(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
 
     # Stub generation ---------------------------------------------------------
 
-    for source_path, stub_path in walk_source_and_targets(root_path, out_dir):
+    for source_path, stub_path in walk_source_and_targets(
+        root_path, out_dir, ignore=config.ignore_files
+    ):
         if source_path.suffix.lower() == ".pyi":
             logger.debug("using existing stub file %s", source_path)
             with source_path.open() as fo:
