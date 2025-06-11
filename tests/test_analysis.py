@@ -4,6 +4,7 @@ import pytest
 
 from docstub._analysis import (
     KnownImport,
+    StubTypeCollector,
     TypeCollector,
     TypeMatcher,
 )
@@ -62,12 +63,18 @@ class Test_TypeCollector:
             module_name="sub.module",
         )
         imports = TypeCollector.collect(file=module_path)
-        assert len(imports) == 2
+        assert len(imports) == 4
+        assert imports["sub.module:TopLevelClass"] == KnownImport(
+            import_path="sub.module", import_name="TopLevelClass"
+        )
         assert imports["sub.module.TopLevelClass"] == KnownImport(
             import_path="sub.module", import_name="TopLevelClass"
         )
         # The import for the nested class should still use only the top-level
         # class as an import target
+        assert imports["sub.module:TopLevelClass.NestedClass"] == KnownImport(
+            import_path="sub.module", import_name="TopLevelClass"
+        )
         assert imports["sub.module.TopLevelClass.NestedClass"] == KnownImport(
             import_path="sub.module", import_name="TopLevelClass"
         )
@@ -78,11 +85,14 @@ class Test_TypeCollector:
     def test_type_alias(self, module_factory, src):
         module_path = module_factory(src=src, module_name="sub.module")
         imports = TypeCollector.collect(file=module_path)
-        assert len(imports) == 1
+        assert len(imports) == 2
         assert imports == {
+            "sub.module:alias_name": KnownImport(
+                import_path="sub.module", import_name="alias_name"
+            ),
             "sub.module.alias_name": KnownImport(
                 import_path="sub.module", import_name="alias_name"
-            )
+            ),
         }
 
     @pytest.mark.parametrize(
@@ -99,6 +109,21 @@ class Test_TypeCollector:
         module_path = module_factory(src=src, module_name="sub.module")
         imports = TypeCollector.collect(file=module_path)
         assert len(imports) == 0
+
+
+class Test_StubTypeCollector:
+
+    def test_debug(self, module_factory):
+        module_path = module_factory(
+            src=dedent(
+                """
+                from foo import Bar as Bar
+                from baz import (Bix as Bix_, Qux)
+                """
+            ),
+            module_name="sub.module",
+        )
+        types = StubTypeCollector.collect(file=module_path)
 
 
 class Test_TypeMatcher:
@@ -203,3 +228,19 @@ class Test_TypeMatcher:
         assert type_name == search_name.split(".")[-1]
         assert type_origin is not None
         assert type_origin.import_path == import_path
+
+    def test_scoped_type(self):
+        types = {
+            "foo:Bar": KnownImport(import_path="foo", import_name="Bar"),
+        }
+        matcher = TypeMatcher(types=types)
+
+        type_name, type_origin = matcher.match("Bar")
+        assert type_name is None
+        assert type_origin is None
+
+        matcher.current_module = "foo"
+        type_name, type_origin = matcher.match("Bar")
+        assert type_name == "Bar"
+        assert type_origin is not None
+        assert type_origin.import_path == "foo"
