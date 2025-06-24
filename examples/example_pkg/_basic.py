@@ -5,6 +5,7 @@ Docstrings, including module-level ones, are stripped.
 
 # Existing imports are preserved
 import logging
+from typing import Literal
 
 # Assign-statements are preserved
 logger = logging.getLogger(__name__)  # Inline comments are stripped
@@ -48,6 +49,30 @@ def func_literals(a1, a2="uno"):
     ----------
     a1 : {1, 3, "foo"}
     a2 : {"uno", 2, "drei", "four"}, default: "uno"
+    """
+
+
+def override_docstring_param(d1, d2: dict[Literal["a", "b", "c"], int]):
+    """Check type hint is kept and overrides docstring.
+
+    Parameters
+    ----------
+    d1 : dict of {str : float}
+    d2 : dict of {str : int}
+    """
+
+
+def override_docstring_return(d1, d2) -> list[Literal[-1, 0, 1] | float]:
+    """Check type hint is kept and overrides docstring.
+
+    Parameters
+    ----------
+    d1 : dict of {str : float}
+    d2 : dict of {str : int}
+
+    Returns
+    -------
+    {"-inf", 0, 1, "inf"}
     """
 
 
