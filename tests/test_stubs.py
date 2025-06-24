@@ -317,11 +317,11 @@ class Test_Py2StubTransformer:
     def test_overwriting_typed_return(self, capsys):
         source = dedent(
             '''
-            def foo() -> dict[str, int]:
+            def foo() -> int:
                 """
                 Returns
                 -------
-                out : int
+                out : dict[str, int]
                 """
                 pass
             '''
@@ -336,7 +336,7 @@ class Test_Py2StubTransformer:
         assert expected == result
 
         captured = capsys.readouterr()
-        assert "Replacing existing inline return annotation" in captured.out
+        assert "Keeping existing inline return annotation" in captured.out
 
     def test_preserved_type_comment(self):
         source = dedent(
