@@ -223,8 +223,8 @@ class Test_Py2StubTransformer:
             # ("plain = 3",       "plain : int",  "plain: int"),
             # ("plain = None",    "plain : int",  "plain: int"),
             # ("x, y = (1, 2)",   "x : int",      "x: int; y: Incomplete"),
-            # Replace pre-existing annotations
-            ("annotated: float = 1.0", "annotated : int", "annotated: int"),
+            # Keep pre-existing annotations
+            ("annotated: float = 1.0", "annotated : int", "annotated: float"),
             # Type aliases are untouched
             # ("alias: TypeAlias = int", "alias : str",     "alias: TypeAlias = int"),
             # ("type alias = int",       "alias : str",     "type alias = int"),
@@ -283,7 +283,7 @@ class Test_Py2StubTransformer:
                 a: int
                 b: float
 
-                c: tuple
+                c: list
                 d: ClassVar[bool]
 
                 def __init__(self, a) -> None: ...
@@ -298,7 +298,127 @@ class Test_Py2StubTransformer:
         #  https://typing.readthedocs.io/en/latest/guides/writing_stubs.html#undocumented-objects
         pass
 
-    def test_existing_typed_return(self):
+    def test_keep_assign_param(self):
+        source = dedent(
+            """
+            a: str
+            """
+        )
+        expected = dedent(
+            """
+            a: str
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    def test_keep_inline_assign_with_doctype(self, capsys):
+        source = dedent(
+            '''
+            """
+            Attributes
+            ----------
+            a : Sized
+            """
+            a: str
+            '''
+        )
+        expected = dedent(
+            """
+            a: str
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+        captured = capsys.readouterr()
+        assert "Keeping existing inline annotation for assignment" in captured.out
+
+    def test_keep_class_assign_param(self):
+        source = dedent(
+            """
+            class Foo:
+                a: str
+            """
+        )
+        expected = dedent(
+            """
+            class Foo:
+                a: str
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    def test_keep_inline_class_assign_with_doctype(self, capsys):
+        source = dedent(
+            '''
+            class Foo:
+                """
+                Attributes
+                ----------
+                a : Sized
+                """
+                a: str
+            '''
+        )
+        expected = dedent(
+            """
+            class Foo:
+                a: str
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+        captured = capsys.readouterr()
+        assert "Keeping existing inline annotation for assignment" in captured.out
+
+    def test_keep_inline_param(self):
+        source = dedent(
+            """
+            def foo(a: str) -> None:
+                pass
+            """
+        )
+        expected = dedent(
+            """
+            def foo(a: str) -> None: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    def test_keep_inline_param_with_doctype(self, capsys):
+        source = dedent(
+            '''
+            def foo(a: int) -> None:
+                """
+                Parameters
+                ----------
+                a : Sized
+                """
+                pass
+            '''
+        )
+        expected = dedent(
+            """
+            def foo(a: int) -> None: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+        captured = capsys.readouterr()
+        assert "Keeping existing inline parameter annotation" in captured.out
+
+    def test_keep_inline_return(self):
         source = dedent(
             """
             def foo() -> str:
@@ -314,14 +434,14 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-    def test_overwriting_typed_return(self, capsys):
+    def test_keep_inline_return_with_doctype(self, capsys):
         source = dedent(
             '''
             def foo() -> int:
                 """
                 Returns
                 -------
-                out : dict[str, int]
+                out : Sized
                 """
                 pass
             '''
