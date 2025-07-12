@@ -580,7 +580,10 @@ class Py2StubTransformer(cst.CSTTransformer):
                     path=self.current_source, line=position.line
                 )
                 to_keep = _inline_node_as_code(original_node.returns.annotation)
-                details = f"{to_keep}\n{reporter.underline(to_keep)} instead of {annotation_value}"
+                details = (
+                    f"{reporter.underline(to_keep)} "
+                    f"ignoring docstring: {annotation_value}"
+                )
                 reporter.message(
                     short="Keeping existing inline return annotation",
                     details=details,
@@ -647,8 +650,8 @@ class Py2StubTransformer(cst.CSTTransformer):
                         original_node.annotation.annotation
                     )
                     details = (
-                        f"{to_keep}\n"
-                        f"{reporter.underline(to_keep)} instead of {annotation_value}"
+                        f"{reporter.underline(to_keep)} "
+                        f"ignoring docstring: {annotation_value}"
                     )
                     reporter.message(
                         short="Keeping existing inline parameter annotation",
@@ -802,7 +805,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                     updated_node.annotation.annotation
                 )
                 details = (
-                    f"{replaced}\n{reporter.underline(replaced)} -> {pytype.value}"
+                    f"{reporter.underline(to_keep)} ignoring docstring: {pytype.value}"
                 )
                 reporter.message(
                     short="Replacing existing inline annotation",
