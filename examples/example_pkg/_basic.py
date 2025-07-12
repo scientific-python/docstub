@@ -95,10 +95,15 @@ class ExampleClass:
     ----------
     a1 : str
     a2 : float, default 0
+
+    Attributes
+    ----------
+    b1 : Sized
     """
 
-    class NestedClass:
+    b1: int
 
+    class NestedClass:
         def method_in_nested_class(self, a1):
             """
 

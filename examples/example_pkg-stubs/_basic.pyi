@@ -41,6 +41,9 @@ def func_use_from_elsewhere(
 ) -> tuple[CustomException, ExampleClass.NestedClass]: ...
 
 class ExampleClass:
+
+    b1: int
+
     class NestedClass:
         def method_in_nested_class(self, a1: complex) -> None: ...
 
