@@ -571,25 +571,31 @@ class Py2StubTransformer(cst.CSTTransformer):
             assert ds_annotations.returns.value
             annotation_value = ds_annotations.returns.value
 
-            if original_node.returns is not None:
+            if original_node.returns is None:
+                annotation = cst.Annotation(cst.parse_expression(annotation_value))
+                node_changes["returns"] = annotation
+                # TODO: check imports
+                self._required_imports |= ds_annotations.returns.imports
+
+            else:
+                # Notify about ignored docstring annotation
+                # TODO: either remove message or print only in verbose mode
                 position = self.get_metadata(
                     cst.metadata.PositionProvider, original_node
                 ).start
                 reporter = self.reporter.copy_with(
                     path=self.current_source, line=position.line
                 )
-                replaced = _inline_node_as_code(original_node.returns.annotation)
+                to_keep = _inline_node_as_code(original_node.returns.annotation)
                 details = (
-                    f"{replaced}\n{reporter.underline(replaced)} -> {annotation_value}"
+                    f"{reporter.underline(to_keep)} "
+                    f"ignoring docstring: {annotation_value}"
                 )
                 reporter.message(
-                    short="Replacing existing inline return annotation",
+                    short="Keeping existing inline return annotation",
                     details=details,
                 )
 
-            annotation = cst.Annotation(cst.parse_expression(annotation_value))
-            node_changes["returns"] = annotation
-            self._required_imports |= ds_annotations.returns.imports
         elif original_node.returns is None:
             annotation = cst.Annotation(cst.parse_expression("None"))
             node_changes["returns"] = annotation
@@ -633,10 +639,35 @@ class Py2StubTransformer(cst.CSTTransformer):
             if pytype:
                 if defaults_to_none:
                     pytype = pytype.as_optional()
-                annotation = cst.Annotation(cst.parse_expression(pytype.value))
-                node_changes["annotation"] = annotation
-                if pytype.imports:
-                    self._required_imports |= pytype.imports
+                annotation_value = pytype.value
+
+                if original_node.annotation is None:
+                    annotation = cst.Annotation(cst.parse_expression(annotation_value))
+                    node_changes["annotation"] = annotation
+                    # TODO: check imports
+                    if pytype.imports:
+                        self._required_imports |= pytype.imports
+
+                else:
+                    # Notify about ignored docstring annotation
+                    # TODO: either remove message or print only in verbose mode
+                    position = self.get_metadata(
+                        cst.metadata.PositionProvider, original_node
+                    ).start
+                    reporter = self.reporter.copy_with(
+                        path=self.current_source, line=position.line
+                    )
+                    to_keep = cst.Module([]).code_for_node(
+                        original_node.annotation.annotation
+                    )
+                    details = (
+                        f"{reporter.underline(to_keep)} "
+                        f"ignoring docstring: {annotation_value}"
+                    )
+                    reporter.message(
+                        short="Keeping existing inline parameter annotation",
+                        details=details,
+                    )
 
         # Potentially use "Incomplete" except for first param in (class)methods
         elif not is_self_or_cls and updated_node.annotation is None:
@@ -764,30 +795,32 @@ class Py2StubTransformer(cst.CSTTransformer):
         if pytypes and name in pytypes.attributes:
             pytype = pytypes.attributes[name]
             expr = cst.parse_expression(pytype.value)
-            self._required_imports |= pytype.imports
 
-            if updated_node.annotation is not None:
-                # Turn original annotation into str and print with context
+            if updated_node.annotation is None:
+                self._required_imports |= pytype.imports
+                updated_node = updated_node.with_deep_changes(
+                    updated_node.annotation, annotation=expr
+                )
+
+            else:
+                # Notify about ignored docstring annotation
+                # TODO: either remove message or print only in verbose mode
                 position = self.get_metadata(
                     cst.metadata.PositionProvider, original_node
                 ).start
                 reporter = self.reporter.copy_with(
                     path=self.current_source, line=position.line
                 )
-                replaced = cst.Module([]).code_for_node(
+                to_keep = cst.Module([]).code_for_node(
                     updated_node.annotation.annotation
                 )
                 details = (
-                    f"{replaced}\n{reporter.underline(replaced)} -> {pytype.value}"
+                    f"{reporter.underline(to_keep)} ignoring docstring: {pytype.value}"
                 )
                 reporter.message(
-                    short="Replacing existing inline annotation",
+                    short="Keeping existing inline annotation for assignment",
                     details=details,
                 )
-
-            updated_node = updated_node.with_deep_changes(
-                updated_node.annotation, annotation=expr
-            )
 
         return updated_node
 

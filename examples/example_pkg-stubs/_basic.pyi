@@ -29,6 +29,10 @@ def func_contains(
 def func_literals(
     a1: Literal[1, 3, "foo"], a2: Literal["uno", 2, "drei", "four"] = ...
 ) -> None: ...
+def override_docstring_param(
+    d1: dict[str, float], d2: dict[Literal["a", "b", "c"], int]
+) -> None: ...
+def override_docstring_return() -> list[Literal[-1, 0, 1] | float]: ...
 def func_use_from_elsewhere(
     a1: CustomException,
     a2: ExampleClass,
@@ -37,6 +41,9 @@ def func_use_from_elsewhere(
 ) -> tuple[CustomException, ExampleClass.NestedClass]: ...
 
 class ExampleClass:
+
+    b1: int
+
     class NestedClass:
         def method_in_nested_class(self, a1: complex) -> None: ...
 
