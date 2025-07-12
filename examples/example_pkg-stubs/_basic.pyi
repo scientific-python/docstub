@@ -32,9 +32,7 @@ def func_literals(
 def override_docstring_param(
     d1: dict[str, float], d2: dict[Literal["a", "b", "c"], int]
 ) -> None: ...
-def override_docstring_return(
-    d1: dict[str, float], d2: dict[str, int]
-) -> list[Literal[-1, 0, 1] | float]: ...
+def override_docstring_return() -> list[Literal[-1, 0, 1] | float]: ...
 def func_use_from_elsewhere(
     a1: CustomException,
     a2: ExampleClass,

@@ -62,13 +62,8 @@ def override_docstring_param(d1, d2: dict[Literal["a", "b", "c"], int]):
     """
 
 
-def override_docstring_return(d1, d2) -> list[Literal[-1, 0, 1] | float]:
+def override_docstring_return() -> list[Literal[-1, 0, 1] | float]:
     """Check type hint is kept and overrides docstring.
-
-    Parameters
-    ----------
-    d1 : dict of {str : float}
-    d2 : dict of {str : int}
 
     Returns
     -------
