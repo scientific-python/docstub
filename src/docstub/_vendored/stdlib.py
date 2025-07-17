@@ -87,8 +87,6 @@ def _fnmatch_translate(pat: str, STAR: str, QUESTION_MARK: str) -> str:
 # Vendored `glob.translate` from Python 3.13.4 because it isn't available in
 # earlier Python versions. Copied from
 # https://github.com/python/cpython/blob/8a526ec7cbea8fafc9dae4b3dd6371906b9be342/Lib/glob.py#L267-L319
-
-
 def glob_translate(
     pat: str,
     *,
