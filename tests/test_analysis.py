@@ -49,7 +49,6 @@ def module_factory(tmp_path):
 
 
 class Test_TypeCollector:
-
     def test_classes(self, module_factory):
         module_path = module_factory(
             src=dedent(
@@ -99,6 +98,41 @@ class Test_TypeCollector:
         module_path = module_factory(src=src, module_name="sub.module")
         imports = TypeCollector.collect(file=module_path)
         assert len(imports) == 0
+
+    @pytest.mark.parametrize(
+        "src",
+        [
+            "from calendar import Aug",
+            "from . import Aug",
+            "from calendar import August as Aug",
+            "from . import Agust as Aug",
+        ],
+    )
+    def test_from_import(self, module_factory, src):
+        module_path = module_factory(src=src, module_name="sub.module")
+        imports = TypeCollector.collect(file=module_path)
+        assert len(imports) == 1
+        assert imports == {
+            "sub.module.Aug": KnownImport(import_path="sub.module", import_name="Aug")
+        }
+
+    @pytest.mark.parametrize(
+        "src",
+        [
+            "from calendar import Aug, Dec",
+            "from . import Aug, Dec",
+            "from calendar import August as Aug, December as Dec",
+            "from . import August as Aug, December as Dec",
+        ],
+    )
+    def test_from_import_multiple(self, module_factory, src):
+        module_path = module_factory(src=src, module_name="sub.module")
+        imports = TypeCollector.collect(file=module_path)
+        assert len(imports) == 2
+        assert imports == {
+            "sub.module.Aug": KnownImport(import_path="sub.module", import_name="Aug"),
+            "sub.module.Dec": KnownImport(import_path="sub.module", import_name="Dec"),
+        }
 
 
 class Test_TypeMatcher:
