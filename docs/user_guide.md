@@ -172,9 +172,35 @@ Two command line options can help addressing these errors gradually:
 
 ## Dealing with typing problems
 
-Docstub may not fully or correctly implement a particular part of Python's typing system yet.
+For various reasons – missing features in docstub, or limitations of Python's typing system – it may not always be possible to correctly type something in a docstring.
+In those cases, you docstub provides a few approaches to dealing with this.
 
-In some cases, you can use a comment directive to selectively disable docstub for a specific block of lines:
+
+### Use inline type annotation
+
+Docstub will always preserve inline type annotations, regardless of what the docstring contains.
+This is useful for example, if you want to express something that isn't yet supported by Python's type system.
+
+E.g., consider the docstring type of `ord` parameter in [`numpy.linalg.matrix_norm`](https://numpy.org/doc/stable/reference/generated/numpy.linalg.matrix_norm.html)
+```rst
+ord : {1, -1, 2, -2, inf, -inf, ‘fro’, ‘nuc’}, optional
+```
+[Python's type system currently can't express floats as literal types](https://typing.python.org/en/latest/spec/literal.html#:~:text=Floats%3A%20e.g.%20Literal%5B3.14%5D) – such as `inf`.
+We don't want to make the type description here less specific to users, so instead, you could handle this with a less constrained inline type annotation like
+```python
+ord: Literal[1, -1, 2, -2, 'fro', 'nuc'] | float
+```
+Docstub will include the latter less constrained type in the stubs.
+This allows you to keep the information in the docstring while still having valid – if a bit less constrained – stubs.
+
+
+### Preserve code with comment directive
+
+At its heart, docstub transforms Python source files into stub files.
+You can tell docstub to temporarily stop that transformation for a specific area with a comment directive.
+Wrapping lines of code with `docstub: off` and `docstub: on` comments will preserve these lines completely.
+
+E.g., consider the following example:
 ```python
 class Foo:
     # docstub: off
@@ -184,7 +210,7 @@ class Foo:
     c: int = None
     d: str = ""
 ```
-will leave the parameters within the `# docstub` guards untouched in the resulting stub file:
+will leave the guarded parameters untouched in the resulting stub file:
 ```python
 class Foo:
     a: int = None
@@ -193,5 +219,7 @@ class Foo:
     d: str
 ```
 
-If that is not possible, you can – for now – fallback to writing a correct stub file by hand.
+### Write a manual stub file
+
+If all of the above does not solve your issue, you can fall back to writing a correct stub file by hand.
 Docstub will preserve this file and integrated it with other automatically generated stubs.
