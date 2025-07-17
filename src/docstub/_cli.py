@@ -95,14 +95,14 @@ def _collect_types(root_path, *, ignore=()):
     -------
     types : dict[str, ~.KnownImport]
     """
-    types = common_known_types()
-
+    types = {}
     collect_cached_types = FileCache(
         func=TypeCollector.collect,
         serializer=TypeCollector.ImportSerializer(),
         cache_dir=Path.cwd() / ".docstub_cache",
         name=f"{__version__}/collected_types",
     )
+
     if root_path.is_dir():
         for source_path in walk_python_package(root_path, ignore=ignore):
             logger.info("collecting types in %s", source_path)
