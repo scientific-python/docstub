@@ -9,8 +9,11 @@ maintainers = [
 ]
 description = "Generate Python stub files from docstrings"
 readme = "README.md"
-license = "BSD-3-Clause"
-license-files = ["LICENSE"]
+
+# Need to include license of vendored code as well
+license = "BSD-3-Clause AND PSF-2.0"
+license-files = ["LICENSE.txt"]
+
 requires-python = ">=3.12"
 keywords = ["typing", "stub files", "docstings", "numpydoc"]
 classifiers = [
@@ -120,6 +123,7 @@ run.source = ["docstub"]
 Path = "pathlib"
 
 [tool.docstub.type_prefixes]
+re = "re"
 cst = "libcst"
 lark = "lark"
 numpydoc = "numpydoc"

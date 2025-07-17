@@ -31,7 +31,7 @@ with grammar_path.open() as file:
 _lark = lark.Lark(_grammar, propagate_positions=True, strict=True)
 
 
-def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token:
+def _find_one_token(tree, *, name):
     """Find token with a specific type name in tree.
 
     Parameters
