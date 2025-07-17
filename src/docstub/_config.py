@@ -74,18 +74,18 @@ class Config:
 
     @staticmethod
     def validate(mapping):
-        for name in ["types", "type_prefixes", "type_nicknames"]:
-            table = mapping[name]
+        for field in ["types", "type_prefixes", "type_nicknames"]:
+            table = mapping[field]
             if not isinstance(table, dict):
-                raise TypeError(f"{name} must be a dict")
+                raise TypeError(f"{field} must be a dict")
             for key, value in table.items():
                 if not isinstance(key, str) or not isinstance(value, str):
-                    raise TypeError(f"`{key} = {value}` in {name} must both be a str")
+                    raise TypeError(f"`{key} = {value}` in {field} must both be a str")
 
-        for name in ["ignore_files"]:
-            sequence = mapping[name]
+        for field in ["ignore_files"]:
+            sequence = mapping[field]
             if not isinstance(sequence, list):
-                raise TypeError(f"{name} must be a list")
+                raise TypeError(f"{field} must be a list")
             for value in sequence:
                 if not isinstance(value, str):
-                    raise TypeError(f"`{value}` in {name} must be a str")
+                    raise TypeError(f"`{value}` in {field} must be a str")
