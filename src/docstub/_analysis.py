@@ -388,6 +388,18 @@ class TypeCollector(cst.CSTVisitor):
             self._collect_type_annotation(stack)
         return False
 
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
+        """Collect "from import" targets as usable types within each module."""
+        for import_alias in node.names:
+            if cstm.matches(import_alias, cstm.ImportStar()):
+                continue
+            name = import_alias.evaluated_alias
+            if name is None:
+                name = import_alias.evaluated_name
+            assert isinstance(name, str)
+            stack = [*self._stack, name]
+            self._collect_type_annotation(stack)
+
     def _collect_type_annotation(self, stack):
         """Collect an importable type annotation.
 
