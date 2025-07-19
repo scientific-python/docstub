@@ -5,9 +5,10 @@ import importlib
 import json
 import logging
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from functools import cache
 from pathlib import Path
+from typing import Self
 
 import libcst as cst
 import libcst.matchers as cstm
@@ -289,6 +290,196 @@ def common_known_types():
     # Overrides containers from typing
     known_imports |= _runtime_types_in_module("collections.abc")
     return known_imports
+
+
+class Node:
+    def __init__(self, name):
+        self.name = name
+        self._parent = None
+        self._children = []
+
+    @property
+    def parent(self):
+        return self._parent
+
+    @property
+    def children(self):
+        return self._children.copy()
+
+    @property
+    def is_leaf(self):
+        return not self._children
+
+    @property
+    def fullname(self):
+        names = [node.name for node in self.walk_up()][::-1]
+        return ".".join(names)
+
+    def add_child(self, child):
+        assert child.parent is None
+        child._parent = self
+        self._children.append(child)
+
+    def walk_down(self):
+        yield self
+        for child in self._children:
+            yield from child.walk_down()
+
+    def walk_up(self):
+        current = self
+        while current.parent is not None:
+            yield current
+            current = current.parent
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self.name!r})"
+
+
+class Tree(Node):
+    def __init__(self):
+        super().__init__(name=None)
+
+    def add_child(self, child):
+        if not isinstance(child, ModuleNode):
+            raise TypeError("expected new child to by a module")
+        return super().add_child(child)
+
+    def get(self):
+
+
+class ModuleNode(Node):
+
+    def __init__(self, name, file_path):
+        super().__init__(name=name)
+        self.file_path = file_path
+
+
+class _InModuleNode(Node):
+    pass
+
+
+class ClassNode(_InModuleNode):
+    pass
+
+
+class TypeAliasNode(_InModuleNode):
+    pass
+
+
+class ImportFromNode(_InModuleNode):
+    pass
+
+
+class NodeCollector(cst.CSTVisitor):
+    """Collect types from a given Python file.
+
+    Examples
+    --------
+    >>> types = NodeCollector.collect(__file__)
+    >>> types[f"{__name__}.TypeCollector"]
+    <KnownImport 'from docstub._analysis import TypeCollector'>
+    """
+
+    class ImportSerializer:
+        """Implements the `FuncSerializer` protocol to cache `TypeCollector.collect`."""
+
+        suffix = ".json"
+        encoding = "utf-8"
+
+        def hash_args(self, path: Path) -> str:
+            """Compute a unique hash from the path passed to `TypeCollector.collect`."""
+            key = pyfile_checksum(path)
+            return key
+
+        def serialize(self, data: dict[str, KnownImport]) -> bytes:
+            """Serialize results from `TypeCollector.collect`."""
+            primitives = {qualname: asdict(imp) for qualname, imp in data.items()}
+            raw = json.dumps(primitives, separators=(",", ":")).encode(self.encoding)
+            return raw
+
+        def deserialize(self, raw: bytes) -> dict[str, KnownImport]:
+            """Deserialize results from `TypeCollector.collect`."""
+            primitives = json.loads(raw.decode(self.encoding))
+            data = {qualname: KnownImport(**kw) for qualname, kw in primitives.items()}
+            return data
+
+    @classmethod
+    def collect(cls, file_path):
+        """Collect importable type annotations in given file.
+
+        Parameters
+        ----------
+        file : Path
+
+        Returns
+        -------
+        collected : dict[str, KnownImport]
+        """
+        file_path = Path(file_path)
+        with file_path.open("r") as fo:
+            source = fo.read()
+
+        tree = cst.parse_module(source)
+        collector = cls(file_path=file_path)
+        tree.visit(collector)
+        return collector._root_node
+
+    def __init__(self, *, file_path):
+        """Initialize type collector.
+
+        Parameters
+        ----------
+        module_name : str
+        """
+        assert "." not in file_path.stem
+        self._root_node = ModuleNode(name=file_path.stem, file_path=file_path)
+        self._current_node = self._root_node
+
+    def visit_ClassDef(self, node: cst.ClassDef) -> bool:
+        node = ClassNode(name=node.name.value)
+        self._current_node.add_child(node)
+        self._current_node = node
+        return True
+
+    def leave_ClassDef(self, original_node: cst.ClassDef) -> None:
+        self._current_node = self._current_node.parent
+
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> bool:
+        return False
+
+    def visit_TypeAlias(self, node: cst.TypeAlias) -> bool:
+        """Collect type alias with 3.12 syntax."""
+        node = TypeAliasNode(name=node.name.value)
+        self._current_node.add_child(node)
+        return False
+
+    def visit_AnnAssign(self, node: cst.AnnAssign) -> bool:
+        """Collect type alias annotated with `TypeAlias`."""
+        is_type_alias = cstm.matches(
+            node,
+            cstm.AnnAssign(
+                annotation=cstm.Annotation(annotation=cstm.Name(value="TypeAlias"))
+            ),
+        )
+        if is_type_alias and node.value is not None:
+            names = cstm.findall(node.target, cstm.Name())
+            assert len(names) == 1
+            node = Node(name=names[0].value)
+            self._current_node.add_child(node)
+        return False
+
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
+        """Collect "from import" targets as usable types within each module."""
+        for import_alias in node.names:
+            if cstm.matches(import_alias, cstm.ImportStar()):
+                continue
+            name = import_alias.evaluated_alias
+            if name is None:
+                name = import_alias.evaluated_name
+            assert isinstance(name, str)
+
+            node = ImportFromNode(name=name)
+            self._current_node.add_child(node)
 
 
 class TypeCollector(cst.CSTVisitor):
