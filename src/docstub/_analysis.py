@@ -5,15 +5,17 @@ import importlib
 import json
 import logging
 import re
-from dataclasses import asdict, dataclass, field
+import dataclasses as dc
+from itertools import pairwise
 from functools import cache
 from pathlib import Path
-from typing import Self
+from typing import Self, ClassVar
 
 import libcst as cst
 import libcst.matchers as cstm
 
 from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
+from . import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,7 @@ def _shared_leading_qualname(*qualnames):
     return ".".join(shared)
 
 
-@dataclass(slots=True, frozen=True)
+@dc.dataclass(slots=True, frozen=True)
 class KnownImport:
     """Import information associated with a single known type annotation.
 
@@ -209,6 +211,96 @@ class KnownImport:
         return out
 
 
+@dc.dataclass(slots=True, kw_only=True)
+class PyNode:
+    _TYPE_KINDS: ClassVar[set[str]] = {
+        "builtin",
+        "class",
+        "type_alias",
+        "ann_assign",
+        "import_from",
+        "generic_type",
+    }
+    _KINDS: ClassVar[set[str]] = {"module"} | _TYPE_KINDS
+
+    name: str
+    kind: str
+    loc: str | None = None
+    parent: Self | None = None
+    children: list[Self] = dc.field(default_factory=list)
+
+    @property
+    def is_leaf(self):
+        return not self.children
+
+    @property
+    def fullname(self):
+        names = [node.name for node in self.walk_parents()][::-1]
+        return ".".join(names + [self.name])
+
+    @property
+    def is_type(self):
+        return self.kind in self._TYPE_KINDS
+
+    @property
+    def import_statement(self):
+        module = []
+        qualname = [self.name]
+        for parent in self.walk_parents():
+            if parent.kind == "module":
+                module.insert(0, parent.name)
+            else:
+                qualname.insert(0, parent.name)
+
+        if module:
+            return f"from {'.'.join(module)} import {'.'.join(qualname)}"
+        else:
+            return None
+
+    def add_child(self, child):
+        assert child.parent is None
+        child.parent = self
+        self.children.append(child)
+
+    def _walk_tree(self, names=()):
+        names = names + (self.name,)
+        yield names, self
+        for child in self.children:
+            yield from child._walk_tree(names)
+
+    def walk_tree(self):
+        yield from self._walk_tree()
+
+    def walk_parents(self):
+        current = self.parent
+        while current is not None:
+            yield current
+            current = current.parent
+
+    def serialize_tree(self):
+        raw = {field.name: getattr(self, field.name) for field in dc.fields(self)}
+        del raw["parent"]
+        raw["children"] = [child.serialize_tree() for child in self.children]
+        return raw
+
+    @classmethod
+    def from_serialized_tree(cls, primitives):
+        self = cls(**primitives)
+        if self.parent:
+            self.parent = cls.from_serialized_tree(self.parent)
+        self.children = [cls.from_serialized_tree(child) for child in self.children]
+        return self
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self.name!r}, kind={self.kind!r})"
+
+    def __post_init__(self):
+        unsupported_kind = {self.kind} - self._KINDS
+        if unsupported_kind:
+            msg = f"unsupported kind {unsupported_kind}, supported are {self._KINDS}"
+            raise ValueError(msg)
+
+
 def _is_type(value):
     """Check if value is a type.
 
@@ -228,28 +320,33 @@ def _is_type(value):
 
 
 def _builtin_types():
-    """Return known imports for all builtins (in the current runtime).
+    """Builtin types in the current runtime.
 
     Returns
     -------
-    known_imports : dict[str, KnownImport]
+    types : dict[str, PyNode]
     """
-    known_builtins = set(dir(builtins))
+    builtins_names = set(dir(builtins))
 
-    known_imports = {}
-    for name in known_builtins:
+    types = {}
+    for name in builtins_names:
         if name.startswith("_"):
             continue
         value = getattr(builtins, name)
         if not _is_type(value):
             continue
-        known_imports[name] = KnownImport(builtin_name=name)
+        types[name] = PyNode(name=name, kind="builtin")
 
-    return known_imports
+    return types
 
 
 def _runtime_types_in_module(module_name):
     module = importlib.import_module(module_name)
+
+    modules = [PyNode(name=name, kind="module") for name in module_name.split(".")]
+    for parent, child in pairwise(modules):
+        parent.add_child(child)
+
     types = {}
     for name in module.__all__:
         if name.startswith("_"):
@@ -258,14 +355,14 @@ def _runtime_types_in_module(module_name):
         if not _is_type(value):
             continue
 
-        import_ = KnownImport(import_path=module_name, import_name=name)
-        types[name] = import_
-        types[f"{module_name}.{name}"] = import_
+        pynode = PyNode(name=name, kind="generic_type")
+        modules[-1].add_child(pynode)
+        types[pynode.fullname] = pynode
 
     return types
 
 
-def common_known_types():
+def common_types_nicknames():
     """Return known imports for commonly supported types.
 
     This includes builtin types, and types from the `typing` or
@@ -273,112 +370,42 @@ def common_known_types():
 
     Returns
     -------
-    known_imports : dict[str, KnownImport]
+    types : list[PyNode]
+    type_nicknames : dict[str, str]
 
     Examples
     --------
     >>> types = common_known_types()
     >>> types["str"]
-    <KnownImport str (builtin)>
+    PyNode('str', kind='builtin')
     >>> types["Iterable"]
-    <KnownImport 'from collections.abc import Iterable'>
+    PyNode('Iterable', kind='generic_type')
+    >>> types["Iterable"].fullname
+    'collections.abc.Iterable'
     >>> types["collections.abc.Iterable"]
-    <KnownImport 'from collections.abc import Iterable'>
+    PyNode('Iterable', kind='generic_type')
     """
-    known_imports = _builtin_types()
-    known_imports |= _runtime_types_in_module("typing")
-    # Overrides containers from typing
-    known_imports |= _runtime_types_in_module("collections.abc")
-    return known_imports
+    pynodes = _builtin_types()
+    pynodes |= _runtime_types_in_module("typing")
+    collections_abc = _runtime_types_in_module("collections.abc")
+    pynodes |= collections_abc
+
+    type_nicknames = {node.name: fullname for fullname, node in collections_abc.items()}
+
+    return pynodes, type_nicknames
 
 
-class Node:
-    def __init__(self, name):
-        self.name = name
-        self._parent = None
-        self._children = []
-
-    @property
-    def parent(self):
-        return self._parent
-
-    @property
-    def children(self):
-        return self._children.copy()
-
-    @property
-    def is_leaf(self):
-        return not self._children
-
-    @property
-    def fullname(self):
-        names = [node.name for node in self.walk_up()][::-1]
-        return ".".join(names)
-
-    def add_child(self, child):
-        assert child.parent is None
-        child._parent = self
-        self._children.append(child)
-
-    def walk_down(self):
-        yield self
-        for child in self._children:
-            yield from child.walk_down()
-
-    def walk_up(self):
-        current = self
-        while current.parent is not None:
-            yield current
-            current = current.parent
-
-    def __repr__(self):
-        return f"{type(self).__name__}({self.name!r})"
-
-
-class Tree(Node):
-    def __init__(self):
-        super().__init__(name=None)
-
-    def add_child(self, child):
-        if not isinstance(child, ModuleNode):
-            raise TypeError("expected new child to by a module")
-        return super().add_child(child)
-
-    def get(self):
-
-
-class ModuleNode(Node):
-
-    def __init__(self, name, file_path):
-        super().__init__(name=name)
-        self.file_path = file_path
-
-
-class _InModuleNode(Node):
-    pass
-
-
-class ClassNode(_InModuleNode):
-    pass
-
-
-class TypeAliasNode(_InModuleNode):
-    pass
-
-
-class ImportFromNode(_InModuleNode):
-    pass
-
-
-class NodeCollector(cst.CSTVisitor):
+class PythonCollector(cst.CSTVisitor):
     """Collect types from a given Python file.
 
     Examples
     --------
-    >>> types = NodeCollector.collect(__file__)
+    >>> types = PythonCollector.collect(__file__)
     >>> types[f"{__name__}.TypeCollector"]
     <KnownImport 'from docstub._analysis import TypeCollector'>
     """
+
+    METADATA_DEPENDENCIES = (cst.metadata.PositionProvider,)
 
     class ImportSerializer:
         """Implements the `FuncSerializer` protocol to cache `TypeCollector.collect`."""
@@ -388,20 +415,20 @@ class NodeCollector(cst.CSTVisitor):
 
         def hash_args(self, path: Path) -> str:
             """Compute a unique hash from the path passed to `TypeCollector.collect`."""
-            key = pyfile_checksum(path)
+            key = pyfile_checksum(path, salt=__version__)
             return key
 
-        def serialize(self, data: dict[str, KnownImport]) -> bytes:
+        def serialize(self, pynode: PyNode) -> bytes:
             """Serialize results from `TypeCollector.collect`."""
-            primitives = {qualname: asdict(imp) for qualname, imp in data.items()}
+            primitives = pynode.serialize_tree()
             raw = json.dumps(primitives, separators=(",", ":")).encode(self.encoding)
             return raw
 
-        def deserialize(self, raw: bytes) -> dict[str, KnownImport]:
+        def deserialize(self, raw: bytes) -> PyNode:
             """Deserialize results from `TypeCollector.collect`."""
             primitives = json.loads(raw.decode(self.encoding))
-            data = {qualname: KnownImport(**kw) for qualname, kw in primitives.items()}
-            return data
+            pynode = PyNode.from_serialized_tree(primitives)
+            return pynode
 
     @classmethod
     def collect(cls, file_path):
@@ -409,20 +436,22 @@ class NodeCollector(cst.CSTVisitor):
 
         Parameters
         ----------
-        file : Path
+        file_path : Path
 
         Returns
         -------
-        collected : dict[str, KnownImport]
+        module_tree : PyNode
         """
         file_path = Path(file_path)
         with file_path.open("r") as fo:
             source = fo.read()
 
         tree = cst.parse_module(source)
+        meta_tree = cst.metadata.MetadataWrapper(tree)
         collector = cls(file_path=file_path)
-        tree.visit(collector)
-        return collector._root_node
+        meta_tree.visit(collector)
+
+        return collector._root_pynode
 
     def __init__(self, *, file_path):
         """Initialize type collector.
@@ -431,26 +460,44 @@ class NodeCollector(cst.CSTVisitor):
         ----------
         module_name : str
         """
-        assert "." not in file_path.stem
-        self._root_node = ModuleNode(name=file_path.stem, file_path=file_path)
-        self._current_node = self._root_node
+        full_module_name = module_name_from_path(file_path)
+        current_module, *parent_modules = full_module_name.split(".")[::-1]
+
+        self._file_path = file_path
+        self._root_pynode = PyNode(
+            name=current_module, kind="module", loc=str(file_path)
+        )
+        self._current_pynode = self._root_pynode
+
+        for name in parent_modules:
+            # TODO set location for parent modules too
+            parent = PyNode(name=name, kind="module")
+            parent.add_child(self._root_pynode)
+            self._root_pynode = parent
+
+    def _get_loc(self, node):
+        pos = self.get_metadata(cst.metadata.PositionProvider, node).start
+        loc = f"{self._file_path}:{pos.line}:{pos.column}"
+        return loc
 
     def visit_ClassDef(self, node: cst.ClassDef) -> bool:
-        node = ClassNode(name=node.name.value)
-        self._current_node.add_child(node)
-        self._current_node = node
+        pynode = PyNode(name=node.name.value, kind="class", loc=self._get_loc(node))
+        self._current_pynode.add_child(pynode)
+        self._current_pynode = pynode
         return True
 
     def leave_ClassDef(self, original_node: cst.ClassDef) -> None:
-        self._current_node = self._current_node.parent
+        self._current_pynode = self._current_pynode.parent
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> bool:
         return False
 
     def visit_TypeAlias(self, node: cst.TypeAlias) -> bool:
         """Collect type alias with 3.12 syntax."""
-        node = TypeAliasNode(name=node.name.value)
-        self._current_node.add_child(node)
+        pynode = PyNode(
+            name=node.name.value, kind="type_alias", loc=self._get_loc(node)
+        )
+        self._current_pynode.add_child(pynode)
         return False
 
     def visit_AnnAssign(self, node: cst.AnnAssign) -> bool:
@@ -464,8 +511,10 @@ class NodeCollector(cst.CSTVisitor):
         if is_type_alias and node.value is not None:
             names = cstm.findall(node.target, cstm.Name())
             assert len(names) == 1
-            node = Node(name=names[0].value)
-            self._current_node.add_child(node)
+            pynode = PyNode(
+                name=names[0].value, kind="ann_assign", loc=self._get_loc(node)
+            )
+            self._current_pynode.add_child(pynode)
         return False
 
     def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
@@ -478,8 +527,8 @@ class NodeCollector(cst.CSTVisitor):
                 name = import_alias.evaluated_name
             assert isinstance(name, str)
 
-            node = ImportFromNode(name=name)
-            self._current_node.add_child(node)
+            pynode = PyNode(name=name, kind="import_from", loc=self._get_loc(node))
+            self._current_pynode.add_child(pynode)
 
 
 class TypeCollector(cst.CSTVisitor):
@@ -597,7 +646,7 @@ class TypeMatcher:
 
     Attributes
     ----------
-    types : dict[str, KnownImport]
+    types : dict[str, PyNode]
     type_prefixes : dict[str, KnownImport]
     type_nicknames : dict[str, str]
     successful_queries : int
@@ -606,7 +655,7 @@ class TypeMatcher:
 
     Examples
     --------
-    >>> from docstub._analysis import TypeMatcher, common_known_types
+    >>> from docstub._analysis import TypeMatcher
     >>> db = TypeMatcher()
     >>> db.match("Any")
     ('Any', <KnownImport 'from typing import Any'>)
@@ -626,12 +675,11 @@ class TypeMatcher:
         type_prefixes : dict[str, KnownImport]
         type_nicknames : dict[str, str]
         """
-        self.types = types or common_known_types()
+        self.types = types or {}
         self.type_prefixes = type_prefixes or {}
         self.type_nicknames = type_nicknames or {}
         self.successful_queries = 0
         self.unknown_qualnames = []
-
         self.current_module = None
 
     def match(self, search_name):
@@ -644,11 +692,9 @@ class TypeMatcher:
 
         Returns
         -------
-        type_name : str | None
-        type_origin : KnownImport | None
+        type : pynode | None
         """
-        type_name = None
-        type_origin = None
+        pynode = None
 
         if search_name.startswith("~."):
             # Sphinx like matching with abbreviated name
@@ -661,8 +707,7 @@ class TypeMatcher:
             }
             if len(matches) > 1:
                 shortest_key = sorted(matches.keys(), key=lambda x: len(x))[0]
-                type_origin = matches[shortest_key]
-                type_name = shortest_key
+                pynode = matches[shortest_key]
                 logger.warning(
                     "%r in %s matches multiple types %r, using %r",
                     search_name,
@@ -671,7 +716,7 @@ class TypeMatcher:
                     shortest_key,
                 )
             elif len(matches) == 1:
-                type_name, type_origin = matches.popitem()
+                _, pynode = matches.popitem()
             else:
                 search_name = search_name[2:]
                 logger.debug(
@@ -683,38 +728,25 @@ class TypeMatcher:
         # Replace alias
         search_name = self.type_nicknames.get(search_name, search_name)
 
-        if type_origin is None and self.current_module:
+        if pynode is None and self.current_module:
             # Try scope of current module
             module_name = module_name_from_path(self.current_module)
             try_qualname = f"{module_name}.{search_name}"
-            type_origin = self.types.get(try_qualname)
-            if type_origin:
-                type_name = search_name
+            pynode = self.types.get(try_qualname)
 
-        if type_origin is None and search_name in self.types:
-            type_name = search_name
-            type_origin = self.types[search_name]
+        if pynode is None and search_name in self.types:
+            pynode = self.types[search_name]
 
-        if type_origin is None:
+        if pynode is None:
             # Try a subset of the qualname (first 'a.b.c', then 'a.b' and 'a')
             for partial_qualname in reversed(accumulate_qualname(search_name)):
-                type_origin = self.type_prefixes.get(partial_qualname)
-                if type_origin:
-                    type_name = search_name
+                pynode = self.type_prefixes.get(partial_qualname)
+                if pynode:
                     break
 
-        if (
-            type_origin is not None
-            and type_name is not None
-            and type_name != type_origin.target
-            and not type_name.startswith(type_origin.target)
-        ):
-            # Ensure that the annotation matches the import target
-            type_name = type_name[type_name.find(type_origin.target) :]
-
-        if type_name is not None:
+        if pynode is not None:
             self.successful_queries += 1
         else:
             self.unknown_qualnames.append(search_name)
 
-        return type_name, type_origin
+        return pynode

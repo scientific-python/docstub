@@ -106,7 +106,7 @@ def module_name_from_path(path):
     return name
 
 
-def pyfile_checksum(path):
+def pyfile_checksum(path, salt=""):
     """Compute a unique key for a Python file.
 
     The key takes into account the given `path`, the relative position if the
@@ -124,7 +124,7 @@ def pyfile_checksum(path):
     absolute_path = str(path.resolve()).encode()
     with open(path, "rb") as fp:
         content = fp.read()
-    key = crc32(content + module_name + absolute_path)
+    key = crc32(content + module_name + absolute_path + salt.encode())
     return key
 
 
