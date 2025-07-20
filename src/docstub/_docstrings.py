@@ -524,13 +524,14 @@ class DoctypeTransformer(lark.visitors.Transformer):
             Possibly modified or normalized qualname.
         """
         if self.matcher is not None:
-            annotation_name, known_import = self.matcher.match(qualname)
+            pynode = self.matcher.match(qualname)
+            annotation_name = pynode.fullname
         else:
             annotation_name = None
-            known_import = None
+            pynode = None
 
-        if known_import and known_import.has_import:
-            self._collected_imports.add(known_import)
+        if pynode and pynode.import_statement:
+            self._collected_imports.add(pynode.import_statement)
 
         if annotation_name:
             matched_qualname = annotation_name

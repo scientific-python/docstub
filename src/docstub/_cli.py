@@ -9,9 +9,9 @@ import click
 
 from ._analysis import (
     KnownImport,
-    TypeCollector,
+    PythonCollector,
     TypeMatcher,
-    common_known_types,
+    common_types_nicknames,
 )
 from ._cache import FileCache
 from ._config import Config
@@ -93,20 +93,26 @@ def _collect_types(root_path, *, ignore=()):
 
     Returns
     -------
-    types : dict[str, ~.KnownImport]
+    types : dict[str, ~.PyNode]
     """
-    types = common_known_types()
+    types = {}
 
     collect_cached_types = FileCache(
-        func=TypeCollector.collect,
-        serializer=TypeCollector.ImportSerializer(),
+        func=PythonCollector.collect,
+        serializer=PythonCollector.ImportSerializer(),
         cache_dir=Path.cwd() / ".docstub_cache",
         name=f"{__version__}/collected_types",
     )
     if root_path.is_dir():
         for source_path in walk_python_package(root_path, ignore=ignore):
             logger.info("collecting types in %s", source_path)
-            types_in_source = collect_cached_types(source_path)
+
+            module_tree = collect_cached_types(source_path)
+            types_in_source = {
+                ".".join(fullname): pynode
+                for fullname, pynode in module_tree.walk_tree()
+                if pynode.is_type
+            }
             types.update(types_in_source)
 
     return types
@@ -228,7 +234,7 @@ def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, ve
     config = _load_configuration(config_paths)
     config = config.merge(Config(ignore_files=list(ignore)))
 
-    types = common_known_types()
+    types, type_nicknames = common_types_nicknames()
     types |= _collect_types(root_path, ignore=config.ignore_files)
     types |= {
         type_name: KnownImport(import_path=module, import_name=type_name)
@@ -244,9 +250,11 @@ def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, ve
         for prefix, module in config.type_prefixes.items()
     }
 
+    type_nicknames |= config.type_nicknames
+
     reporter = GroupedErrorReporter() if group_errors else ErrorReporter()
     matcher = TypeMatcher(
-        types=types, type_prefixes=type_prefixes, type_nicknames=config.type_nicknames
+        types=types, type_prefixes=type_prefixes, type_nicknames=type_nicknames
     )
     stub_transformer = Py2StubTransformer(matcher=matcher, reporter=reporter)
 
