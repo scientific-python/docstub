@@ -49,7 +49,6 @@ def module_factory(tmp_path):
 
 
 class Test_TypeCollector:
-
     def test_classes(self, module_factory):
         module_path = module_factory(
             src=dedent(
@@ -61,14 +60,15 @@ class Test_TypeCollector:
             ),
             module_name="sub.module",
         )
-        imports = TypeCollector.collect(file=module_path)
-        assert len(imports) == 2
-        assert imports["sub.module.TopLevelClass"] == KnownImport(
+        types, prefixes = TypeCollector.collect(file=module_path)
+        assert prefixes == {}
+        assert len(types) == 2
+        assert types["sub.module.TopLevelClass"] == KnownImport(
             import_path="sub.module", import_name="TopLevelClass"
         )
         # The import for the nested class should still use only the top-level
         # class as an import target
-        assert imports["sub.module.TopLevelClass.NestedClass"] == KnownImport(
+        assert types["sub.module.TopLevelClass.NestedClass"] == KnownImport(
             import_path="sub.module", import_name="TopLevelClass"
         )
 
@@ -77,9 +77,10 @@ class Test_TypeCollector:
     )
     def test_type_alias(self, module_factory, src):
         module_path = module_factory(src=src, module_name="sub.module")
-        imports = TypeCollector.collect(file=module_path)
-        assert len(imports) == 1
-        assert imports == {
+        types, prefixes = TypeCollector.collect(file=module_path)
+        assert prefixes == {}
+        assert len(types) == 1
+        assert types == {
             "sub.module.alias_name": KnownImport(
                 import_path="sub.module", import_name="alias_name"
             )
@@ -97,8 +98,73 @@ class Test_TypeCollector:
     )
     def test_ignores_assigns(self, module_factory, src):
         module_path = module_factory(src=src, module_name="sub.module")
-        imports = TypeCollector.collect(file=module_path)
-        assert len(imports) == 0
+        types, prefixes = TypeCollector.collect(file=module_path)
+        assert prefixes == {}
+        assert len(types) == 0
+
+    def test_from_import(self, module_factory):
+        src = dedent(
+            """
+            from calendar import gregorian
+            from calendar.gregorian import August as Aug, December
+            """
+        )
+
+        module_path = module_factory(src=src, module_name="sub.module")
+        types, prefixes = TypeCollector.collect(file=module_path)
+
+        assert prefixes == {}
+        assert types == {
+            "calendar.gregorian": KnownImport(
+                import_path="calendar", import_name="gregorian"
+            ),
+            "calendar.gregorian.August": KnownImport(
+                import_path="calendar.gregorian", import_name="August"
+            ),
+            "calendar.gregorian.December": KnownImport(
+                import_path="calendar.gregorian", import_name="December"
+            ),
+            "sub.module:gregorian": KnownImport(builtin_name="gregorian"),
+            "sub.module:Aug": KnownImport(builtin_name="Aug"),
+            "sub.module:December": KnownImport(builtin_name="December"),
+        }
+
+    def test_relative_import(self, module_factory):
+        src = dedent(
+            """
+            from . import January
+            from .. import August as Aug, December
+            from ..calendar import September
+            """
+        )
+        module_path = module_factory(src=src, module_name="sub.module")
+        types, prefixes = TypeCollector.collect(file=module_path)
+        assert prefixes == {}
+        assert types == {
+            "sub.module:January": KnownImport(builtin_name="January"),
+            "sub.module:Aug": KnownImport(builtin_name="Aug"),
+            "sub.module:December": KnownImport(builtin_name="December"),
+            "sub.module:September": KnownImport(builtin_name="September"),
+        }
+
+    def test_imports(self, module_factory):
+        src = dedent(
+            """
+            import calendar
+            import drinks as dr
+            import calendar.gregorian as greg
+            """
+        )
+
+        module_path = module_factory(src=src, module_name="sub.module")
+        types, prefixes = TypeCollector.collect(file=module_path)
+        assert types == {}
+        assert len(prefixes) == 3
+        assert prefixes == {
+            "sub.module:calendar": KnownImport(builtin_name="calendar"),
+            "sub.module:dr": KnownImport(builtin_name="dr"),
+            "sub.module:greg": KnownImport(builtin_name="greg"),
+        }
 
 
 class Test_TypeMatcher:

@@ -111,8 +111,9 @@ To translate a type from a docstring into a valid type annotation, docstub needs
 Out of the box, docstub will know about builtin types such as `int` or `bool` that don't need an import, and types in `typing`, `collections.abc` from Python's standard library.
 It will source these from the Python environment it is installed in.
 In addition to that, docstub will collect all types in the package directory you are running it on.
+This also includes imported types, which you can then use within the scope of the module that imports them.
 
-However, if you want to use types from third-party libraries you can tell docstub about them in a configuration file.
+However, you can also tell docstub directly about external types in a configuration file.
 Docstub will look for a `pyproject.toml` or `docstub.toml` in the current working directory.
 Or, you can point docstub at TOML file(s) explicitly using the `--config` option.
 In these configuration file(s) you can declare external types directly with
@@ -134,8 +135,9 @@ ski = "skimage"
 
 which will enable any type that is prefixed with `ski.` or `sklearn.tree.`, e.g. `ski.transform.AffineTransform` or `sklearn.tree.DecisionTreeClassifier`.
 
-In both of these cases, docstub doesn't check that these types actually exist.
-Testing the generated stubs with a type checker is recommended.
+> [!IMPORTANT]
+> Docstub doesn't check that types actually exist or if a symbol is a valid type.
+> We always recommend validating the generated stubs with a full type checker!
 
 > [!TIP]
 > Docstub currently collects types statically.

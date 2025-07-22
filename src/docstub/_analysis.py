@@ -197,10 +197,14 @@ class KnownImport:
 
     def __repr__(self) -> str:
         if self.builtin_name:
-            info = f"{self.target} (builtin)"
+            kwargs = f"builtin_name={self.builtin_name!r}"
         else:
-            info = f"{self.format_import()!r}"
-        out = f"<{type(self).__name__} {info}>"
+            kwargs = (
+                f"import_path={self.import_path!r}, "
+                f"import_name={self.import_name!r}, "
+                f"import_alias={self.import_alias!r}"
+            )
+        out = f"{type(self).__name__}({kwargs})"
         return out
 
     def __str__(self) -> str:
@@ -291,14 +295,30 @@ def common_known_types():
     return known_imports
 
 
+@dataclass(slots=True, kw_only=True)
+class TypeCollectionResult:
+    types: dict[str, KnownImport]
+    type_prefixes: dict[str, KnownImport]
+
+    @classmethod
+    def serialize(cls, result):
+        pass
+
+    @classmethod
+    def deserialize(cls, result):
+        pass
+
+
 class TypeCollector(cst.CSTVisitor):
     """Collect types from a given Python file.
 
     Examples
     --------
-    >>> types = TypeCollector.collect(__file__)
+    >>> types, prefixes = TypeCollector.collect(__file__)
     >>> types[f"{__name__}.TypeCollector"]
     <KnownImport 'from docstub._analysis import TypeCollector'>
+    >>> prefixes["logging"]
+    <KnownImport 'import logging'>
     """
 
     class ImportSerializer:
@@ -312,17 +332,45 @@ class TypeCollector(cst.CSTVisitor):
             key = pyfile_checksum(path)
             return key
 
-        def serialize(self, data: dict[str, KnownImport]) -> bytes:
-            """Serialize results from `TypeCollector.collect`."""
-            primitives = {qualname: asdict(imp) for qualname, imp in data.items()}
-            raw = json.dumps(primitives, separators=(",", ":")).encode(self.encoding)
+        def serialize(self, data):
+            """Serialize results from `TypeCollector.collect`.
+
+            Parameters
+            ----------
+            data : tuple[dict[str, KnownImport], dict[str, KnownImport]]
+
+            Returns
+            -------
+            raw : bytes
+            """
+            primitives = {}
+            for name, table in zip(["types", "type_prefixes"], data, strict=False):
+                primitives[name] = {key: asdict(imp) for key, imp in table.items()}
+            raw = json.dumps(primitives, separators=(",", ":"), indent=1).encode(
+                self.encoding
+            )
             return raw
 
-        def deserialize(self, raw: bytes) -> dict[str, KnownImport]:
-            """Deserialize results from `TypeCollector.collect`."""
+        def deserialize(self, raw):
+            """Deserialize results from `TypeCollector.collect`.
+
+            Parameters
+            ----------
+            raw : bytes
+
+            Returns
+            -------
+            types : dict[str, KnownImport]
+            type_prefixes : dict[str, KnownImport]
+            """
             primitives = json.loads(raw.decode(self.encoding))
-            data = {qualname: KnownImport(**kw) for qualname, kw in primitives.items()}
-            return data
+
+            def deserialize_table(table):
+                return {key: KnownImport(**kw) for key, kw in table.items()}
+
+            types = deserialize_table(primitives["types"])
+            type_prefixes = deserialize_table(primitives["type_prefixes"])
+            return types, type_prefixes
 
     @classmethod
     def collect(cls, file):
@@ -334,7 +382,8 @@ class TypeCollector(cst.CSTVisitor):
 
         Returns
         -------
-        collected : dict[str, KnownImport]
+        types : dict[str, KnownImport]
+        type_prefixes : dict[str, KnownImport]
         """
         file = Path(file)
         with file.open("r") as fo:
@@ -343,7 +392,7 @@ class TypeCollector(cst.CSTVisitor):
         tree = cst.parse_module(source)
         collector = cls(module_name=module_name_from_path(file))
         tree.visit(collector)
-        return collector.known_imports
+        return collector.types, collector.type_prefixes
 
     def __init__(self, *, module_name):
         """Initialize type collector.
@@ -354,7 +403,8 @@ class TypeCollector(cst.CSTVisitor):
         """
         self.module_name = module_name
         self._stack = []
-        self.known_imports = {}
+        self.types = {}
+        self.type_prefixes = {}
 
     def visit_ClassDef(self, node: cst.ClassDef) -> bool:
         self._stack.append(node.name.value)
@@ -388,6 +438,44 @@ class TypeCollector(cst.CSTVisitor):
             self._collect_type_annotation(stack)
         return False
 
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> bool:
+        """Collect "from import" targets as usable types."""
+        if cstm.matches(node.names, cstm.ImportStar()):
+            return False
+
+        if node.module:
+            from_names = cstm.findall(node.module, cstm.Name())
+            from_names = [n.value for n in from_names]
+        else:
+            from_names = []
+
+        for import_alias in node.names:
+            asname = import_alias.evaluated_alias
+            name = import_alias.evaluated_name
+
+            if not node.relative:
+                key = ".".join([*from_names, name])
+                known_import = KnownImport(
+                    import_path=".".join(from_names), import_name=name
+                )
+                self.types[key] = known_import
+
+            scoped_import = KnownImport(builtin_name=asname or name)
+            self.types[f"{self.module_name}:{asname or name}"] = scoped_import
+
+        return False
+
+    def visit_Import(self, node: cst.Import) -> bool:
+        for import_alias in node.names:
+            asname = import_alias.evaluated_alias
+            name = import_alias.evaluated_name
+            target = asname or name
+
+            known_import = KnownImport(builtin_name=asname or name)
+            self.type_prefixes[f"{self.module_name}:{target}"] = known_import
+
+        return False
+
     def _collect_type_annotation(self, stack):
         """Collect an importable type annotation.
 
@@ -398,7 +486,7 @@ class TypeCollector(cst.CSTVisitor):
         """
         qualname = ".".join([self.module_name, *stack])
         known_import = KnownImport(import_path=self.module_name, import_name=stack[0])
-        self.known_imports[qualname] = known_import
+        self.types[qualname] = known_import
 
 
 class TypeMatcher:
@@ -411,7 +499,7 @@ class TypeMatcher:
     type_nicknames : dict[str, str]
     successful_queries : int
     unknown_qualnames : list
-    current_module : Path | None
+    current_file : Path | None
 
     Examples
     --------
@@ -435,13 +523,14 @@ class TypeMatcher:
         type_prefixes : dict[str, KnownImport]
         type_nicknames : dict[str, str]
         """
-        self.types = types or common_known_types()
+
+        self.types = common_known_types() | (types or {})
         self.type_prefixes = type_prefixes or {}
         self.type_nicknames = type_nicknames or {}
         self.successful_queries = 0
         self.unknown_qualnames = []
 
-        self.current_module = None
+        self.current_file = None
 
     def match(self, search_name):
         """Search for a known annotation name.
@@ -459,6 +548,8 @@ class TypeMatcher:
         type_name = None
         type_origin = None
 
+        module = module_name_from_path(self.current_file) if self.current_file else None
+
         if search_name.startswith("~."):
             # Sphinx like matching with abbreviated name
             pattern = search_name.replace(".", r"\.")
@@ -466,7 +557,10 @@ class TypeMatcher:
             regex = re.compile(pattern + "$")
             # Might be slow, but works for now
             matches = {
-                key: value for key, value in self.types.items() if regex.match(key)
+                key: value
+                for key, value in self.types.items()
+                if regex.match(key)
+                if ":" not in key
             }
             if len(matches) > 1:
                 shortest_key = sorted(matches.keys(), key=lambda x: len(x))[0]
@@ -475,7 +569,7 @@ class TypeMatcher:
                 logger.warning(
                     "%r in %s matches multiple types %r, using %r",
                     search_name,
-                    self.current_module or "<file not known>",
+                    self.current_file or "<file not known>",
                     matches.keys(),
                     shortest_key,
                 )
@@ -486,17 +580,16 @@ class TypeMatcher:
                 logger.debug(
                     "couldn't match %r in %s",
                     search_name,
-                    self.current_module or "<file not known>",
+                    self.current_file or "<file not known>",
                 )
 
         # Replace alias
         search_name = self.type_nicknames.get(search_name, search_name)
 
-        if type_origin is None and self.current_module:
-            # Try scope of current module
-            module_name = module_name_from_path(self.current_module)
-            try_qualname = f"{module_name}.{search_name}"
-            type_origin = self.types.get(try_qualname)
+        if type_origin is None and module:
+            # Look for matching type in current module
+            type_origin = self.types.get(f"{module}:{search_name}")
+            type_origin = self.types.get(f"{module}.{search_name}", type_origin)
             if type_origin:
                 type_name = search_name
 
@@ -507,7 +600,8 @@ class TypeMatcher:
         if type_origin is None:
             # Try a subset of the qualname (first 'a.b.c', then 'a.b' and 'a')
             for partial_qualname in reversed(accumulate_qualname(search_name)):
-                type_origin = self.type_prefixes.get(partial_qualname)
+                type_origin = self.type_prefixes.get(f"{module}:{partial_qualname}")
+                type_origin = self.type_prefixes.get(partial_qualname, type_origin)
                 if type_origin:
                     type_name = search_name
                     break

@@ -1,11 +1,18 @@
 """Basic docstring examples.
 
 Docstrings, including module-level ones, are stripped.
+
+Attributes
+----------
+logger : logging.Logger
 """
 
 # Existing imports are preserved
 import logging
+from configparser import ConfigParser as Cfg  # noqa: F401
 from typing import Literal
+
+from . import AnotherType  # noqa: F401
 
 # Assign-statements are preserved
 logger = logging.getLogger(__name__)  # Inline comments are stripped
@@ -85,6 +92,16 @@ def func_use_from_elsewhere(a1, a2, a3, a4):
     -------
     r1 : ~.CustomException
     r2 : ~.NestedClass
+    """
+
+
+def func_use_from_import(a1, a2):
+    """Check using symbols made available in this module with from imports.
+
+    Parameters
+    ----------
+    a1 : AnotherType
+    a2 : Cfg
     """
 
 

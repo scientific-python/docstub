@@ -21,7 +21,7 @@ from ._path_utils import (
     walk_source_and_targets,
 )
 from ._stubs import Py2StubTransformer, try_format_stub
-from ._utils import ErrorReporter, GroupedErrorReporter
+from ._utils import ErrorReporter, GroupedErrorReporter, module_name_from_path
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ def _setup_logging(*, verbose):
     )
 
 
-def _collect_types(root_path, *, ignore=()):
+def _collect_type_info(root_path, *, ignore=()):
     """Collect types.
 
     Parameters
@@ -94,22 +94,29 @@ def _collect_types(root_path, *, ignore=()):
     Returns
     -------
     types : dict[str, ~.KnownImport]
+    type_prefixes : dict[str, ~.KnownImport]
     """
     types = common_known_types()
+    type_prefixes = {}
 
-    collect_cached_types = FileCache(
-        func=TypeCollector.collect,
-        serializer=TypeCollector.ImportSerializer(),
-        cache_dir=Path.cwd() / ".docstub_cache",
-        name=f"{__version__}/collected_types",
-    )
     if root_path.is_dir():
         for source_path in walk_python_package(root_path, ignore=ignore):
-            logger.info("collecting types in %s", source_path)
-            types_in_source = collect_cached_types(source_path)
-            types.update(types_in_source)
 
-    return types
+            module = module_name_from_path(source_path)
+            module = module.replace(".", "/")
+            collect_cached_types = FileCache(
+                func=TypeCollector.collect,
+                serializer=TypeCollector.ImportSerializer(),
+                cache_dir=Path.cwd() / ".docstub_cache",
+                name=f"{__version__}/{module}",
+            )
+
+            logger.info("collecting types in %s", source_path)
+            types_in_file, prefixes_in_file = collect_cached_types(source_path)
+            types.update(types_in_file)
+            type_prefixes.update(prefixes_in_file)
+
+    return types, type_prefixes
 
 
 @contextmanager
@@ -228,14 +235,13 @@ def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, ve
     config = _load_configuration(config_paths)
     config = config.merge(Config(ignore_files=list(ignore)))
 
-    types = common_known_types()
-    types |= _collect_types(root_path, ignore=config.ignore_files)
+    types, type_prefixes = _collect_type_info(root_path, ignore=config.ignore_files)
     types |= {
         type_name: KnownImport(import_path=module, import_name=type_name)
         for type_name, module in config.types.items()
     }
 
-    type_prefixes = {
+    type_prefixes |= {
         prefix: (
             KnownImport(import_name=module, import_alias=prefix)
             if module != prefix
