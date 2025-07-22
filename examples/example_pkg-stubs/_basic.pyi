@@ -1,15 +1,16 @@
 # File generated with docstub
 
-import configparser
 import logging
 from collections.abc import Sequence
+from configparser import ConfigParser
+from configparser import ConfigParser as Cfg
 from typing import Any, Literal, Self, Union
 
 from _typeshed import Incomplete
 
-from . import CustomException
+from . import AnotherType, CustomException
 
-logger: Incomplete
+logger: logging.Logger
 
 __all__ = [
     "func_empty",
@@ -39,6 +40,7 @@ def func_use_from_elsewhere(
     a3: ExampleClass.NestedClass,
     a4: ExampleClass.NestedClass,
 ) -> tuple[CustomException, ExampleClass.NestedClass]: ...
+def func_use_from_import(a1: AnotherType, a2: Cfg) -> None: ...
 
 class ExampleClass:
 
@@ -58,6 +60,6 @@ class ExampleClass:
     @some_property.setter
     def some_property(self, value: str) -> None: ...
     @classmethod
-    def method_returning_cls(cls, config: configparser.ConfigParser) -> Self: ...
+    def method_returning_cls(cls, config: ConfigParser) -> Self: ...
     @classmethod
-    def method_returning_cls2(cls, config: configparser.ConfigParser) -> Self: ...
+    def method_returning_cls2(cls, config: ConfigParser) -> Self: ...

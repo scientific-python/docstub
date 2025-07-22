@@ -11,3 +11,7 @@ __all__ = [
 
 class CustomException(Exception):
     pass
+
+
+class AnotherType:
+    pass

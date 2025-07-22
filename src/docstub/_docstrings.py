@@ -555,11 +555,11 @@ def _uncombine_numpydoc_params(params):
 
     Parameters
     ----------
-    params : list[numpydoc.docsrape.Parameter]
+    params : list[npds.Parameter]
 
     Yields
     ------
-    param : numpydoc.docscrape.Parameter
+    param : npds.Parameter
     """
     for param in params:
         if "," in param.name:
@@ -791,11 +791,11 @@ class DocstringAnnotations:
 
         Parameters
         ----------
-        param : numpydoc.docscrape.Parameter
+        param : npds.Parameter
 
         Returns
         -------
-        param : numpydoc.docscrape.Parameter
+        param : npds.Parameter
         """
         if ":" in param.name and param.type == "":
             msg = "Possibly missing whitespace between parameter and colon in docstring"

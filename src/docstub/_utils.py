@@ -65,7 +65,7 @@ def escape_qualname(name):
     return qualname
 
 
-@lru_cache(maxsize=10)
+@lru_cache(maxsize=100)
 def module_name_from_path(path):
     """Find the full name of a module within its package from its file path.
 
