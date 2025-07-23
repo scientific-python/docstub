@@ -265,3 +265,57 @@ class Test_TypeMatcher:
         assert type_name == search_name.split(".")[-1]
         assert py_import is not None
         assert py_import.from_ == import_path
+
+    def test_scoped_types(self, module_factory):
+        types = {
+            "sub.module:January": PyImport(implicit="sub.module:January"),
+        }
+        matcher = TypeMatcher(types=types)
+
+        # Shouldn't match because the current module isn't set
+        type_name, py_import = matcher.match("January")
+        assert type_name is None
+        assert py_import is None
+
+        # Set current module to something that doesn't match scope
+        module_path = module_factory(src="", module_name="other.module")
+        matcher.current_file = module_path
+        # Still shouldn't match because the current module doesn't match the scope
+        type_name, py_import = matcher.match("January")
+        assert type_name is None
+        assert py_import is None
+
+        # Set current module to match the scope
+        module_path = module_factory(src="", module_name="sub.module")
+        matcher.current_file = module_path
+        # Now we should find the type
+        type_name, py_import = matcher.match("January")
+        assert type_name == "January"
+        assert py_import == PyImport(implicit="sub.module:January")
+
+    def test_scoped_type_prefix(self, module_factory):
+        type_prefixes = {
+            "sub.module:cal": PyImport(implicit="sub.module:cal"),
+        }
+        matcher = TypeMatcher(type_prefixes=type_prefixes)
+
+        # Shouldn't match because the current module isn't set
+        type_name, py_import = matcher.match("cal.January")
+        assert type_name is None
+        assert py_import is None
+
+        # Set current module to something that doesn't match scope
+        module_path = module_factory(src="", module_name="other.module")
+        matcher.current_file = module_path
+        # Still shouldn't match because the current module doesn't match the scope
+        type_name, py_import = matcher.match("cal.January")
+        assert type_name is None
+        assert py_import is None
+
+        # Set current module to match the scope
+        module_path = module_factory(src="", module_name="sub.module")
+        matcher.current_file = module_path
+        # Now we should find the prefix
+        type_name, py_import = matcher.match("cal.January")
+        assert type_name == "cal.January"
+        assert py_import == PyImport(implicit="sub.module:cal")
