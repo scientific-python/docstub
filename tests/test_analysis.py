@@ -3,7 +3,7 @@ from textwrap import dedent
 import pytest
 
 from docstub._analysis import (
-    KnownImport,
+    PyImport,
     TypeCollector,
     TypeMatcher,
 )
@@ -12,7 +12,7 @@ from docstub._analysis import (
 class Test_KnownImport:
     def test_dot_in_alias(self):
         with pytest.raises(ValueError, match=r".*can't contain a '\.'"):
-            KnownImport(import_name="foo.bar.baz", import_alias="bar.baz")
+            PyImport(import_="foo.bar.baz", as_="bar.baz")
 
 
 @pytest.fixture
@@ -63,13 +63,13 @@ class Test_TypeCollector:
         types, prefixes = TypeCollector.collect(file=module_path)
         assert prefixes == {}
         assert len(types) == 2
-        assert types["sub.module.TopLevelClass"] == KnownImport(
-            import_path="sub.module", import_name="TopLevelClass"
+        assert types["sub.module.TopLevelClass"] == PyImport(
+            from_="sub.module", import_="TopLevelClass"
         )
         # The import for the nested class should still use only the top-level
         # class as an import target
-        assert types["sub.module.TopLevelClass.NestedClass"] == KnownImport(
-            import_path="sub.module", import_name="TopLevelClass"
+        assert types["sub.module.TopLevelClass.NestedClass"] == PyImport(
+            from_="sub.module", import_="TopLevelClass"
         )
 
     @pytest.mark.parametrize(
@@ -81,9 +81,7 @@ class Test_TypeCollector:
         assert prefixes == {}
         assert len(types) == 1
         assert types == {
-            "sub.module.alias_name": KnownImport(
-                import_path="sub.module", import_name="alias_name"
-            )
+            "sub.module.alias_name": PyImport(from_="sub.module", import_="alias_name")
         }
 
     @pytest.mark.parametrize(
@@ -115,18 +113,16 @@ class Test_TypeCollector:
 
         assert prefixes == {}
         assert types == {
-            "calendar.gregorian": KnownImport(
-                import_path="calendar", import_name="gregorian"
+            "calendar.gregorian": PyImport(from_="calendar", import_="gregorian"),
+            "calendar.gregorian.August": PyImport(
+                from_="calendar.gregorian", import_="August"
             ),
-            "calendar.gregorian.August": KnownImport(
-                import_path="calendar.gregorian", import_name="August"
+            "calendar.gregorian.December": PyImport(
+                from_="calendar.gregorian", import_="December"
             ),
-            "calendar.gregorian.December": KnownImport(
-                import_path="calendar.gregorian", import_name="December"
-            ),
-            "sub.module:gregorian": KnownImport(builtin_name="gregorian"),
-            "sub.module:Aug": KnownImport(builtin_name="Aug"),
-            "sub.module:December": KnownImport(builtin_name="December"),
+            "sub.module:gregorian": PyImport(implicit="sub.module:gregorian"),
+            "sub.module:Aug": PyImport(implicit="sub.module:Aug"),
+            "sub.module:December": PyImport(implicit="sub.module:December"),
         }
 
     def test_relative_import(self, module_factory):
@@ -141,10 +137,10 @@ class Test_TypeCollector:
         types, prefixes = TypeCollector.collect(file=module_path)
         assert prefixes == {}
         assert types == {
-            "sub.module:January": KnownImport(builtin_name="January"),
-            "sub.module:Aug": KnownImport(builtin_name="Aug"),
-            "sub.module:December": KnownImport(builtin_name="December"),
-            "sub.module:September": KnownImport(builtin_name="September"),
+            "sub.module:January": PyImport(implicit="sub.module:January"),
+            "sub.module:Aug": PyImport(implicit="sub.module:Aug"),
+            "sub.module:December": PyImport(implicit="sub.module:December"),
+            "sub.module:September": PyImport(implicit="sub.module:September"),
         }
 
     def test_imports(self, module_factory):
@@ -161,24 +157,24 @@ class Test_TypeCollector:
         assert types == {}
         assert len(prefixes) == 3
         assert prefixes == {
-            "sub.module:calendar": KnownImport(builtin_name="calendar"),
-            "sub.module:dr": KnownImport(builtin_name="dr"),
-            "sub.module:greg": KnownImport(builtin_name="greg"),
+            "sub.module:calendar": PyImport(implicit="sub.module:calendar"),
+            "sub.module:dr": PyImport(implicit="sub.module:dr"),
+            "sub.module:greg": PyImport(implicit="sub.module:greg"),
         }
 
 
 class Test_TypeMatcher:
     type_prefixes = {  # noqa: RUF012
-        "np": KnownImport(import_name="numpy", import_alias="np"),
-        "foo.bar.Baz": KnownImport(import_path="foo.bar", import_name="Baz"),
+        "np": PyImport(import_="numpy", as_="np"),
+        "foo.bar.Baz": PyImport(from_="foo.bar", import_="Baz"),
     }
 
     types = {  # noqa: RUF012
-        "dict": KnownImport(builtin_name="dict"),
-        "foo.bar": KnownImport(import_path="foo", import_name="bar"),
-        "foo.bar.Baz": KnownImport(import_path="foo.bar", import_name="Baz"),
-        "foo.bar.Baz.Bix": KnownImport(import_path="foo.bar", import_name="Baz"),
-        "foo.bar.Baz.Qux": KnownImport(import_path="foo", import_name="bar"),
+        "dict": PyImport(implicit="dict"),
+        "foo.bar": PyImport(from_="foo", import_="bar"),
+        "foo.bar.Baz": PyImport(from_="foo.bar", import_="Baz"),
+        "foo.bar.Baz.Bix": PyImport(from_="foo.bar", import_="Baz"),
+        "foo.bar.Baz.Qux": PyImport(from_="foo", import_="bar"),
     }
 
     # fmt: off
@@ -212,16 +208,16 @@ class Test_TypeMatcher:
     def test_query_types(self, search_name, expected_name, expected_origin):
         db = TypeMatcher(types=self.types.copy())
 
-        type_name, type_origin = db.match(search_name)
+        type_name, py_import = db.match(search_name)
 
         if expected_name is None and expected_origin is None:
             assert expected_name is type_name
-            assert expected_origin is type_origin
+            assert expected_origin is py_import
         else:
             assert type_name is not None
-            assert type_origin is not None
-            assert str(type_origin) == expected_origin
-            assert type_name.startswith(type_origin.target)
+            assert py_import is not None
+            assert str(py_import) == expected_origin
+            assert type_name.startswith(py_import.target)
             assert type_name == expected_name
     # fmt: on
 
@@ -240,16 +236,16 @@ class Test_TypeMatcher:
     def test_query_prefix(self, search_name, expected_name, expected_origin):
         db = TypeMatcher(type_prefixes=self.type_prefixes.copy())
 
-        type_name, type_origin = db.match(search_name)
+        type_name, py_import = db.match(search_name)
 
         if expected_name is None and expected_origin is None:
             assert expected_name is type_name
-            assert expected_origin is type_origin
+            assert expected_origin is py_import
         else:
             assert type_name is not None
-            assert type_origin is not None
-            assert str(type_origin) == expected_origin
-            assert type_name.startswith(type_origin.target)
+            assert py_import is not None
+            assert str(py_import) == expected_origin
+            assert type_name.startswith(py_import.target)
             assert type_name == expected_name
     # fmt: on
 
@@ -264,8 +260,8 @@ class Test_TypeMatcher:
     )
     def test_common_known_types(self, search_name, import_path):
         matcher = TypeMatcher()
-        type_name, type_origin = matcher.match(search_name)
+        type_name, py_import = matcher.match(search_name)
 
         assert type_name == search_name.split(".")[-1]
-        assert type_origin is not None
-        assert type_origin.import_path == import_path
+        assert py_import is not None
+        assert py_import.from_ == import_path

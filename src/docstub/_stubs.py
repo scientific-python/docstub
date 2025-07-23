@@ -14,7 +14,7 @@ from typing import ClassVar
 import libcst as cst
 import libcst.matchers as cstm
 
-from ._analysis import KnownImport
+from ._analysis import PyImport
 from ._docstrings import DocstringAnnotations, DoctypeTransformer
 from ._utils import ErrorReporter, module_name_from_path
 
@@ -571,7 +571,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         # Potentially use "Incomplete" except for first param in (class)methods
         elif not is_self_or_cls and updated_node.annotation is None:
             node_changes["annotation"] = self._Annotation_Incomplete
-            import_ = KnownImport.typeshed_Incomplete()
+            import_ = PyImport.typeshed_Incomplete()
             self._required_imports.add(import_)
 
         if node_changes:
@@ -756,7 +756,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         if self.current_source:
             current_module = module_name_from_path(self.current_source)
             required_imports = [
-                imp for imp in required_imports if imp.import_path != current_module
+                imp for imp in required_imports if imp.from_ != current_module
             ]
         import_nodes = self._parse_imports(
             required_imports, current_module=current_module
@@ -818,7 +818,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Parameters
         ----------
-        imports : set[~.KnownImport]
+        imports : set[PyImport]
         current_module : str, optional
 
         Returns
@@ -912,7 +912,7 @@ class Py2StubTransformer(cst.CSTTransformer):
             self._required_imports |= pytype.imports
         else:
             annotation = self._Annotation_Incomplete
-            self._required_imports.add(KnownImport.typeshed_Incomplete())
+            self._required_imports.add(PyImport.typeshed_Incomplete())
 
         semicolon = (
             cst.Semicolon(whitespace_after=cst.SimpleWhitespace(" "))

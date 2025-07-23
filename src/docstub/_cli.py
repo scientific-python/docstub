@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from ._analysis import (
-    KnownImport,
+    PyImport,
     TypeCollector,
     TypeMatcher,
     common_known_types,
@@ -93,8 +93,8 @@ def _collect_type_info(root_path, *, ignore=()):
 
     Returns
     -------
-    types : dict[str, ~.KnownImport]
-    type_prefixes : dict[str, ~.KnownImport]
+    types : dict[str, PyImport]
+    type_prefixes : dict[str, PyImport]
     """
     types = common_known_types()
     type_prefixes = {}
@@ -237,15 +237,15 @@ def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, ve
 
     types, type_prefixes = _collect_type_info(root_path, ignore=config.ignore_files)
     types |= {
-        type_name: KnownImport(import_path=module, import_name=type_name)
+        type_name: PyImport(from_=module, import_=type_name)
         for type_name, module in config.types.items()
     }
 
     type_prefixes |= {
         prefix: (
-            KnownImport(import_name=module, import_alias=prefix)
+            PyImport(import_=module, as_=prefix)
             if module != prefix
-            else KnownImport(import_name=prefix)
+            else PyImport(import_=prefix)
         )
         for prefix, module in config.type_prefixes.items()
     }

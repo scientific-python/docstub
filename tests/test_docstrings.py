@@ -3,7 +3,7 @@ from textwrap import dedent
 import lark
 import pytest
 
-from docstub._analysis import KnownImport
+from docstub._analysis import PyImport
 from docstub._docstrings import Annotation, DocstringAnnotations, DoctypeTransformer
 
 
@@ -11,20 +11,18 @@ class Test_Annotation:
     def test_str(self):
         annotation = Annotation(
             value="Path",
-            imports=frozenset({KnownImport(import_name="Path", import_path="pathlib")}),
+            imports=frozenset({PyImport(import_="Path", from_="pathlib")}),
         )
         assert str(annotation) == annotation.value
 
     def test_as_return_tuple(self):
         path_anno = Annotation(
             value="Path",
-            imports=frozenset({KnownImport(import_name="Path", import_path="pathlib")}),
+            imports=frozenset({PyImport(import_="Path", from_="pathlib")}),
         )
         sequence_anno = Annotation(
             value="Sequence",
-            imports=frozenset(
-                {KnownImport(import_name="Sequence", import_path="collections.abc")}
-            ),
+            imports=frozenset({PyImport(import_="Sequence", from_="collections.abc")}),
         )
         return_annotation = Annotation.many_as_tuple([path_anno, sequence_anno])
         assert return_annotation.value == "tuple[Path, Sequence]"
@@ -229,9 +227,7 @@ class Test_DoctypeTransformer:
         annotation, unknown_names = transformer.doctype_to_annotation("a")
         assert annotation.value == "a"
         assert annotation.imports == {
-            KnownImport(
-                import_name="Incomplete", import_path="_typeshed", import_alias="a"
-            )
+            PyImport(import_="Incomplete", from_="_typeshed", as_="a")
         }
         assert unknown_names == [("a", 0, 1)]
 
@@ -241,9 +237,7 @@ class Test_DoctypeTransformer:
         annotation, unknown_names = transformer.doctype_to_annotation("a.b")
         assert annotation.value == "a_b"
         assert annotation.imports == {
-            KnownImport(
-                import_name="Incomplete", import_path="_typeshed", import_alias="a_b"
-            )
+            PyImport(import_="Incomplete", from_="_typeshed", as_="a_b")
         }
         assert unknown_names == [("a.b", 0, 3)]
 
@@ -253,12 +247,8 @@ class Test_DoctypeTransformer:
         annotation, unknown_names = transformer.doctype_to_annotation("a.b of c")
         assert annotation.value == "a_b[c]"
         assert annotation.imports == {
-            KnownImport(
-                import_name="Incomplete", import_path="_typeshed", import_alias="a_b"
-            ),
-            KnownImport(
-                import_name="Incomplete", import_path="_typeshed", import_alias="c"
-            ),
+            PyImport(import_="Incomplete", from_="_typeshed", as_="a_b"),
+            PyImport(import_="Incomplete", from_="_typeshed", as_="c"),
         }
         assert unknown_names == [("a.b", 0, 3), ("c", 7, 8)]
 
@@ -294,9 +284,7 @@ class Test_DocstringAnnotations:
         assert len(annotations.parameters) == 2
         assert annotations.parameters["a"].value == expected
         assert annotations.parameters["b"].value == "Incomplete"
-        assert annotations.parameters["b"].imports == {
-            KnownImport.typeshed_Incomplete()
-        }
+        assert annotations.parameters["b"].imports == {PyImport.typeshed_Incomplete()}
 
     @pytest.mark.parametrize(
         ("doctypes", "expected"),
@@ -333,7 +321,7 @@ class Test_DocstringAnnotations:
         assert annotations.returns is not None
         assert annotations.returns.value == "Generator[tuple[int, str]]"
         assert annotations.returns.imports == {
-            KnownImport(import_path="collections.abc", import_name="Generator")
+            PyImport(from_="collections.abc", import_="Generator")
         }
 
     def test_receives(self, caplog):
@@ -358,7 +346,7 @@ class Test_DocstringAnnotations:
             == "Generator[tuple[int, str], tuple[float, bytes]]"
         )
         assert annotations.returns.imports == {
-            KnownImport(import_path="collections.abc", import_name="Generator")
+            PyImport(from_="collections.abc", import_="Generator")
         }
 
     def test_full_generator(self, caplog):
@@ -386,7 +374,7 @@ class Test_DocstringAnnotations:
             "Generator[tuple[int, str], tuple[float, bytes], bool]"
         )
         assert annotations.returns.imports == {
-            KnownImport(import_path="collections.abc", import_name="Generator")
+            PyImport(from_="collections.abc", import_="Generator")
         }
 
     def test_yields_and_returns(self, caplog):
@@ -407,7 +395,7 @@ class Test_DocstringAnnotations:
         assert annotations.returns is not None
         assert annotations.returns.value == ("Generator[tuple[int, str], None, bool]")
         assert annotations.returns.imports == {
-            KnownImport(import_path="collections.abc", import_name="Generator")
+            PyImport(from_="collections.abc", import_="Generator")
         }
 
     def test_duplicate_parameters(self, caplog):
@@ -491,9 +479,5 @@ class Test_DocstringAnnotations:
 
         assert annotations.parameters["d"].value == "Incomplete"
         assert annotations.parameters["e"].value == "Incomplete"
-        assert annotations.parameters["d"].imports == {
-            KnownImport.typeshed_Incomplete()
-        }
-        assert annotations.parameters["e"].imports == {
-            KnownImport.typeshed_Incomplete()
-        }
+        assert annotations.parameters["d"].imports == {PyImport.typeshed_Incomplete()}
+        assert annotations.parameters["e"].imports == {PyImport.typeshed_Incomplete()}
