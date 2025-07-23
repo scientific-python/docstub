@@ -236,11 +236,14 @@ def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, ve
     config = config.merge(Config(ignore_files=list(ignore)))
 
     types, type_prefixes = _collect_type_info(root_path, ignore=config.ignore_files)
+
+    # Add declared types from configuration
     types |= {
         type_name: PyImport(from_=module, import_=type_name)
         for type_name, module in config.types.items()
     }
 
+    # Add declared type prefixes from configuration
     type_prefixes |= {
         prefix: (
             PyImport(import_=module, as_=prefix)

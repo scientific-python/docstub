@@ -504,12 +504,39 @@ class TypeMatcher:
 
         self.current_file = None
 
-    def match(self, search_name):
+    def _resolve_nickname(self, name):
+        """Return intended name if `name` is a nickname.
+
+        Parameters
+        ----------
+        name : str
+
+        Returns
+        -------
+        resolved : str
+        """
+        original = name
+        resolved = name
+        for _ in range(1000):
+            name = self.type_nicknames.get(name)
+            if name is None:
+                break
+            resolved = name
+        else:
+            logger.warning(
+                "reached limit while resolving nicknames for %r in %s, using %r",
+                original,
+                self.current_file or "<file not known>",
+                resolved,
+            )
+        return resolved
+
+    def match(self, search):
         """Search for a known annotation name.
 
         Parameters
         ----------
-        search_name : str
+        search : str
         current_module : Path, optional
 
         Returns
@@ -517,14 +544,17 @@ class TypeMatcher:
         type_name : str | None
         py_import : PyImport | None
         """
+        original_search = search
         type_name = None
         py_import = None
 
         module = module_name_from_path(self.current_file) if self.current_file else None
 
-        if search_name.startswith("~."):
+        search = self._resolve_nickname(search)
+
+        if search.startswith("~."):
             # Sphinx like matching with abbreviated name
-            pattern = search_name.replace(".", r"\.")
+            pattern = search.replace(".", r"\.")
             pattern = pattern.replace("~", ".*")
             regex = re.compile(pattern + "$")
             # Might be slow, but works for now
@@ -539,8 +569,9 @@ class TypeMatcher:
                 py_import = matches[shortest_key]
                 type_name = shortest_key
                 logger.warning(
-                    "%r in %s matches multiple types %r, using %r",
-                    search_name,
+                    "%r (original %r) in %s matches multiple types %r, using %r",
+                    search,
+                    original_search,
                     self.current_file or "<file not known>",
                     matches.keys(),
                     shortest_key,
@@ -548,34 +579,31 @@ class TypeMatcher:
             elif len(matches) == 1:
                 type_name, py_import = matches.popitem()
             else:
-                search_name = search_name[2:]
+                search = search[2:]
                 logger.debug(
                     "couldn't match %r in %s",
-                    search_name,
+                    search,
                     self.current_file or "<file not known>",
                 )
 
-        # Replace alias
-        search_name = self.type_nicknames.get(search_name, search_name)
-
         if py_import is None and module:
             # Look for matching type in current module
-            py_import = self.types.get(f"{module}:{search_name}")
-            py_import = self.types.get(f"{module}.{search_name}", py_import)
+            py_import = self.types.get(f"{module}:{search}")
+            py_import = self.types.get(f"{module}.{search}", py_import)
             if py_import:
-                type_name = search_name
+                type_name = search
 
-        if py_import is None and search_name in self.types:
-            type_name = search_name
-            py_import = self.types[search_name]
+        if py_import is None and search in self.types:
+            type_name = search
+            py_import = self.types[search]
 
         if py_import is None:
             # Try a subset of the qualname (first 'a.b.c', then 'a.b' and 'a')
-            for partial_qualname in reversed(accumulate_qualname(search_name)):
+            for partial_qualname in reversed(accumulate_qualname(search)):
                 py_import = self.type_prefixes.get(f"{module}:{partial_qualname}")
                 py_import = self.type_prefixes.get(partial_qualname, py_import)
                 if py_import:
-                    type_name = search_name
+                    type_name = search
                     break
 
         if (
@@ -590,6 +618,6 @@ class TypeMatcher:
         if type_name is not None:
             self.successful_queries += 1
         else:
-            self.unknown_qualnames.append(search_name)
+            self.unknown_qualnames.append(search)
 
         return type_name, py_import

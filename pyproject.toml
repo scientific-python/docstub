@@ -119,8 +119,8 @@ run.source = ["docstub"]
 ".*maintenance.*" = "Maintenance"
 
 
-[tool.docstub.type_nicknames]
-Path = "pathlib.Path"
+[tool.docstub.types]
+Path = "pathlib"
 
 
 [tool.mypy]
