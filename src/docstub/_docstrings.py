@@ -15,7 +15,7 @@ import numpydoc.docscrape as npds
 #   It should be possible to transform docstrings without matching to valid
 #   types and imports. I think that could very well be done at a higher level,
 #   e.g. in the stubs module.
-from ._analysis import KnownImport, TypeMatcher
+from ._analysis import PyImport, TypeMatcher
 from ._utils import DocstubError, ErrorReporter, escape_qualname
 
 logger = logging.getLogger(__name__)
@@ -60,14 +60,14 @@ class Annotation:
     """Python-ready type annotation with attached import information."""
 
     value: str
-    imports: frozenset[KnownImport] = field(default_factory=frozenset)
+    imports: frozenset[PyImport] = field(default_factory=frozenset)
 
     def __post_init__(self):
         object.__setattr__(self, "imports", frozenset(self.imports))
         if "~" in self.value:
             raise ValueError(f"unexpected '~' in annotation value: {self.value}")
         for import_ in self.imports:
-            if not isinstance(import_, KnownImport):
+            if not isinstance(import_, PyImport):
                 raise TypeError(f"unexpected type {type(import_)} in `imports`")
 
     def __str__(self) -> str:
@@ -133,7 +133,7 @@ class Annotation:
             value = f"{value}, {return_annotation.value}"
 
         value = f"Generator[{value}]"
-        imports |= {KnownImport(import_path="collections.abc", import_name="Generator")}
+        imports |= {PyImport(from_="collections.abc", import_="Generator")}
         generator = cls(value=value, imports=imports)
         return generator
 
@@ -165,7 +165,7 @@ class Annotation:
         Returns
         -------
         values : list[str]
-        imports : set[~.KnownImport]
+        imports : set[PyImport]
         """
         values = []
         imports = set()
@@ -176,7 +176,7 @@ class Annotation:
 
 
 FallbackAnnotation = Annotation(
-    value="Incomplete", imports=frozenset([KnownImport.typeshed_Incomplete()])
+    value="Incomplete", imports=frozenset([PyImport.typeshed_Incomplete()])
 )
 
 
@@ -394,9 +394,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
             )
 
         if self.matcher is not None:
-            _, known_import = self.matcher.match("Literal")
-            if known_import:
-                self._collected_imports.add(known_import)
+            _, py_import = self.matcher.match("Literal")
+            if py_import:
+                self._collected_imports.add(py_import)
         return out
 
     def natlang_container(self, tree):
@@ -524,13 +524,13 @@ class DoctypeTransformer(lark.visitors.Transformer):
             Possibly modified or normalized qualname.
         """
         if self.matcher is not None:
-            annotation_name, known_import = self.matcher.match(qualname)
+            annotation_name, py_import = self.matcher.match(qualname)
         else:
             annotation_name = None
-            known_import = None
+            py_import = None
 
-        if known_import and known_import.has_import:
-            self._collected_imports.add(known_import)
+        if py_import and py_import.has_import:
+            self._collected_imports.add(py_import)
 
         if annotation_name:
             matched_qualname = annotation_name
@@ -538,10 +538,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
             # Unknown qualname, alias to `Incomplete`
             self._unknown_qualnames.append((qualname, meta.start_pos, meta.end_pos))
             matched_qualname = escape_qualname(qualname)
-            any_alias = KnownImport(
-                import_path="_typeshed",
-                import_name="Incomplete",
-                import_alias=matched_qualname,
+            any_alias = PyImport(
+                from_="_typeshed",
+                import_="Incomplete",
+                as_=matched_qualname,
             )
             self._collected_imports.add(any_alias)
         return matched_qualname
