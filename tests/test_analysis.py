@@ -319,3 +319,37 @@ class Test_TypeMatcher:
         type_name, py_import = matcher.match("cal.January")
         assert type_name == "cal.January"
         assert py_import == PyImport(implicit="sub.module:cal")
+
+    def test_nested_nicknames(self, caplog):
+        types = {
+            "Foo": PyImport(implicit="Foo"),
+            "Bar": PyImport(implicit="Bar"),
+        }
+        type_nicknames = {
+            "Foo": "~.Baz",
+            "~.Baz": "B.i.k",
+            "B.i.k": "Bar",
+        }
+        matcher = TypeMatcher(types=types, type_nicknames=type_nicknames)
+
+        type_name, py_import = matcher.match("Foo")
+        assert type_name == "Bar"
+        assert py_import == PyImport(implicit="Bar")
+
+    def test_nickname_infinite_loop(self, caplog):
+        types = {
+            "Foo": PyImport(implicit="Foo"),
+            "Bar": PyImport(implicit="Bar"),
+        }
+        type_nicknames = {
+            "Foo": "Bar",
+            "Bar": "Foo",
+        }
+        matcher = TypeMatcher(types=types, type_nicknames=type_nicknames)
+
+        type_name, py_import = matcher.match("Foo")
+        assert len(caplog.records) == 1
+        assert "reached limit while resolving nicknames" in caplog.text
+
+        assert type_name == "Foo"
+        assert py_import == PyImport(implicit="Foo")
