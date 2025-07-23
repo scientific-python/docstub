@@ -395,7 +395,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         if self.matcher is not None:
             _, py_import = self.matcher.match("Literal")
-            if py_import:
+            if py_import.has_import:
                 self._collected_imports.add(py_import)
         return out
 
