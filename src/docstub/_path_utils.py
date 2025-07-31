@@ -347,13 +347,14 @@ def walk_source_and_targets(root_path, target_dir, *, ignore=()):
     --------
     >>> from pathlib import Path
     >>> current_root = Path(__file__).parent
-    >>> source_path, stub_path = next(
+    >>> sources_n_targets = sorted(
     ...     walk_source_and_targets(current_root, target_dir=current_root)
     ... )
+    >>> source_path, stub_path = sources_n_targets[0]
     >>> source_path.as_posix()
-    '.../docstub/_cli.py'
+    '.../docstub/__init__.py'
     >>> stub_path.as_posix()
-    '.../docstub/_cli.pyi'
+    '.../docstub/__init__.pyi'
     >>> stub_path.is_file()
     False
     """
