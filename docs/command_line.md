@@ -52,6 +52,7 @@ Options:
   --allow-errors INT  Allow this many or fewer errors. If docstub reports
                       more, exit with error code '1'. This is useful to adopt
                       docstub gradually.  [default: 0; x>=0]
+  --no-cache          Ignore pre-existing cache and don't create a new one.
   -v, --verbose       Print more details (repeatable).
   -h, --help          Show this message and exit.
 ```
