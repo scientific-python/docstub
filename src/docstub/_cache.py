@@ -90,9 +90,24 @@ class FileCache:
     This class can cache results of a function to the disk. A unique key is
     generated from the arguments to the function, and the result is cached
     inside a file named after this key.
+
+    Attributes
+    ----------
+    func : Callable
+        The function whose output shall be cached.
+    serializer : FuncSerializer
+        An interface that matches the given `func`. It must implement the
+        `FuncSerializer` protocol.
+    sub_dir : str
+        A unique name to structure multiple / parallel caches inside `cache_dir`.
+    cache_hits, cache_misses : int
+        Records how many times this object returned results from a cache (hits)
+        or by computing it (misses).
+    cached_last_call : bool or None
+        Whether the last call was cached. ``None`` if not called yet.
     """
 
-    def __init__(self, *, func, serializer, cache_dir, name):
+    def __init__(self, *, func, serializer, cache_dir, sub_dir=None):
         """
         Parameters
         ----------
@@ -103,27 +118,45 @@ class FileCache:
             `FuncSerializer` protocol.
         cache_dir : Path
             The directory of the cache.
-        name : str
-            A unique name to separate parallel caches inside `cache_dir`.
+        sub_dir : str
+            A unique name to structure multiple / parallel caches inside `cache_dir`.
         """
         self.func = func
         self.serializer = serializer
         self._cache_dir = cache_dir
-        self.name = name
+        self.sub_dir = sub_dir
+
+        self.cache_hits = 0
+        self.cache_misses = 0
+        self.cached_last_call = None
 
     @cached_property
-    def named_cache_dir(self):
-        """Path to the named subdirectory inside the cache.
+    def cache_dir(self):
+        """Return and create cache dir on first use - also check its size.
+
+        Returns
+        -------
+        cache_dir : Path
+        """
+        create_cache(self._cache_dir)
+
+        if _directory_size(self._cache_dir) > 512 * 1024**2:
+            logger.warning("cache size at %r exceeds 512 MiB", self._cache_dir)
+
+        return self._cache_dir
+
+    @property
+    def cache_sub_dir(self):
+        """Create and return path to a specific subdirectory inside the cache.
 
         Warns when cache size exceeds 512 MiB.
         """
-        cache_dir = self._cache_dir
-        create_cache(cache_dir)
-        if _directory_size(cache_dir) > 512 * 1024**2:
-            logger.warning("cache size at %r exceeds 512 MiB", cache_dir)
-        _named_cache_dir = cache_dir / self.name
-        _named_cache_dir.mkdir(parents=True, exist_ok=True)
-        return _named_cache_dir
+        named_dir = self.cache_dir
+        if self.sub_dir:
+            named_dir /= self.sub_dir
+        named_dir.mkdir(parents=True, exist_ok=True)
+
+        return named_dir
 
     def __call__(self, *args, **kwargs):
         """Call the wrapped `func` and cache each result in a file.
@@ -138,14 +171,25 @@ class FileCache:
         data : Any
         """
         key = self.serializer.hash_args(*args, **kwargs)
-        entry_path = self.named_cache_dir / f"{key}{self.serializer.suffix}"
+        entry_path = self.cache_sub_dir / f"{key}{self.serializer.suffix}"
+
         if entry_path.is_file():
+            # `data` is already cached
             with entry_path.open("rb") as fp:
                 raw = fp.read()
             data = self.serializer.deserialize(raw)
+
+            self.cached_last_call = True
+            self.cache_hits += 1
+
         else:
+            # `data` isn't cached, write cache
             data = self.func(*args, **kwargs)
             raw = self.serializer.serialize(data)
             with entry_path.open("xb") as fp:
                 fp.write(raw)
+
+            self.cached_last_call = False
+            self.cache_misses += 1
+
         return data
