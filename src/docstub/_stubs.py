@@ -15,7 +15,7 @@ import libcst as cst
 import libcst.matchers as cstm
 
 from ._analysis import PyImport
-from ._docstrings import DocstringAnnotations, DoctypeTransformer
+from ._docstrings import DocstringAnnotations, DoctypeTransformer, FallbackAnnotation
 from ._utils import ErrorReporter, module_name_from_path
 
 logger = logging.getLogger(__name__)
@@ -701,7 +701,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                     updated_node.annotation, annotation=expr
                 )
 
-            else:
+            elif pytype != FallbackAnnotation:
                 # Notify about ignored docstring annotation
                 # TODO: either remove message or print only in verbose mode
                 position = self.get_metadata(

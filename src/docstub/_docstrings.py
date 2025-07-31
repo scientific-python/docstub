@@ -677,30 +677,11 @@ class DocstringAnnotations:
         -------
         attributes : dict[str, Annotation]
             A dictionary mapping attribute names to their annotations.
-            Attributes without annotations fall back to :class:`_typeshed.Incomplete`.
+            Attributes without annotations fall back to
+            :class:`FallbackAnnotation` which corresponds to
+            :class:`_typeshed.Incomplete`.
         """
-        annotations = {}
-        for attribute in self.np_docstring["Attributes"]:
-            self._handle_missing_whitespace(attribute)
-            if not attribute.type:
-                continue
-
-            ds_line = 0
-            for i, line in enumerate(self.docstring.split("\n")):
-                if attribute.name in line and attribute.type in line:
-                    ds_line = i
-                    break
-
-            if attribute.name in annotations:
-                self.reporter.message(
-                    "duplicate attribute name in docstring",
-                    details=self.reporter.underline(attribute.name),
-                )
-                continue
-
-            annotation = self._doctype_to_annotation(attribute.type, ds_line=ds_line)
-            annotations[attribute.name.strip()] = annotation
-
+        annotations = self._section_annotations("Attributes")
         return annotations
 
     @cached_property
@@ -711,7 +692,9 @@ class DocstringAnnotations:
         -------
         parameters : dict[str, Annotation]
             A dictionary mapping parameters names to their annotations.
-            Parameters without annotations fall back to :class:`_typeshed.Incomplete`.
+            Parameters without annotations fall back to
+            :class:`FallbackAnnotation` which corresponds to
+            :class:`_typeshed.Incomplete`.
         """
         param_section = self._section_annotations("Parameters")
         other_section = self._section_annotations("Other Parameters")
