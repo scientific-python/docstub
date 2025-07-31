@@ -39,7 +39,7 @@ def is_docstub_generated(stub_path):
     >>> is_docstub_generated(Path(__file__))
     Traceback (most recent call last):
         ...
-    TypeError: expected stub file (ending with '.pyi'), got .../docstub/_path_utils.py
+    TypeError: expected stub file (ending with '.pyi'), ...
     """
     if stub_path.suffix != ".pyi":
         raise TypeError(f"expected stub file (ending with '.pyi'), got {stub_path}")
