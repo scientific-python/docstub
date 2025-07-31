@@ -17,8 +17,8 @@ from ._cache import FileCache
 from ._config import Config
 from ._path_utils import (
     STUB_HEADER_COMMENT,
-    walk_python_package,
     walk_source_and_targets,
+    walk_source_package,
 )
 from ._stubs import Py2StubTransformer, try_format_stub
 from ._utils import ErrorReporter, GroupedErrorReporter, module_name_from_path
@@ -100,7 +100,7 @@ def _collect_type_info(root_path, *, ignore=()):
     type_prefixes = {}
 
     if root_path.is_dir():
-        for source_path in walk_python_package(root_path, ignore=ignore):
+        for source_path in walk_source_package(root_path, ignore=ignore):
 
             module = module_name_from_path(source_path)
             module = module.replace(".", "/")
@@ -228,8 +228,8 @@ def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, ve
     root_path = Path(root_path)
     if root_path.is_file():
         logger.warning(
-            "Running docstub on a single file is experimental. Relative imports "
-            "or type references won't work."
+            "Running docstub on a single file. Relative imports "
+            "or type references outside this file won't work."
         )
 
     config = _load_configuration(config_paths)
