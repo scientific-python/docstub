@@ -90,3 +90,15 @@ class Test_clean:
         assert run_result.exception is None
         assert run_result.exit_code == 0
         assert not cache_dir.exists()
+
+    def test_corrupted_cache(self, tmp_path_cwd, caplog):
+        cache_dir = tmp_path_cwd / ".docstub_cache"
+        cache_dir.mkdir()
+
+        runner = CliRunner()
+        run_result = runner.invoke(_cli.clean, args=[])
+        assert run_result.exit_code == 1
+        assert "might not be a valid cache or might be corrupted" in "\n".join(
+            caplog.messages
+        )
+        assert cache_dir.is_dir()

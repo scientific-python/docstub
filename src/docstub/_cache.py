@@ -5,10 +5,21 @@ from typing import Any, Protocol
 logger = logging.getLogger(__name__)
 
 
+CACHE_DIR_NAME = ".docstub_cache"
+
+
 CACHEDIR_TAG_CONTENT = """\
-Signature: 8a477f597d28d172789f06886806bc55\
-# This file is a cache directory tag automatically created by docstub.\n"
-# For information about cache directory tags see https://bford.info/cachedir/\n"
+Signature: 8a477f597d28d172789f06886806bc55
+# Mark this directory as a cache [1], created by docstub [2]
+# [1] https://bford.info/cachedir/
+# [2] https://github.com/scientific-python/docstub
+"""
+
+
+GITHUB_IGNORE_CONTENT = """\
+# Make git ignore this cache directory, created by docstub [1]
+# [1] https://github.com/scientific-python/docstub
+*
 """
 
 
@@ -43,22 +54,42 @@ def create_cache(path):
     """
     path.mkdir(parents=True, exist_ok=True)
     cachdir_tag_path = path / "CACHEDIR.TAG"
-    cachdir_tag_content = (
-        "Signature: 8a477f597d28d172789f06886806bc55\n"
-        "# This file is a cache directory tag automatically created by docstub.\n"
-        "# For information about cache directory tags see https://bford.info/cachedir/\n"
-    )
+
     if not cachdir_tag_path.is_file():
         with open(cachdir_tag_path, "w") as fp:
-            fp.write(cachdir_tag_content)
+            fp.write(CACHEDIR_TAG_CONTENT)
 
     gitignore_path = path / ".gitignore"
-    gitignore_content = (
-        "# This file is a cache directory automatically created by docstub.\n" "*\n"
-    )
     if not gitignore_path.is_file():
         with open(gitignore_path, "w") as fp:
-            fp.write(gitignore_content)
+            fp.write(GITHUB_IGNORE_CONTENT)
+
+
+def validate_cache(path):
+    """Make sure the given path is a cache created by docstub.
+
+    Parameters
+    ----------
+    path : Path
+
+    Raises
+    ------
+    FileNotFoundError
+    """
+    if not path.is_dir():
+        raise FileNotFoundError(f"expected '{path}' to be a valid directory")
+
+    if not path.name == CACHE_DIR_NAME:
+        raise FileNotFoundError(
+            f"expected directory '{path}' be named '{CACHE_DIR_NAME}'"
+        )
+
+    cachdir_tag_path = path / "CACHEDIR.TAG"
+    if not cachdir_tag_path.is_file():
+        raise FileNotFoundError(f"expected '{path}' to contain a 'CACHEDIR.TAG' file")
+    gitignore_path = path / ".gitignore"
+    if not gitignore_path.is_file():
+        raise FileNotFoundError(f"expected '{path}' to contain a '.gitignore' file")
 
 
 class FuncSerializer[T](Protocol):

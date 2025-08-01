@@ -14,7 +14,7 @@ from ._analysis import (
     TypeMatcher,
     common_known_types,
 )
-from ._cache import FileCache
+from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
 from ._config import Config
 from ._path_utils import (
     STUB_HEADER_COMMENT,
@@ -35,7 +35,7 @@ def _cache_dir_in_cwd():
     -------
     cache_dir : Path
     """
-    return Path.cwd() / ".docstub_cache"
+    return Path.cwd() / CACHE_DIR_NAME
 
 
 def _load_configuration(config_paths=None):
@@ -385,8 +385,19 @@ def clean(verbose):
 
     path = _cache_dir_in_cwd()
     if path.exists():
-        assert path.is_dir()
-        shutil.rmtree(_cache_dir_in_cwd())
-        logger.info("cleaned %s", path)
+        try:
+            validate_cache(path)
+        except (FileNotFoundError, ValueError) as e:
+            logger.error(
+                "'%s' might not be a valid cache or might be corrupted. Not "
+                "removing it out of caution. Manually remove it after checking "
+                "if it is safe to do so.\n\nDetails: %s",
+                path,
+                "\n".join(e.args),
+            )
+            sys.exit(1)
+        else:
+            shutil.rmtree(_cache_dir_in_cwd())
+            logger.info("cleaned %s", path)
     else:
         logger.info("no cache to clean")

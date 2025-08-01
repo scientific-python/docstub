@@ -37,6 +37,15 @@ def test_create_cache(tmp_path):
     _cache.create_cache(cache_dir)
 
 
+def test_create_validate_cache(tmp_path):
+    cache_dir = tmp_path / _cache.CACHE_DIR_NAME
+    _cache.create_cache(cache_dir)
+    _cache.validate_cache(cache_dir)
+
+    with pytest.raises(FileNotFoundError, match="expected directory .* named .*"):
+        _cache.validate_cache(tmp_path)
+
+
 class Test_FileCache:
     def test_basic(self, tmp_path):
 
