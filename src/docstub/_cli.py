@@ -260,7 +260,7 @@ def run(
     group_errors : bool
     allow_errors : int
     no_cache : bool
-    verbose : str
+    verbose : int
     """
 
     # Setup -------------------------------------------------------------------
@@ -382,6 +382,10 @@ def clean(verbose):
 
     Looks for a cache directory relative to the current working directory.
     If one exists, remove it.
+
+    Parameters
+    ----------
+    verbose : int
     """
     _setup_logging(verbose=verbose)
 
