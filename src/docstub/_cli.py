@@ -382,6 +382,7 @@ def clean(verbose):
 
     Looks for a cache directory relative to the current working directory.
     If one exists, remove it.
+    \f
 
     Parameters
     ----------
