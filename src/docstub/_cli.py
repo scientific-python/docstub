@@ -372,7 +372,9 @@ def run(
         sys.exit(1)
 
 
+# docstub: off
 @cli.command()
+# docstub: on
 @click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
 @click.help_option("-h", "--help")
 def clean(verbose):
