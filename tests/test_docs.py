@@ -56,7 +56,8 @@ def test_user_guide_example(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("command", "name"), [(_cli.cli, "docstub"), (_cli.run, "docstub run")]
+    ("command", "name"),
+    [(_cli.cli, "docstub"), (_cli.run, "docstub run"), (_cli.clean, "docstub clean")],
 )
 def test_command_line_reference(command, name):
     ctx = click.Context(command, info_name=name)

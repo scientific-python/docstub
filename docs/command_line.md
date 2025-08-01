@@ -15,7 +15,8 @@ Options:
   -h, --help  Show this message and exit.
 
 Commands:
-  run  Generate Python stub files.
+  clean  Clean the cache.
+  run    Generate Python stub files.
 ```
 
 <!--- end cli-docstub --->
@@ -58,3 +59,24 @@ Options:
 ```
 
 <!--- end cli-docstub-run --->
+
+
+## Command `docstub clean`
+
+<!--- The following block is checked by the test suite --->
+<!--- begin cli-docstub-clean --->
+
+```plain
+Usage: docstub clean [OPTIONS]
+
+  Clean the cache.
+
+  Looks for a cache directory relative to the current working directory. If
+  one exists, remove it.
+
+Options:
+  -v, --verbose  Print more details (repeatable).
+  -h, --help     Show this message and exit.
+```
+
+<!--- end cli-docstub-clean --->
