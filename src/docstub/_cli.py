@@ -1,4 +1,5 @@
 import logging
+import shutil
 import sys
 import time
 from collections import Counter
@@ -369,3 +370,23 @@ def run(
     if allow_errors < total_errors:
         logger.debug("number of allowed errors %i was exceeded")
         sys.exit(1)
+
+
+@cli.command()
+@click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
+@click.help_option("-h", "--help")
+def clean(verbose):
+    """Clean the cache.
+
+    Looks for a cache directory relative to the current working directory.
+    If one exists, remove it.
+    """
+    _setup_logging(verbose=verbose)
+
+    path = _cache_dir_in_cwd()
+    if path.exists():
+        assert path.is_dir()
+        shutil.rmtree(_cache_dir_in_cwd())
+        logger.info("cleaned %s", path)
+    else:
+        logger.info("no cache to clean")
