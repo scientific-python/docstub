@@ -1,6 +1,6 @@
 import pytest
 
-from docstub._path_utils import walk_source_package
+from docstub._path_utils import STUB_HEADER_COMMENT, walk_source_package
 
 
 class Test_walk_source_package:
@@ -46,6 +46,26 @@ class Test_walk_source_package:
 
         with pytest.raises(TypeError, match=".* must be a Python file or package"):
             next(walk_source_package(tmp_path))
+
+    def test_single_with_docstub_generated_stub(self, tmp_path):
+        script_py = tmp_path / "script.py"
+        script_py.touch()
+        script_stub = tmp_path / "script.pyi"
+        with script_stub.open("w") as io:
+            io.write(STUB_HEADER_COMMENT)
+
+        paths = sorted(walk_source_package(script_py))
+        assert paths == [script_py]
+
+    def test_package_with_docstub_generated_stub(self, tmp_path):
+        init_py = tmp_path / "__init__.py"
+        init_py.touch()
+        init_stub = tmp_path / "__init__.pyi"
+        with init_stub.open("w") as io:
+            io.write(STUB_HEADER_COMMENT)
+
+        paths = sorted(walk_source_package(tmp_path))
+        assert paths == [init_py]
 
     @pytest.mark.parametrize("name", ["script.py", "script.pyi"])
     def test_ignore_single_file(self, tmp_path, name):

@@ -1,4 +1,5 @@
 import logging
+import shutil
 import sys
 import time
 from collections import Counter
@@ -13,7 +14,7 @@ from ._analysis import (
     TypeMatcher,
     common_known_types,
 )
-from ._cache import FileCache
+from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
 from ._config import Config
 from ._path_utils import (
     STUB_HEADER_COMMENT,
@@ -21,10 +22,20 @@ from ._path_utils import (
     walk_source_package,
 )
 from ._stubs import Py2StubTransformer, try_format_stub
-from ._utils import ErrorReporter, GroupedErrorReporter, module_name_from_path
+from ._utils import ErrorReporter, GroupedErrorReporter
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
+
+
+def _cache_dir_in_cwd():
+    """Return cache directory for and in current working directory.
+
+    Returns
+    -------
+    cache_dir : Path
+    """
+    return Path.cwd() / CACHE_DIR_NAME
 
 
 def _load_configuration(config_paths=None):
@@ -79,7 +90,7 @@ def _setup_logging(*, verbose):
     )
 
 
-def _collect_type_info(root_path, *, ignore=()):
+def _collect_type_info(root_path, *, ignore=(), cache=False):
     """Collect types.
 
     Parameters
@@ -90,6 +101,8 @@ def _collect_type_info(root_path, *, ignore=()):
         interpreted relative to the root of the Python package unless it starts
         with "/". See :ref:`glob.translate(..., recursive=True, include_hidden=True)`
         for more details on the precise implementation.
+    cache : bool, optional
+        Cache collected types.
 
     Returns
     -------
@@ -99,22 +112,30 @@ def _collect_type_info(root_path, *, ignore=()):
     types = common_known_types()
     type_prefixes = {}
 
-    if root_path.is_dir():
-        for source_path in walk_source_package(root_path, ignore=ignore):
+    if cache:
+        collect = FileCache(
+            func=TypeCollector.collect,
+            serializer=TypeCollector.ImportSerializer(),
+            cache_dir=_cache_dir_in_cwd(),
+        )
+    else:
+        collect = TypeCollector.collect
 
-            module = module_name_from_path(source_path)
-            module = module.replace(".", "/")
-            collect_cached_types = FileCache(
-                func=TypeCollector.collect,
-                serializer=TypeCollector.ImportSerializer(),
-                cache_dir=Path.cwd() / ".docstub_cache",
-                name=f"{__version__}/{module}",
-            )
+    for source_path in walk_source_package(root_path, ignore=ignore):
 
-            logger.info("collecting types in %s", source_path)
-            types_in_file, prefixes_in_file = collect_cached_types(source_path)
-            types.update(types_in_file)
-            type_prefixes.update(prefixes_in_file)
+        if cache:
+            module = source_path.relative_to(root_path.parent)
+            collect.sub_dir = f"{__version__}/{module}"
+
+        types_in_file, prefixes_in_file = collect(source_path)
+        types.update(types_in_file)
+        type_prefixes.update(prefixes_in_file)
+
+        logger.info(
+            "collected types in %s%s",
+            source_path,
+            " (cached)" if cache and collect.cached_last_call else "",
+        )
 
     return types, type_prefixes
 
@@ -136,6 +157,11 @@ def report_execution_time():
             formated_duration = f"{minutes} min {formated_duration}"
         if hours:
             formated_duration = f"{hours} h {formated_duration}"
+
+        # FIXME A hack to ensure that closing message is printed last, instead
+        #   it would be got to use the same mechanism for all output
+        for handler in logger.handlers:
+            handler.flush()
 
         click.echo()
         click.echo(f"Finished in {formated_duration}")
@@ -199,10 +225,25 @@ def cli():
     "If docstub reports more, exit with error code '1'. "
     "This is useful to adopt docstub gradually.",
 )
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Ignore pre-existing cache and don't create a new one.",
+)
 @click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
 @click.help_option("-h", "--help")
 @report_execution_time()
-def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, verbose):
+def run(
+    *,
+    root_path,
+    out_dir,
+    config_paths,
+    ignore,
+    group_errors,
+    allow_errors,
+    no_cache,
+    verbose,
+):
     """Generate Python stub files.
 
     Given a `PACKAGE_PATH` to a Python package, generate stub files for it.
@@ -218,7 +259,8 @@ def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, ve
     ignore : Sequence[str]
     group_errors : bool
     allow_errors : int
-    verbose : str
+    no_cache : bool
+    verbose : int
     """
 
     # Setup -------------------------------------------------------------------
@@ -235,7 +277,9 @@ def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, ve
     config = _load_configuration(config_paths)
     config = config.merge(Config(ignore_files=list(ignore)))
 
-    types, type_prefixes = _collect_type_info(root_path, ignore=config.ignore_files)
+    types, type_prefixes = _collect_type_info(
+        root_path, ignore=config.ignore_files, cache=not no_cache
+    )
 
     # Add declared types from configuration
     types |= {
@@ -326,3 +370,41 @@ def run(root_path, out_dir, config_paths, ignore, group_errors, allow_errors, ve
     if allow_errors < total_errors:
         logger.debug("number of allowed errors %i was exceeded")
         sys.exit(1)
+
+
+# docstub: off
+@cli.command()
+# docstub: on
+@click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
+@click.help_option("-h", "--help")
+def clean(verbose):
+    """Clean the cache.
+
+    Looks for a cache directory relative to the current working directory.
+    If one exists, remove it.
+    \f
+
+    Parameters
+    ----------
+    verbose : int
+    """
+    _setup_logging(verbose=verbose)
+
+    path = _cache_dir_in_cwd()
+    if path.exists():
+        try:
+            validate_cache(path)
+        except (FileNotFoundError, ValueError) as e:
+            logger.error(
+                "'%s' might not be a valid cache or might be corrupted. Not "
+                "removing it out of caution. Manually remove it after checking "
+                "if it is safe to do so.\n\nDetails: %s",
+                path,
+                "\n".join(e.args),
+            )
+            sys.exit(1)
+        else:
+            shutil.rmtree(_cache_dir_in_cwd())
+            logger.info("cleaned %s", path)
+    else:
+        logger.info("no cache to clean")
