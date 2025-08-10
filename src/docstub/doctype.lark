@@ -12,7 +12,7 @@
 // The basic structure of a full docstring annotation as it comes after the
 // `name : `. It includes additional meta information that is optional and
 // currently ignored.
-?annotation_with_meta: type ("," optional)? ("," extra_info)?
+?annotation_with_meta: type ("," extra_info)?
 
 
 // A type annotation. Can range from a simple qualified name to a complex
@@ -132,13 +132,8 @@ shape: "(" dim ",)"
 ?dim: INT | ELLIPSES | NAME ("=" INT)?
 
 
-// Optional information about a parameter has a default value, added after the
-// docstring annotation. Currently dropped during transformation.
-optional:  "optional" | "default" ("=" | ":")? literal_item
-
-
-// Extra meta information added after the docstring annotation.
-// Currently dropped during transformation.
+// Extra meta information added after the docstring annotation, e.g. "optional"
+// or "default: 3". Information is dropped and not used to generate stubs.
 extra_info: /[^\r\n]+/
 
 // A simple name. Can start with a number or character. Can be delimited by "_"

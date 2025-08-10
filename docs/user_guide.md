@@ -93,21 +93,21 @@ def example_metric(
 There are several interesting things to note here:
 
 - Many existing conventions that the scientific Python ecosystem uses, will work out of the box.
-  In this case, docstub knew how to translate `array-like`, `array of dtype uint8` into a valid type annotation in the stub file.
-  In a similar manner, `or` can be used as a "natural language" alternative to `|`.
+  In this case, docstub knew how to translate `array-like`, `array of dtype uint8` into a valid Python type for the stub file.
+  In a similar manner, `or` can be used as a "natural language" alternative to `|` to form unions.
   You can find more details in [Typing syntax in docstrings](typing_syntax.md).
 
-- Optional arguments that default to `None` are recognized and a `| None` is appended automatically if the type doesn't include it already.
+- Optional arguments that default to `None` are recognized and a `| None` is appended automatically.
   The `optional` or `default = ...` part don't influence the annotation.
 
 - Referencing the `float` and `Iterable` types worked out of the box.
-  All builtin types as well as types from the standard libraries `typing` and `collections.abc` module can be used.
+  All builtin types as well as types from the standard libraries `typing` and `collections.abc` module can be used like this.
   Necessary imports will be added automatically to the stub file.
 
 
-## Using types & nicknames
+## Referencing types & nicknames
 
-To translate a type from a docstring into a valid type annotation, docstub needs to know where that type originates from and how to import it.
+To translate a type from a docstring into a valid type annotation, docstub needs to know where names in that type are defined from where to import them.
 Out of the box, docstub will know about builtin types such as `int` or `bool` that don't need an import, and types in `typing`, `collections.abc` from Python's standard library.
 It will source these from the Python environment it is installed in.
 In addition to that, docstub will collect all types in the package directory you are running it on.
