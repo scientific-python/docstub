@@ -35,6 +35,48 @@ class Test_Annotation:
 
 class Test_DoctypeTransformer:
     @pytest.mark.parametrize(
+        "doctype",
+        [
+            "((float))",
+            "(float,)",
+            "(, )",
+            "...",
+            "(..., ...)",
+            "{}",
+            "{:}",
+            "{a:}",
+            "{:b}",
+            "{'a',}",
+            "a or (b or c)",
+            ",, optional",
+        ],
+    )
+    def test_edge_case_errors(self, doctype):
+        transformer = DoctypeTransformer()
+        with pytest.raises(lark.exceptions.UnexpectedInput):
+            transformer.doctype_to_annotation(doctype)
+
+    @pytest.mark.parametrize("doctype", DoctypeTransformer.blacklisted_qualnames)
+    def test_reserved_keywords(self, doctype):
+        assert DoctypeTransformer.blacklisted_qualnames
+
+        transformer = DoctypeTransformer()
+        with pytest.raises(lark.exceptions.VisitError):
+            transformer.doctype_to_annotation(doctype)
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("int or float", "int | float"),
+            ("int or float or str", "int | float | str"),
+        ],
+    )
+    def test_natlang_union(self, doctype, expected):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(doctype)
+        assert annotation.value == expected
+
+    @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
             # Conventional
@@ -67,6 +109,7 @@ class Test_DoctypeTransformer:
             ("list of int", "list[int]"),
             ("list of int(s)", "list[int]"),
             ("list of (int or float)", "list[int | float]"),
+            ("list of (list of int)", "list[list[int]]"),
             # Natural tuple variant
             ("tuple of (float, int, str)", "tuple[float, int, str]"),
             ("tuple of (float, ...)", "tuple[float, ...]"),
@@ -74,7 +117,11 @@ class Test_DoctypeTransformer:
             ("dict of {str: int}", "dict[str, int]"),
             ("dict of {str: int | float}", "dict[str, int | float]"),
             ("dict of {str: int or float}", "dict[str, int | float]"),
-            ("dict[list of str]", "dict[list[str]]"),
+            # Nesting is possible but probably rarely a good idea
+            ("list of (list of int(s))", "list[list[int]]"),
+            ("tuple of (tuple of (float, ...), ...)", "tuple[tuple[float, ...], ...]"),
+            ("dict of {str: dict of {str: float}}", "dict[str, dict[str, float]]"),
+            ("dict of {str: list of (list of int(s))}", "dict[str, list[list[int]]]"),
         ],
     )
     def test_natlang_container(self, doctype, expected):
@@ -86,7 +133,7 @@ class Test_DoctypeTransformer:
         "doctype",
         [
             "list of int (s)",
-            "list of (float)",
+            "list of ((float))",
             "list of (float,)",
             "list of (, )",
             "list of ...",
