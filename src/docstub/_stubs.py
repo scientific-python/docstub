@@ -537,7 +537,7 @@ class Py2StubTransformer(cst.CSTTransformer):
             pytype = pytypes.parameters.get(name)
             if pytype:
                 if defaults_to_none:
-                    pytype = pytype.as_optional()
+                    pytype = pytype.as_union_with_none()
                 annotation_value = pytype.value
 
                 if original_node.annotation is None:
