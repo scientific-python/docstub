@@ -136,21 +136,29 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
-            ("int, optional", "int"),
-            ("int | None, optional", "int | None"),
-            ("int, default -1", "int"),
-            ("int, default = 1", "int"),
-            ("int, default: 0", "int"),
-            ("float, default: 1.0", "float"),
-            ("{'a', 'b'}, default : 'a'", "Literal['a', 'b']"),
+            ("int", "int"),
+            ("int | None", "int | None"),
+            ("tuple of (int, float)", "tuple[int, float]"),
+            ("{'a', 'b'}", "Literal['a', 'b']"),
         ],
     )
-    @pytest.mark.parametrize("extra_info", [None, "int", ", extra, info"])
-    def test_optional_extra_info(self, doctype, expected, extra_info):
-        if extra_info:
-            doctype = f"{doctype}, {extra_info}"
+    @pytest.mark.parametrize(
+        "optional_info",
+        [
+            "",
+            ", optional",
+            ", default -1",
+            ", default: -1",
+            ", default = 1",
+            ", in range (0, 1), optional",
+            ", optional, in range [0, 1]",
+            ", see parameter `image`, optional",
+        ],
+    )
+    def test_optional_info(self, doctype, expected, optional_info):
+        doctype_with_optional = doctype + optional_info
         transformer = DoctypeTransformer()
-        annotation, _ = transformer.doctype_to_annotation(doctype)
+        annotation, _ = transformer.doctype_to_annotation(doctype_with_optional)
         assert annotation.value == expected
 
     @pytest.mark.parametrize(

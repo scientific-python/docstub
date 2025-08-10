@@ -137,16 +137,19 @@ class Annotation:
         generator = cls(value=value, imports=imports)
         return generator
 
-    def as_optional(self):
-        """Return optional version of this annotation by appending `| None`.
+    def as_union_with_none(self):
+        """Return a union with `| None` of the current annotation.
+
+        .. note::
+            Doesn't check for `| None` or `Optional[...]` being present.
 
         Returns
         -------
-        optional : Annotation
+        union : Annotation
 
         Examples
         --------
-        >>> Annotation(value="int").as_optional()
+        >>> Annotation(value="int").as_union_with_none()
         Annotation(value='int | None', imports=frozenset())
         """
         # TODO account for `| None` or `Optional` already being included?
@@ -471,7 +474,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping optional / default info")
         return lark.Discard
 
-    def extra_info(self, tree):
+    def optional_info(self, tree):
         """
         Parameters
         ----------
@@ -481,7 +484,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : lark.visitors._DiscardType
         """
-        logger.debug("dropping extra info")
+        logger.debug("dropping optional info")
         return lark.Discard
 
     def __default__(self, data, children, meta):

@@ -7,24 +7,24 @@
 > Several features are experimental and included to make adoption of docstub easier.
 > Long-term, some of these might be discouraged or removed as docstub matures.
 
-Docstub defines its own [grammar](../src/docstub/doctype.lark) to parse and transform type information in docstrings into valid type annotations.
+Docstub defines its own [grammar](../src/docstub/doctype.lark) to parse and transform type information in docstrings (doctypes) into valid Python type expressions.
 This grammar fully supports [Python's conventional typing syntax](https://typing.python.org/en/latest/index.html).
-So any type annotation that is valid in Python, can be used in a docstrings as is.
+So any type expression that is valid in Python, can be used in a docstrings as is.
 In addition, docstub extends this syntax with several "natural language" expressions that are commonly used in the scientific Python ecosystem.
 
-Docstrings are expected to follow the NumPyDoc style:
+Docstrings should follow a form that is inspired by the NumPyDoc style:
 ```
 Section name
 ------------
-name : annotation, optional, extra_info
+name : doctype, optional_info
   Description.
 ```
 
-- `name` might be the name of a parameter or attribute.
-  Other sections like "Returns" or "Yields" are supported.
-- `annotation` the actual type information that will be transformed into the type annotation.
-- `optional` and `extra_info` can be appended to provide additional information.
-  Their presence and content doesn't currently affect the resulting type annotation.
+- `name` might be the name of a parameter, attribute or similar.
+- `doctype` the actual type information that will be transformed into a Python type.
+- `optional_info` is optional and captures anything after the first comma (that is not inside a type expression).
+  It is useful to provide additional information for readers.
+  Its presence and content doesn't currently affect the resulting type annotation.
 
 
 ## Unions
