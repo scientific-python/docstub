@@ -474,7 +474,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping optional / default info")
         return lark.Discard
 
-    def extra_info(self, tree):
+    def optional_info(self, tree):
         """
         Parameters
         ----------
@@ -484,7 +484,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : lark.visitors._DiscardType
         """
-        logger.debug("dropping extra info")
+        logger.debug("dropping optional info")
         return lark.Discard
 
     def __default__(self, data, children, meta):

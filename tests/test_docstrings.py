@@ -143,7 +143,7 @@ class Test_DoctypeTransformer:
         ],
     )
     @pytest.mark.parametrize(
-        "extra_info",
+        "optional_info",
         [
             "",
             ", optional",
@@ -155,10 +155,10 @@ class Test_DoctypeTransformer:
             ", see parameter `image`, optional",
         ],
     )
-    def test_extra_info(self, doctype, expected, extra_info):
-        doctype_with_extra = doctype + extra_info
+    def test_optional_info(self, doctype, expected, optional_info):
+        doctype_with_optional = doctype + optional_info
         transformer = DoctypeTransformer()
-        annotation, _ = transformer.doctype_to_annotation(doctype_with_extra)
+        annotation, _ = transformer.doctype_to_annotation(doctype_with_optional)
         assert annotation.value == expected
 
     @pytest.mark.parametrize(

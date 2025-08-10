@@ -16,13 +16,13 @@ Docstrings should follow a form that is inspired by the NumPyDoc style:
 ```
 Section name
 ------------
-name : doctype, extra_info
+name : doctype, optional_info
   Description.
 ```
 
 - `name` might be the name of a parameter, attribute or similar.
 - `doctype` the actual type information that will be transformed into a Python type.
-- `extra_info` is optional and captures anything after the first comma (that is not inside a type expression).
+- `optional_info` is optional and captures anything after the first comma (that is not inside a type expression).
   It is useful to provide additional information for readers.
   Its presence and content doesn't currently affect the resulting type annotation.
 
