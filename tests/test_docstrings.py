@@ -67,6 +67,7 @@ class Test_DoctypeTransformer:
             ("list of int", "list[int]"),
             ("list of int(s)", "list[int]"),
             ("list of (int or float)", "list[int | float]"),
+            ("list of (list of int)", "list[list[int]]"),
             # Natural tuple variant
             ("tuple of (float, int, str)", "tuple[float, int, str]"),
             ("tuple of (float, ...)", "tuple[float, ...]"),
@@ -74,7 +75,11 @@ class Test_DoctypeTransformer:
             ("dict of {str: int}", "dict[str, int]"),
             ("dict of {str: int | float}", "dict[str, int | float]"),
             ("dict of {str: int or float}", "dict[str, int | float]"),
-            ("dict[list of str]", "dict[list[str]]"),
+            # Nesting is possible but probably rarely a good idea
+            ("list of (list of int(s))", "list[list[int]]"),
+            ("tuple of (tuple of (float, ...), ...)", "tuple[tuple[float, ...], ...]"),
+            ("dict of {str: dict of {str: float}}", "dict[str, dict[str, float]]"),
+            ("dict of {str: list of (list of int(s))}", "dict[str, list[list[int]]]"),
         ],
     )
     def test_natlang_container(self, doctype, expected):

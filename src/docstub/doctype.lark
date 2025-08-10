@@ -65,7 +65,7 @@ natlang_literal: "{" literal_item ("," literal_item)* "}"
 // These forms allow nesting with other expressions. But it's discouraged to do
 // so extensively to maintain readability.
 natlang_container: qualname "of" qualname _PLURAL_S?
-    | qualname "of" "(" union ")"
+    | qualname "of" "(" type ")"
     | _natlang_tuple
     | _natlang_mapping
 
@@ -83,7 +83,7 @@ _natlang_tuple: qualname "of" "(" type "," ELLIPSES ")"
 
 
 // Natural language container variant for mappings.
-_natlang_mapping: qualname "of" "{" type ":" (type | union) "}"
+_natlang_mapping: qualname "of" "{" type ":" type "}"
 
 
 // A natural language alternative to describe arrays with a dtype and shape.
