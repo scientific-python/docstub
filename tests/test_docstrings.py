@@ -35,6 +35,48 @@ class Test_Annotation:
 
 class Test_DoctypeTransformer:
     @pytest.mark.parametrize(
+        "doctype",
+        [
+            "((float))",
+            "(float,)",
+            "(, )",
+            "...",
+            "(..., ...)",
+            "{}",
+            "{:}",
+            "{a:}",
+            "{:b}",
+            "{'a',}",
+            "a or (b or c)",
+            ",, optional",
+        ],
+    )
+    def test_edge_case_errors(self, doctype):
+        transformer = DoctypeTransformer()
+        with pytest.raises(lark.exceptions.UnexpectedInput):
+            transformer.doctype_to_annotation(doctype)
+
+    @pytest.mark.parametrize("doctype", DoctypeTransformer.blacklisted_qualnames)
+    def test_reserved_keywords(self, doctype):
+        assert DoctypeTransformer.blacklisted_qualnames
+
+        transformer = DoctypeTransformer()
+        with pytest.raises(lark.exceptions.VisitError):
+            transformer.doctype_to_annotation(doctype)
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("int or float", "int | float"),
+            ("int or float or str", "int | float | str"),
+        ],
+    )
+    def test_natlang_union(self, doctype, expected):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(doctype)
+        assert annotation.value == expected
+
+    @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
             # Conventional
@@ -91,7 +133,7 @@ class Test_DoctypeTransformer:
         "doctype",
         [
             "list of int (s)",
-            "list of (float)",
+            "list of ((float))",
             "list of (float,)",
             "list of (, )",
             "list of ...",
