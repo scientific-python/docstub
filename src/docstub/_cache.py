@@ -1,10 +1,11 @@
 import logging
 from functools import cached_property
-from typing import Any, Protocol
+
+from typing_extensions import Any, Protocol, TypeVar
 
 logger = logging.getLogger(__name__)
 
-
+T = TypeVar("T")
 CACHE_DIR_NAME = ".docstub_cache"
 
 
@@ -92,7 +93,7 @@ def validate_cache(path):
         raise FileNotFoundError(f"expected '{path}' to contain a '.gitignore' file")
 
 
-class FuncSerializer[T](Protocol):
+class FuncSerializer(Protocol[T]):
     """Defines an interface to serialize and deserialize results of a function.
 
     This interface is used by `FileCache` to cache results of a
