@@ -112,6 +112,7 @@ run.source = ["docstub"]
 
 [tool.changelist.label_section_map]
 ".*enhancement.*" = "Enhancement"
+".*(deprecation|API).*" = "Deprecations"
 ".*performance.*" = "Performance"
 ".*fix.*" = "Bug Fixes"
 ".*documentation.*" = "Documentation"
