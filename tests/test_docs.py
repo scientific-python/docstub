@@ -70,7 +70,7 @@ def test_command_line_reference(command, name):
     with md_file.open("r") as io:
         md_content = io.read()
 
-    guard_name = f"cli-{name.replace(" ", "-")}"
+    guard_name = f"cli-{name.replace(' ', '-')}"
     regex = rf"<!--- begin {guard_name} --->(.*)<!--- end {guard_name} --->"
     matches = re.findall(regex, md_content, flags=re.DOTALL)
     assert len(matches) == 1
