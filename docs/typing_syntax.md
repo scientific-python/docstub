@@ -75,26 +75,28 @@ and **mappings** exist.
 
 This expression allows adding shape and datatype information for data structures like [NumPy arrays](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html).
 
-`array` and `ndarray`, and `array-like` and `array_like` can be used interchange-ably.
+`array` and `ndarray`, and `array-like` and `array_like` can be used interchange-ably for the variable `ARRAY` below.
 
-| Docstring type              | Python type annotation |
-|-----------------------------|------------------------|
-| `array of DTYPE`            | `ndarray[DTYPE]`       |
-| `ndarray of dtype DTYPE`    | `ndarray[DTYPE]`       |
-| `array-like of DTYPE`       | `ArrayLike[DTYPE]`     |
-| `array_like of dtype DTYPE` | `ArrayLike[DTYPE]`     |
+| Docstring type                         | Python type annotation |
+|----------------------------------------|------------------------|
+| `ARRAY of dtype DTYPE`                 | `ARRAY[DTYPE]`         |
+| `ARRAY of dtype DTYPE and shape SHAPE` | `ARRAY[DTYPE]`         |
+| `ARRAY of shape SHAPE`                 | `ARRAY[DTYPE]`         |
+| `ARRAY of shape SHAPE and dtype DTYPE` | `ARRAY[DTYPE]`         |
+
+E.g.
+
+| Docstring type                           | Python type annotation |
+|------------------------------------------|------------------------|
+| `array of dtype int`                     | `ndarray[int]`         |
+| `ndarray of dtype bool and shape (4, 4)` | `ndarray[bool]`        |
+| `array-like of dtype float`              | `ArrayLike[float]`     |
+| `array_like of shape (M, 2)`             | `ArrayLike`            |
+
 
 > [!NOTE]
 > Noting the **shape** of an array in the docstring is supported.
-> However, Python's typing system is not yet able to express this information.
-> It is therefore not included in the resulting type annotation.
-
-| Docstring type           | Python type annotation |
-|--------------------------|------------------------|
-| `(3,) array of DTYPE`    | `ndarray[DTYPE]`       |
-| `(X, Y) array of DTYPE`  | `ndarray[DTYPE]`       |
-| `([P,] M, N) array-like` | `ArrayLike`            |
-| `(M, ...) ndarray`       | `ArrayLike`            |
+> However, [support for including shapes in generated stubs](https://github.com/scientific-python/docstub/issues/76) is not yet included in docstub.
 
 
 ## Literals
