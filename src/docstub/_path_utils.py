@@ -212,7 +212,8 @@ def _walk_source_package(path, *, ignore_regex):
     source_path : Path
         Either a Python file or a stub file that takes precedence.
     """
-    if ignore_regex and ignore_regex.match(str(path)):
+    # Make sure
+    if ignore_regex and ignore_regex.match(str(path.resolve())):
         logger.info("ignoring %s", path)
         return
 
