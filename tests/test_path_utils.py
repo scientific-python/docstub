@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from docstub._path_utils import STUB_HEADER_COMMENT, walk_source_package
@@ -122,3 +124,18 @@ class Test_walk_source_package:
 
         paths = sorted(walk_source_package(tmp_path, ignore=["**/*init*"]))
         assert paths == [stub_in_sub_package]
+
+    def test_ignore_relative_path(self, tmp_path_cwd):
+        init = tmp_path_cwd / "__init__.py"
+        init.touch()
+        tests_dir = tmp_path_cwd / "tests"
+        tests_dir.mkdir()
+        sub_init = tests_dir / "__init__.py"
+        sub_init.touch()
+
+        relative_cwd = Path()
+
+        paths = sorted(walk_source_package(relative_cwd))
+        assert [p.resolve() for p in paths] == [init, sub_init]
+        paths = sorted(walk_source_package(relative_cwd, ignore=["**/tests"]))
+        assert [p.resolve() for p in paths] == [init]

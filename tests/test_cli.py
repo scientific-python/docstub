@@ -1,7 +1,6 @@
 """Test command line interface."""
 
 import logging
-import os
 from pathlib import Path
 
 import pytest
@@ -11,22 +10,6 @@ from docstub import _cli
 from docstub._cache import create_cache
 
 PROJECT_ROOT = Path(__file__).parent.parent
-
-
-@pytest.fixture
-def tmp_path_cwd(tmp_path):
-    """Fixture: Create temporary directory and use it as working directory.
-
-    .. warning::
-        Not written with parallelization in mind!
-    """
-    previous_cwd = Path.cwd()
-    os.chdir(tmp_path)
-    try:
-        yield tmp_path
-    except:
-        os.chdir(previous_cwd)
-        raise
 
 
 class Test_run:
