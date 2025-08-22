@@ -466,6 +466,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.FunctionDef
         """
+        reporter = self._reporter_with_ctx(original_node)
         node_changes = {"body": self._body_replacement}
 
         ds_annotations = self._pytypes_stack.pop()
@@ -481,13 +482,6 @@ class Py2StubTransformer(cst.CSTTransformer):
 
             else:
                 # Notify about ignored docstring annotation
-                # TODO: either remove report or print only in verbose mode
-                position = self.get_metadata(
-                    cst.metadata.PositionProvider, original_node
-                ).start
-                reporter = self.reporter.copy_with(
-                    path=self.current_source, line=position.line
-                )
                 to_keep = _inline_node_as_code(original_node.returns.annotation)
                 details = (
                     f"{reporter.underline(to_keep)} "
@@ -517,6 +511,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.Param
         """
+        reporter = self._reporter_with_ctx(original_node)
         node_changes = {}
 
         scope = self._scope_stack[-1]
@@ -551,13 +546,6 @@ class Py2StubTransformer(cst.CSTTransformer):
 
                 else:
                     # Notify about ignored docstring annotation
-                    # TODO: either remove report or print only in verbose mode
-                    position = self.get_metadata(
-                        cst.metadata.PositionProvider, original_node
-                    ).start
-                    reporter = self.reporter.copy_with(
-                        path=self.current_source, line=position.line
-                    )
                     to_keep = cst.Module([]).code_for_node(
                         original_node.annotation.annotation
                     )
@@ -575,6 +563,7 @@ class Py2StubTransformer(cst.CSTTransformer):
             node_changes["annotation"] = self._Annotation_Incomplete
             import_ = PyImport.typeshed_Incomplete()
             self._required_imports.add(import_)
+            reporter.warn(f"Missing annotation for parameter '{name}'")
 
         if node_changes:
             updated_node = updated_node.with_changes(**node_changes)
@@ -625,6 +614,8 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.Assign or cst.FlattenSentinel
         """
+        reporter = self._reporter_with_ctx(original_node)
+
         target_names = [
             name.value
             for target in updated_node.targets
@@ -632,15 +623,18 @@ class Py2StubTransformer(cst.CSTTransformer):
         ]
         if "__all__" in target_names:
             if len(target_names) > 1:
-                logger.warning(
-                    "found `__all__` in assignment with multiple targets, not modifying it"
+                reporter.warn(
+                    "found `__all__` in assignment with multiple targets, "
+                    "not modifying it"
                 )
             return updated_node
 
         assert len(original_node.targets) > 0
         if len(target_names) == 1:
             # Replace with annotated assignment
-            updated_node = self._create_annotated_assign(name=target_names[0])
+            updated_node = self._create_annotated_assign(
+                name=target_names[0], reporter=reporter
+            )
 
         else:
             # Unpack assignment with multiple targets into multiple annotated ones
@@ -649,7 +643,7 @@ class Py2StubTransformer(cst.CSTTransformer):
             for name in target_names:
                 is_last = name == target_names[-1]
                 sub_node = self._create_annotated_assign(
-                    name=name, trailing_semicolon=not is_last
+                    name=name, trailing_semicolon=not is_last, reporter=reporter
                 )
                 unpacked.append(sub_node)
             updated_node = cst.FlattenSentinel(unpacked)
@@ -668,6 +662,8 @@ class Py2StubTransformer(cst.CSTTransformer):
         -------
         updated_node : cst.AnnAssign
         """
+        reporter = self._reporter_with_ctx(original_node)
+
         name = updated_node.target.value
 
         if updated_node.value is not None:
@@ -705,13 +701,6 @@ class Py2StubTransformer(cst.CSTTransformer):
 
             elif pytype != FallbackAnnotation:
                 # Notify about ignored docstring annotation
-                # TODO: either remove report or print only in verbose mode
-                position = self.get_metadata(
-                    cst.metadata.PositionProvider, original_node
-                ).start
-                reporter = self.reporter.copy_with(
-                    path=self.current_source, line=position.line
-                )
                 to_keep = cst.Module([]).code_for_node(
                     updated_node.annotation.annotation
                 )
@@ -891,13 +880,16 @@ class Py2StubTransformer(cst.CSTTransformer):
                 reporter.error("could not parse docstring", exc_info=True)
         return annotations
 
-    def _create_annotated_assign(self, *, name, trailing_semicolon=False):
+    def _create_annotated_assign(
+        self, *, name, trailing_semicolon=False, reporter=None
+    ):
         """Create an annotated assign.
 
         Parameters
         ----------
         name : str
         trailing_semicolon : bool, optional
+        reporter : ContextReporter, optional
 
         Returns
         -------
@@ -911,6 +903,8 @@ class Py2StubTransformer(cst.CSTTransformer):
         else:
             annotation = self._Annotation_Incomplete
             self._required_imports.add(PyImport.typeshed_Incomplete())
+            if reporter:
+                reporter.warn(f"Missing annotation for assignment '{name}'")
 
         semicolon = (
             cst.Semicolon(whitespace_after=cst.SimpleWhitespace(" "))
@@ -959,3 +953,18 @@ class Py2StubTransformer(cst.CSTTransformer):
         )
 
         return updated_node
+
+    def _reporter_with_ctx(self, node):
+        """Return reporter with file and line information attached.
+
+        Parameters
+        ----------
+        node : cst.Node
+
+        Returns
+        -------
+        reporter : ContextReporter
+        """
+        position = self.get_metadata(cst.metadata.PositionProvider, node).start
+        reporter = self.reporter.copy_with(path=self.current_source, line=position.line)
+        return reporter
