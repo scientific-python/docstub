@@ -345,7 +345,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         Parameters
         ----------
         source : str
-        module_path : Pathfads dsa fsadf , optional
+        module_path : Path , optional
             The location of the source that is transformed into a stub file.
             If given, used to enhance logging & error messages with more
             context information.
@@ -505,7 +505,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         self._scope_stack.pop()
         return updated_node
 
-    def leave_Param(self, original_node: int, updated_node):
+    def leave_Param(self, original_node, updated_node):
         """Add type annotation to parameter.
 
         Parameters
