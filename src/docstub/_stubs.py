@@ -16,7 +16,8 @@ import libcst.matchers as cstm
 
 from ._analysis import PyImport
 from ._docstrings import DocstringAnnotations, DoctypeTransformer, FallbackAnnotation
-from ._utils import ErrorReporter, module_name_from_path
+from ._report import ContextReporter
+from ._utils import module_name_from_path
 
 logger = logging.getLogger(__name__)
 
@@ -27,14 +28,20 @@ def try_format_stub(stub: str) -> str:
         import isort
 
         stub = isort.code(stub)
+    except (SystemExit, KeyboardInterrupt):
+        raise
     except ImportError:
         logger.warning("isort is not available, couldn't sort imports")
     try:
         import black
 
         stub = black.format_str(stub, mode=black.Mode(is_pyi=True))
+    except (SystemExit, KeyboardInterrupt):
+        raise
     except ImportError:
         logger.warning("black is not available, couldn't format stubs")
+    except:  # noqa: E722
+        logger.exception("Unexpected error while formatting with black")
     return stub
 
 
@@ -278,18 +285,14 @@ class Py2StubTransformer(cst.CSTTransformer):
     )
     _Annotation_None: ClassVar[cst.Annotation] = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, *, matcher=None, reporter=None):
+    def __init__(self, *, matcher=None):
         """
         Parameters
         ----------
         matcher : ~.TypeMatcher
-        reporter : ~.ErrorReporter
         """
-        if reporter is None:
-            reporter = ErrorReporter()
-
         self.transformer = DoctypeTransformer(matcher=matcher)
-        self.reporter = reporter
+        self.reporter = ContextReporter(logger=logger)
         # Relevant docstring for the current context
         self._scope_stack = None  # Entered module, class or function scopes
         self._pytypes_stack = None  # Collected pytypes for each stack
@@ -342,7 +345,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         Parameters
         ----------
         source : str
-        module_path : Path, optional
+        module_path : Pathfads dsa fsadf , optional
             The location of the source that is transformed into a stub file.
             If given, used to enhance logging & error messages with more
             context information.
@@ -478,7 +481,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
             else:
                 # Notify about ignored docstring annotation
-                # TODO: either remove message or print only in verbose mode
+                # TODO: either remove report or print only in verbose mode
                 position = self.get_metadata(
                     cst.metadata.PositionProvider, original_node
                 ).start
@@ -490,9 +493,8 @@ class Py2StubTransformer(cst.CSTTransformer):
                     f"{reporter.underline(to_keep)} "
                     f"ignoring docstring: {annotation_value}"
                 )
-                reporter.message(
-                    short="Keeping existing inline return annotation",
-                    details=details,
+                reporter.warn(
+                    short="Keeping existing inline return annotation", details=details
                 )
 
         elif original_node.returns is None:
@@ -503,7 +505,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         self._scope_stack.pop()
         return updated_node
 
-    def leave_Param(self, original_node, updated_node):
+    def leave_Param(self, original_node: int, updated_node):
         """Add type annotation to parameter.
 
         Parameters
@@ -549,7 +551,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
                 else:
                     # Notify about ignored docstring annotation
-                    # TODO: either remove message or print only in verbose mode
+                    # TODO: either remove report or print only in verbose mode
                     position = self.get_metadata(
                         cst.metadata.PositionProvider, original_node
                     ).start
@@ -563,7 +565,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                         f"{reporter.underline(to_keep)} "
                         f"ignoring docstring: {annotation_value}"
                     )
-                    reporter.message(
+                    reporter.warn(
                         short="Keeping existing inline parameter annotation",
                         details=details,
                     )
@@ -703,7 +705,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
             elif pytype != FallbackAnnotation:
                 # Notify about ignored docstring annotation
-                # TODO: either remove message or print only in verbose mode
+                # TODO: either remove report or print only in verbose mode
                 position = self.get_metadata(
                     cst.metadata.PositionProvider, original_node
                 ).start
@@ -716,7 +718,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                 details = (
                     f"{reporter.underline(to_keep)} ignoring docstring: {pytype.value}"
                 )
-                reporter.message(
+                reporter.warn(
                     short="Keeping existing inline annotation for assignment",
                     details=details,
                 )
@@ -885,12 +887,8 @@ class Py2StubTransformer(cst.CSTTransformer):
                 )
             except (SystemExit, KeyboardInterrupt):
                 raise
-            except Exception as e:
-                logger.exception(
-                    "error while parsing docstring of `%s`:\n\n%s",
-                    node.name.value,
-                    e,
-                )
+            except:  # noqa: E722
+                reporter.error("could not parse docstring", exc_info=True)
         return annotations
 
     def _create_annotated_assign(self, *, name, trailing_semicolon=False):

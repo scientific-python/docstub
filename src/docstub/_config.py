@@ -35,7 +35,7 @@ class Config:
         with open(path, "rb") as fp:
             raw = tomllib.load(fp)
         config = cls(**raw.get("tool", {}).get("docstub", {}), config_paths=(path,))
-        logger.debug("created Config from %s", path)
+        logger.debug("Created `Config` from %s", path)
         return config
 
     def merge(self, other):
@@ -58,7 +58,7 @@ class Config:
             ignore_files=self.ignore_files + other.ignore_files,
             config_paths=self.config_paths + other.config_paths,
         )
-        logger.debug("merged Config from %s", new.config_paths)
+        logger.debug("Merged Config from %s", new.config_paths)
         return new
 
     def to_dict(self):

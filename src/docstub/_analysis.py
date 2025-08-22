@@ -524,7 +524,7 @@ class TypeMatcher:
             resolved = name
         else:
             logger.warning(
-                "reached limit while resolving nicknames for %r in %s, using %r",
+                "Reached limit while resolving nicknames for %r in %s, using %r",
                 original,
                 self.current_file or "<file not known>",
                 resolved,
@@ -572,7 +572,7 @@ class TypeMatcher:
                     "%r (original %r) in %s matches multiple types %r, using %r",
                     search,
                     original_search,
-                    self.current_file or "<file not known>",
+                    self.current_file or "<file?>",
                     matches.keys(),
                     shortest_key,
                 )

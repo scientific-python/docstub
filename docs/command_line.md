@@ -54,7 +54,10 @@ Options:
                       more, exit with error code '1'. This is useful to adopt
                       docstub gradually.  [default: 0; x>=0]
   --no-cache          Ignore pre-existing cache and don't create a new one.
-  -v, --verbose       Print more details (repeatable).
+  -v, --verbose       Print more details. Use once to show information
+                      messages. Use '-vv' to print debug messages.
+  -q, --quiet         Print less details. Use once to hide warnings. Use '-qq'
+                      to completely silence output.
   -h, --help          Show this message and exit.
 ```
 
@@ -75,7 +78,10 @@ Usage: docstub clean [OPTIONS]
   one exists, remove it.
 
 Options:
-  -v, --verbose  Print more details (repeatable).
+  -v, --verbose  Print more details. Use once to show information messages.
+                 Use '-vv' to print debug messages.
+  -q, --quiet    Print less details. Use once to hide warnings. Use '-qq' to
+                 completely silence output.
   -h, --help     Show this message and exit.
 ```
 
