@@ -172,7 +172,7 @@ class FileCache:
         create_cache(self._cache_dir)
 
         if _directory_size(self._cache_dir) > 512 * 1024**2:
-            logger.warning("cache size at %r exceeds 512 MiB", self._cache_dir)
+            logger.warning("Cache size at %r exceeds 512 MiB", self._cache_dir)
 
         return self._cache_dir
 

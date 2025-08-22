@@ -349,7 +349,7 @@ class Test_TypeMatcher:
 
         type_name, py_import = matcher.match("Foo")
         assert len(caplog.records) == 1
-        assert "reached limit while resolving nicknames" in caplog.text
+        assert "Reached limit while resolving nicknames" in caplog.text
 
         assert type_name == "Foo"
         assert py_import == PyImport(implicit="Foo")
