@@ -5,6 +5,9 @@ updates:
     directory: "/"
     schedule:
       interval: "quarterly"
+    labels:
+      - "devops"
+      - "bot"
     groups:
       actions:
         patterns:
