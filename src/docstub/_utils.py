@@ -235,7 +235,7 @@ class ErrorReporter:
 
     @staticmethod
     def underline(line):
-        underlined = f"{line}\n" f"{click.style('^' * len(line), fg='red', bold=True)}"
+        underlined = f"{line}\n{click.style('^' * len(line), fg='red', bold=True)}"
         return underlined
 
 

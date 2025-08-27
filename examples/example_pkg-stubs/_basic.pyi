@@ -13,8 +13,8 @@ from . import AnotherType, CustomException
 logger: logging.Logger
 
 __all__ = [
-    "func_empty",
     "ExampleClass",
+    "func_empty",
 ]
 
 def func_empty(a1: Incomplete, a2: Incomplete, a3) -> None: ...
