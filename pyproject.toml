@@ -133,6 +133,8 @@ Path = "pathlib"
 
 [tool.mypy]
 strict = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 disable_error_code = ["type-arg"]
 
 # Don't type test suite itself but check if usage makes sense with docstub's stubs
