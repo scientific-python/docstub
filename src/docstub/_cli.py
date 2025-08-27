@@ -122,7 +122,6 @@ def _collect_type_info(root_path, *, ignore=(), cache=False):
         collect = TypeCollector.collect
 
     for source_path in walk_source_package(root_path, ignore=ignore):
-
         if cache:
             module = source_path.relative_to(root_path.parent)
             collect.sub_dir = f"{__version__}/{module}"
