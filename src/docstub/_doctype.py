@@ -5,6 +5,7 @@ import itertools
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import lark
@@ -67,7 +68,7 @@ class Token(str):
 
     flag = TokenFlag
 
-    __slots__ = ("value", "kind", "pos")
+    __slots__ = ("kind", "pos", "value")
 
     def __new__(cls, value, *, kind, pos=None):
         self = super().__new__(cls, value)
@@ -302,10 +303,13 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
 @dataclass(frozen=True, slots=True)
 class ParsedDoctype:
+    """Parsed representation of a doctype, a type description in a docstring."""
+
     tokens: tuple[Token, ...]
     raw_doctype: str
 
     @classmethod
+    @lru_cache(maxsize=100)
     def parse(cls, doctype):
         """Turn a type description in a docstring into a type annotation.
 
@@ -316,26 +320,38 @@ class ParsedDoctype:
 
         Returns
         -------
-        annotation_list : list of Token
+        parsed : Self
 
         Examples
         --------
-        >>> doctype = ParsedDoctype.parse(
+        >>> parsed = ParsedDoctype.parse(
         ...     "tuple of int or ndarray of dtype (float or int)"
         ... )
-        >>> doctype
-        <ParsedDoctype: 'tuple[int] | ndarray[float | int]'>
-        >>> doctype.qualnames
-        (Token('tuple', kind='qualname'),
-         Token('int', kind='qualname'),
-         Token('ndarray', kind='qualname'),
-         Token('float', kind='qualname'),
-         Token('int', kind='qualname'))
+        >>> parsed
+        <ParsedDoctype 'tuple[int] | ndarray[float | int]'>
+        >>> str(parsed)
+        'tuple[int] | ndarray[float | int]'
+        >>> parsed.format({"ndarray": "np.ndarray"})
+        'tuple[int] | np.ndarray[float | int]'
+        >>> parsed.qualnames  # doctest: +NORMALIZE_WHITESPACE
+        (Token('tuple', kind=<TokenFlag.NAME: 1>),
+         Token('int', kind=<TokenFlag.NAME: 1>),
+         Token('ndarray', kind=<TokenFlag.NAME|ARRAY: 33>),
+         Token('float', kind=<TokenFlag.NAME: 1>),
+         Token('int', kind=<TokenFlag.NAME: 1>))
         """
         tree = _lark.parse(doctype)
         tokens = DoctypeTransformer().transform(tree=tree)
         tokens = tuple(flatten_recursive(tokens))
         return cls(tokens, raw_doctype=doctype)
+
+    def format(self, replace_names=None):
+        replace_names = replace_names or {}
+        tokens = [
+            replace_names.get(token, token) if token.kind == TokenFlag.NAME else token
+            for token in self.tokens
+        ]
+        return "".join(tokens)
 
     def __str__(self):
         return "".join(self.tokens)
@@ -351,7 +367,7 @@ class ParsedDoctype:
         for token in self.tokens:
             if token.pos is not None:
                 start, stop = token.pos
-                print(self.raw_doctype)
-                print(" " * start + "^" * (stop - start))
-                print(" " * start + token)
-                print()
+                print(self.raw_doctype)  # noqa: T201
+                print(" " * start + "^" * (stop - start))  # noqa: T201
+                print(" " * start + token)  # noqa: T201
+                print()  # noqa: T201
