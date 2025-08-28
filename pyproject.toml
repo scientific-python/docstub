@@ -40,7 +40,14 @@ dependencies = [
     "isort >=5.13.2",
 ]
 
-[project.optional-dependencies]
+[project.urls]
+Homepage = "https://github.com/lagru/docstub"
+
+[project.scripts]
+docstub = "docstub.__main__:cli"
+
+
+[dependency-groups]
 dev = [
     "pre-commit >=4.3.0",
     "ipython",
@@ -51,12 +58,6 @@ test = [
     "mypy >=1.17.0",
     "basedpyright >=1.31",
 ]
-
-[project.urls]
-Homepage = "https://github.com/lagru/docstub"
-
-[project.scripts]
-docstub = "docstub.__main__:cli"
 
 
 [tool.setuptools_scm]
