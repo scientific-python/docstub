@@ -37,9 +37,17 @@ def test_create_cache(tmp_path):
     _cache.create_cache(cache_dir)
 
 
+def test_create_validate_cache(tmp_path):
+    cache_dir = tmp_path / _cache.CACHE_DIR_NAME
+    _cache.create_cache(cache_dir)
+    _cache.validate_cache(cache_dir)
+
+    with pytest.raises(FileNotFoundError, match="expected directory .* named .*"):
+        _cache.validate_cache(tmp_path)
+
+
 class Test_FileCache:
     def test_basic(self, tmp_path):
-
         class Serializer:
             suffix = ".txt"
 
@@ -59,11 +67,15 @@ class Test_FileCache:
             return x * x
 
         cached_square = _cache.FileCache(
-            func=square, serializer=Serializer(), cache_dir=tmp_path, name="test"
+            func=square, serializer=Serializer(), cache_dir=tmp_path, sub_dir="test"
         )
+        assert cached_square.cached_last_call is None
 
         assert cached_square(3) == 9
         assert counter[3] == 1
+        assert cached_square.cache_misses == 1
+        assert cached_square.cache_hits == 0
+        assert cached_square.cached_last_call is False
 
         # Result was cached
         entry_name = f"{Serializer().hash_args(3)!s}{Serializer.suffix}"
@@ -73,20 +85,29 @@ class Test_FileCache:
         # With the square(3) cached, the counter no longer increases
         assert cached_square(3) == 9
         assert counter[3] == 1
+        assert cached_square.cache_misses == 1
+        assert cached_square.cache_hits == 1
+        assert cached_square.cached_last_call is True
 
         # Using another FileCache will use the existing cache
         cached_square_2 = _cache.FileCache(
-            func=square, serializer=Serializer(), cache_dir=tmp_path, name="test"
+            func=square, serializer=Serializer(), cache_dir=tmp_path, sub_dir="test"
         )
         assert cached_square_2(3) == 9
         assert counter[3] == 1
+        assert cached_square_2.cache_misses == 0
+        assert cached_square_2.cache_hits == 1
+        assert cached_square_2.cached_last_call is True
 
         # But using another FileCache with a different name will not hit existing cache
         cached_square_3 = _cache.FileCache(
             func=square,
             serializer=Serializer(),
             cache_dir=tmp_path,
-            name="test2",
+            sub_dir="test2",
         )
         assert cached_square_3(3) == 9
         assert counter[3] == 2
+        assert cached_square_3.cache_misses == 1
+        assert cached_square_3.cache_hits == 0
+        assert cached_square_3.cached_last_call is False

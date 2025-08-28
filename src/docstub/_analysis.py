@@ -50,30 +50,38 @@ def _shared_leading_qualname(*qualnames):
 
 
 @dataclass(slots=True, frozen=True)
-class KnownImport:
-    """Import information associated with a single known type annotation.
+class PyImport:
+    """Information to construct an import statement for any Python object.
 
     Attributes
     ----------
-    import_path
+    from_ :
         Dotted names after "from".
-    import_name
+    import_ :
         Dotted names after "import".
-    import_alias
+    as_ :
         Name (without ".") after "as".
-    builtin_name
-        Names an object that's builtin and doesn't need an import.
+    implicit :
+        Describes an object that doesn't need an import statement and is
+        implicitly available. This may be a builtin or an object that is known
+        to be available in a given scope. E.g. it may have already been
+        imported.
 
     Examples
     --------
-    >>> KnownImport(import_path="numpy", import_name="uint8", import_alias="ui8")
-    <KnownImport 'from numpy import uint8 as ui8'>
+    >>> str(PyImport(from_="numpy", import_="uint8", as_="ui8"))
+    'from numpy import uint8 as ui8'
+
+    >>> str(PyImport(implicit="int"))
+    Traceback (most recent call last):
+        ...
+    RuntimeError: cannot import implicit object: 'int'
     """
 
-    import_name: str | None = None
-    import_path: str | None = None
-    import_alias: str | None = None
-    builtin_name: str | None = None
+    import_: str | None = None
+    from_: str | None = None
+    as_: str | None = None
+    implicit: str | None = None
 
     @classmethod
     @cache
@@ -85,122 +93,78 @@ class KnownImport:
 
         Returns
         -------
-        import : KnownImport
+        import : PyImport
             The import corresponding to ``from _typeshed import Incomplete``.
 
         References
         ----------
         .. [1] https://typing.readthedocs.io/en/latest/guides/writing_stubs.html#incomplete-stubs
         """
-        import_ = cls(import_path="_typeshed", import_name="Incomplete")
+        import_ = cls(from_="_typeshed", import_="Incomplete")
         return import_
 
-    @classmethod
-    def one_from_config(cls, name, *, info):
-        """Create one KnownImport from the configuration format.
-
-        Parameters
-        ----------
-        name : str
-        info : dict[{"from", "import", "as", "is_builtin"}, str]
-
-        Returns
-        -------
-        TypeImport : Self
-        """
-        assert not (info.keys() - {"from", "import", "as", "is_builtin"})
-
-        if info.get("is_builtin"):
-            known_import = cls(builtin_name=name)
-        else:
-            import_name = name
-            if "import" in info:
-                import_name = info["import"]
-
-            known_import = cls(
-                import_name=import_name,
-                import_path=info.get("from"),
-                import_alias=info.get("as"),
-            )
-            if not name.startswith(known_import.target):
-                raise ValueError(
-                    f"{name!r} doesn't start with {known_import.target!r}",
-                )
-
-        return known_import
-
-    @classmethod
-    def many_from_config(cls, mapping):
-        """Create many KnownImports from the configuration format.
-
-        Parameters
-        ----------
-        mapping : dict[str, dict[{"from", "import", "as", "is_builtin"}, str]]
-
-        Returns
-        -------
-        known_imports : dict[str, Self]
-        """
-        known_imports = {
-            name: cls.one_from_config(name, info=info) for name, info in mapping.items()
-        }
-        return known_imports
-
     def format_import(self, relative_to=None):
-        if self.builtin_name:
-            msg = "cannot import builtin"
+        if self.implicit:
+            msg = f"cannot import implicit object: {self.implicit!r}"
             raise RuntimeError(msg)
-        out = f"import {self.import_name}"
+        out = f"import {self.import_}"
 
-        import_path = self.import_path
+        import_path = self.from_
         if import_path:
             if relative_to:
                 shared = _shared_leading_qualname(relative_to, import_path)
                 if shared == import_path:
                     import_path = "."
                 else:
-                    import_path = self.import_path.replace(shared, "")
+                    import_path = self.from_.replace(shared, "")
 
             out = f"from {import_path} {out}"
-        if self.import_alias:
-            out = f"{out} as {self.import_alias}"
+        if self.as_:
+            out = f"{out} as {self.as_}"
         return out
 
     @property
     def target(self) -> str:
-        if self.import_alias:
-            out = self.import_alias
-        elif self.import_name:
-            out = self.import_name
-        elif self.builtin_name:
-            out = self.builtin_name
+        if self.as_:
+            out = self.as_
+        elif self.import_:
+            out = self.import_
+        elif self.implicit:
+            # Account for scoped form "some_module_scope:target"
+            out = self.implicit.split(":")[-1]
         else:
             raise RuntimeError("cannot determine import target")
         return out
 
     @property
     def has_import(self):
-        return self.builtin_name is None
+        return self.implicit is None
 
     def __post_init__(self):
-        if self.builtin_name is not None:
+        if self.implicit is not None:
             if (
-                self.import_name is not None
-                or self.import_alias is not None
-                or self.import_path is not None
+                self.import_ is not None
+                or self.as_ is not None
+                or self.from_ is not None
             ):
-                raise ValueError("builtin cannot contain import information")
-        elif self.import_name is None:
-            raise ValueError("non builtin must at least define an `import_name`")
-        if self.import_alias is not None and "." in self.import_alias:
-            raise ValueError("`import_alias` can't contain a '.'")
+                raise ValueError("implicit import cannot contain import information")
+        elif self.import_ is None:
+            raise ValueError("must set at least one parameter: `import_` or `implicit`")
+        if self.as_ is not None and "." in self.as_:
+            raise ValueError("parameter `as_` can't contain a '.'")
 
     def __repr__(self) -> str:
-        if self.builtin_name:
-            info = f"{self.target} (builtin)"
+        if self.implicit:
+            kwargs = f"implicit={self.implicit!r}"
         else:
-            info = f"{self.format_import()!r}"
-        out = f"<{type(self).__name__} {info}>"
+            kwargs = [
+                f"from_={self.from_!r}" if self.from_ else None,
+                f"import_={self.import_!r}" if self.import_ else None,
+                f"as_={self.as_!r}" if self.as_ else None,
+            ]
+            kwargs = [arg for arg in kwargs if arg is not None]
+            kwargs = ", ".join(kwargs)
+        out = f"{type(self).__name__}({kwargs})"
         return out
 
     def __str__(self) -> str:
@@ -227,27 +191,37 @@ def _is_type(value):
 
 
 def _builtin_types():
-    """Return known imports for all builtins (in the current runtime).
+    """Return known imports for all builtins in the current runtime.
 
     Returns
     -------
-    known_imports : dict[str, KnownImport]
+    types : dict[str, PyImport]
     """
     known_builtins = set(dir(builtins))
 
-    known_imports = {}
+    types = {}
     for name in known_builtins:
         if name.startswith("_"):
             continue
         value = getattr(builtins, name)
         if not _is_type(value):
             continue
-        known_imports[name] = KnownImport(builtin_name=name)
+        types[name] = PyImport(implicit=name)
 
-    return known_imports
+    return types
 
 
 def _runtime_types_in_module(module_name):
+    """Return types of a module in the current runtime.
+
+    Parameters
+    ----------
+    module_name : str
+
+    Returns
+    -------
+    types : dict[str, PyImport]
+    """
     module = importlib.import_module(module_name)
     types = {}
     for name in module.__all__:
@@ -257,38 +231,52 @@ def _runtime_types_in_module(module_name):
         if not _is_type(value):
             continue
 
-        import_ = KnownImport(import_path=module_name, import_name=name)
-        types[name] = import_
-        types[f"{module_name}.{name}"] = import_
+        py_import = PyImport(from_=module_name, import_=name)
+        types[name] = py_import
+        types[f"{module_name}.{name}"] = py_import
 
     return types
 
 
 def common_known_types():
-    """Return known imports for commonly supported types.
+    """Return commonly supported types.
 
     This includes builtin types, and types from the `typing` or
     `collections.abc` module.
 
     Returns
     -------
-    known_imports : dict[str, KnownImport]
+    py_imports : dict[str, PyImport]
 
     Examples
     --------
     >>> types = common_known_types()
     >>> types["str"]
-    <KnownImport str (builtin)>
+    PyImport(implicit='str')
     >>> types["Iterable"]
-    <KnownImport 'from collections.abc import Iterable'>
+    PyImport(from_='collections.abc', import_='Iterable')
     >>> types["collections.abc.Iterable"]
-    <KnownImport 'from collections.abc import Iterable'>
+    PyImport(from_='collections.abc', import_='Iterable')
     """
-    known_imports = _builtin_types()
-    known_imports |= _runtime_types_in_module("typing")
+    types = _builtin_types()
+    types |= _runtime_types_in_module("typing")
     # Overrides containers from typing
-    known_imports |= _runtime_types_in_module("collections.abc")
-    return known_imports
+    types |= _runtime_types_in_module("collections.abc")
+    return types
+
+
+@dataclass(slots=True, kw_only=True)
+class TypeCollectionResult:
+    types: dict[str, PyImport]
+    type_prefixes: dict[str, PyImport]
+
+    @classmethod
+    def serialize(cls, result):
+        pass
+
+    @classmethod
+    def deserialize(cls, result):
+        pass
 
 
 class TypeCollector(cst.CSTVisitor):
@@ -296,9 +284,15 @@ class TypeCollector(cst.CSTVisitor):
 
     Examples
     --------
-    >>> types = TypeCollector.collect(__file__)
+    >>> types, prefixes = TypeCollector.collect(__file__)
     >>> types[f"{__name__}.TypeCollector"]
-    <KnownImport 'from docstub._analysis import TypeCollector'>
+    PyImport(from_='docstub._analysis', import_='TypeCollector')
+
+    >>> from pathlib import Path
+    >>> from docstub._utils import module_name_from_path
+    >>> module = module_name_from_path(Path(__file__))
+    >>> prefixes[f"{module}:logging"]
+    PyImport(implicit='...:logging')
     """
 
     class ImportSerializer:
@@ -312,17 +306,45 @@ class TypeCollector(cst.CSTVisitor):
             key = pyfile_checksum(path)
             return key
 
-        def serialize(self, data: dict[str, KnownImport]) -> bytes:
-            """Serialize results from `TypeCollector.collect`."""
-            primitives = {qualname: asdict(imp) for qualname, imp in data.items()}
-            raw = json.dumps(primitives, separators=(",", ":")).encode(self.encoding)
+        def serialize(self, data):
+            """Serialize results from `TypeCollector.collect`.
+
+            Parameters
+            ----------
+            data : tuple[dict[str, PyImport], dict[str, PyImport]]
+
+            Returns
+            -------
+            raw : bytes
+            """
+            primitives = {}
+            for name, table in zip(["types", "type_prefixes"], data, strict=False):
+                primitives[name] = {key: asdict(imp) for key, imp in table.items()}
+            raw = json.dumps(primitives, separators=(",", ":"), indent=1).encode(
+                self.encoding
+            )
             return raw
 
-        def deserialize(self, raw: bytes) -> dict[str, KnownImport]:
-            """Deserialize results from `TypeCollector.collect`."""
+        def deserialize(self, raw):
+            """Deserialize results from `TypeCollector.collect`.
+
+            Parameters
+            ----------
+            raw : bytes
+
+            Returns
+            -------
+            types : dict[str, PyImport]
+            type_prefixes : dict[str, PyImport]
+            """
             primitives = json.loads(raw.decode(self.encoding))
-            data = {qualname: KnownImport(**kw) for qualname, kw in primitives.items()}
-            return data
+
+            def deserialize_table(table):
+                return {key: PyImport(**kw) for key, kw in table.items()}
+
+            types = deserialize_table(primitives["types"])
+            type_prefixes = deserialize_table(primitives["type_prefixes"])
+            return types, type_prefixes
 
     @classmethod
     def collect(cls, file):
@@ -334,7 +356,8 @@ class TypeCollector(cst.CSTVisitor):
 
         Returns
         -------
-        collected : dict[str, KnownImport]
+        types : dict[str, PyImport]
+        type_prefixes : dict[str, PyImport]
         """
         file = Path(file)
         with file.open("r") as fo:
@@ -343,7 +366,7 @@ class TypeCollector(cst.CSTVisitor):
         tree = cst.parse_module(source)
         collector = cls(module_name=module_name_from_path(file))
         tree.visit(collector)
-        return collector.known_imports
+        return collector.types, collector.type_prefixes
 
     def __init__(self, *, module_name):
         """Initialize type collector.
@@ -354,7 +377,8 @@ class TypeCollector(cst.CSTVisitor):
         """
         self.module_name = module_name
         self._stack = []
-        self.known_imports = {}
+        self.types = {}
+        self.type_prefixes = {}
 
     def visit_ClassDef(self, node: cst.ClassDef) -> bool:
         self._stack.append(node.name.value)
@@ -388,6 +412,42 @@ class TypeCollector(cst.CSTVisitor):
             self._collect_type_annotation(stack)
         return False
 
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> bool:
+        """Collect "from import" targets as usable types."""
+        if cstm.matches(node.names, cstm.ImportStar()):
+            return False
+
+        if node.module:
+            from_names = cstm.findall(node.module, cstm.Name())
+            from_names = [n.value for n in from_names]
+        else:
+            from_names = []
+
+        for import_alias in node.names:
+            asname = import_alias.evaluated_alias
+            name = import_alias.evaluated_name
+
+            if not node.relative:
+                key = ".".join([*from_names, name])
+                py_import = PyImport(from_=".".join(from_names), import_=name)
+                self.types[key] = py_import
+
+            scoped_key = f"{self.module_name}:{asname or name}"
+            scoped_import = PyImport(implicit=scoped_key)
+            self.types[scoped_key] = scoped_import
+
+        return False
+
+    def visit_Import(self, node: cst.Import) -> bool:
+        for import_alias in node.names:
+            asname = import_alias.evaluated_alias
+            name = import_alias.evaluated_name
+            scoped_key = f"{self.module_name}:{asname or name}"
+            py_import = PyImport(implicit=scoped_key)
+            self.type_prefixes[scoped_key] = py_import
+
+        return False
+
     def _collect_type_annotation(self, stack):
         """Collect an importable type annotation.
 
@@ -397,8 +457,8 @@ class TypeCollector(cst.CSTVisitor):
             A list of names that form the path to the collected type.
         """
         qualname = ".".join([self.module_name, *stack])
-        known_import = KnownImport(import_path=self.module_name, import_name=stack[0])
-        self.known_imports[qualname] = known_import
+        py_import = PyImport(from_=self.module_name, import_=stack[0])
+        self.types[qualname] = py_import
 
 
 class TypeMatcher:
@@ -406,19 +466,19 @@ class TypeMatcher:
 
     Attributes
     ----------
-    types : dict[str, KnownImport]
-    type_prefixes : dict[str, KnownImport]
+    types : dict[str, PyImport]
+    type_prefixes : dict[str, PyImport]
     type_nicknames : dict[str, str]
     successful_queries : int
     unknown_qualnames : list
-    current_module : Path | None
+    current_file : Path | None
 
     Examples
     --------
     >>> from docstub._analysis import TypeMatcher, common_known_types
     >>> db = TypeMatcher()
     >>> db.match("Any")
-    ('Any', <KnownImport 'from typing import Any'>)
+    ('Any', PyImport(from_='typing', import_='Any'))
     """
 
     def __init__(
@@ -431,99 +491,133 @@ class TypeMatcher:
         """
         Parameters
         ----------
-        types : dict[str, KnownImport]
-        type_prefixes : dict[str, KnownImport]
+        types : dict[str, PyImport]
+        type_prefixes : dict[str, PyImport]
         type_nicknames : dict[str, str]
         """
-        self.types = types or common_known_types()
+
+        self.types = common_known_types() | (types or {})
         self.type_prefixes = type_prefixes or {}
         self.type_nicknames = type_nicknames or {}
         self.successful_queries = 0
         self.unknown_qualnames = []
 
-        self.current_module = None
+        self.current_file = None
 
-    def match(self, search_name):
+    def _resolve_nickname(self, name):
+        """Return intended name if `name` is a nickname.
+
+        Parameters
+        ----------
+        name : str
+
+        Returns
+        -------
+        resolved : str
+        """
+        original = name
+        resolved = name
+        for _ in range(1000):
+            name = self.type_nicknames.get(name)
+            if name is None:
+                break
+            resolved = name
+        else:
+            logger.warning(
+                "reached limit while resolving nicknames for %r in %s, using %r",
+                original,
+                self.current_file or "<file not known>",
+                resolved,
+            )
+        return resolved
+
+    def match(self, search):
         """Search for a known annotation name.
 
         Parameters
         ----------
-        search_name : str
+        search : str
         current_module : Path, optional
 
         Returns
         -------
         type_name : str | None
-        type_origin : KnownImport | None
+        py_import : PyImport | None
         """
+        original_search = search
         type_name = None
-        type_origin = None
+        py_import = None
 
-        if search_name.startswith("~."):
+        module = module_name_from_path(self.current_file) if self.current_file else None
+
+        search = self._resolve_nickname(search)
+
+        if search.startswith("~."):
             # Sphinx like matching with abbreviated name
-            pattern = search_name.replace(".", r"\.")
+            pattern = search.replace(".", r"\.")
             pattern = pattern.replace("~", ".*")
             regex = re.compile(pattern + "$")
             # Might be slow, but works for now
             matches = {
-                key: value for key, value in self.types.items() if regex.match(key)
+                key: value
+                for key, value in self.types.items()
+                if regex.match(key)
+                if ":" not in key
             }
             if len(matches) > 1:
                 shortest_key = sorted(matches.keys(), key=lambda x: len(x))[0]
-                type_origin = matches[shortest_key]
+                py_import = matches[shortest_key]
                 type_name = shortest_key
                 logger.warning(
-                    "%r in %s matches multiple types %r, using %r",
-                    search_name,
-                    self.current_module or "<file not known>",
+                    "%r (original %r) in %s matches multiple types %r, using %r",
+                    search,
+                    original_search,
+                    self.current_file or "<file not known>",
                     matches.keys(),
                     shortest_key,
                 )
             elif len(matches) == 1:
-                type_name, type_origin = matches.popitem()
+                type_name, py_import = matches.popitem()
             else:
-                search_name = search_name[2:]
+                search = search[2:]
                 logger.debug(
                     "couldn't match %r in %s",
-                    search_name,
-                    self.current_module or "<file not known>",
+                    search,
+                    self.current_file or "<file not known>",
                 )
 
-        # Replace alias
-        search_name = self.type_nicknames.get(search_name, search_name)
+        if py_import is None and module:
+            # Look for matching type in current module
+            py_import = self.types.get(f"{module}:{search}")
+            py_import = self.types.get(f"{module}.{search}", py_import)
+            if py_import:
+                type_name = search
 
-        if type_origin is None and self.current_module:
-            # Try scope of current module
-            module_name = module_name_from_path(self.current_module)
-            try_qualname = f"{module_name}.{search_name}"
-            type_origin = self.types.get(try_qualname)
-            if type_origin:
-                type_name = search_name
+        if py_import is None and search in self.types:
+            type_name = search
+            py_import = self.types[search]
 
-        if type_origin is None and search_name in self.types:
-            type_name = search_name
-            type_origin = self.types[search_name]
-
-        if type_origin is None:
+        if py_import is None:
             # Try a subset of the qualname (first 'a.b.c', then 'a.b' and 'a')
-            for partial_qualname in reversed(accumulate_qualname(search_name)):
-                type_origin = self.type_prefixes.get(partial_qualname)
-                if type_origin:
-                    type_name = search_name
+            for partial_qualname in reversed(accumulate_qualname(search)):
+                py_import = self.type_prefixes.get(f"{module}:{partial_qualname}")
+                py_import = self.type_prefixes.get(partial_qualname, py_import)
+                if py_import:
+                    type_name = search
                     break
 
         if (
-            type_origin is not None
+            py_import is not None
             and type_name is not None
-            and type_name != type_origin.target
-            and not type_name.startswith(type_origin.target)
+            and type_name != py_import.target
+            and not type_name.startswith(py_import.target)
         ):
             # Ensure that the annotation matches the import target
-            type_name = type_name[type_name.find(type_origin.target) :]
+            type_name = type_name[type_name.find(py_import.target) :]
 
         if type_name is not None:
             self.successful_queries += 1
         else:
-            self.unknown_qualnames.append(search_name)
+            self.unknown_qualnames.append(search)
 
-        return type_name, type_origin
+        return type_name, py_import

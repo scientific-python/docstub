@@ -93,26 +93,27 @@ def example_metric(
 There are several interesting things to note here:
 
 - Many existing conventions that the scientific Python ecosystem uses, will work out of the box.
-  In this case, docstub knew how to translate `array-like`, `array of dtype uint8` into a valid type annotation in the stub file.
-  In a similar manner, `or` can be used as a "natural language" alternative to `|`.
+  In this case, docstub knew how to translate `array-like`, `array of dtype uint8` into a valid Python type for the stub file.
+  In a similar manner, `or` can be used as a "natural language" alternative to `|` to form unions.
   You can find more details in [Typing syntax in docstrings](typing_syntax.md).
 
-- Optional arguments that default to `None` are recognized and a `| None` is appended automatically if the type doesn't include it already.
+- Optional arguments that default to `None` are recognized and a `| None` is appended automatically.
   The `optional` or `default = ...` part don't influence the annotation.
 
 - Referencing the `float` and `Iterable` types worked out of the box.
-  All builtin types as well as types from the standard libraries `typing` and `collections.abc` module can be used.
+  All builtin types as well as types from the standard libraries `typing` and `collections.abc` module can be used like this.
   Necessary imports will be added automatically to the stub file.
 
 
-## Using types & nicknames
+## Referencing types & nicknames
 
-To translate a type from a docstring into a valid type annotation, docstub needs to know where that type originates from and how to import it.
+To translate a type from a docstring into a valid type annotation, docstub needs to know where names in that type are defined from where to import them.
 Out of the box, docstub will know about builtin types such as `int` or `bool` that don't need an import, and types in `typing`, `collections.abc` from Python's standard library.
 It will source these from the Python environment it is installed in.
 In addition to that, docstub will collect all types in the package directory you are running it on.
+This also includes imported types, which you can then use within the scope of the module that imports them.
 
-However, if you want to use types from third-party libraries you can tell docstub about them in a configuration file.
+However, you can also tell docstub directly about external types in a configuration file.
 Docstub will look for a `pyproject.toml` or `docstub.toml` in the current working directory.
 Or, you can point docstub at TOML file(s) explicitly using the `--config` option.
 In these configuration file(s) you can declare external types directly with
@@ -134,8 +135,9 @@ ski = "skimage"
 
 which will enable any type that is prefixed with `ski.` or `sklearn.tree.`, e.g. `ski.transform.AffineTransform` or `sklearn.tree.DecisionTreeClassifier`.
 
-In both of these cases, docstub doesn't check that these types actually exist.
-Testing the generated stubs with a type checker is recommended.
+> [!IMPORTANT]
+> Docstub doesn't check that types actually exist or if a symbol is a valid type.
+> We always recommend validating the generated stubs with a full type checker!
 
 > [!TIP]
 > Docstub currently collects types statically.
@@ -172,9 +174,35 @@ Two command line options can help addressing these errors gradually:
 
 ## Dealing with typing problems
 
-Docstub may not fully or correctly implement a particular part of Python's typing system yet.
+For various reasons – missing features in docstub, or limitations of Python's typing system – it may not always be possible to correctly type something in a docstring.
+In those cases, you docstub provides a few approaches to dealing with this.
 
-In some cases, you can use a comment directive to selectively disable docstub for a specific block of lines:
+
+### Use inline type annotation
+
+Docstub will always preserve inline type annotations, regardless of what the docstring contains.
+This is useful for example, if you want to express something that isn't yet supported by Python's type system.
+
+E.g., consider the docstring type of `ord` parameter in [`numpy.linalg.matrix_norm`](https://numpy.org/doc/stable/reference/generated/numpy.linalg.matrix_norm.html)
+```rst
+ord : {1, -1, 2, -2, inf, -inf, ‘fro’, ‘nuc’}, optional
+```
+[Python's type system currently can't express floats as literal types](https://typing.python.org/en/latest/spec/literal.html#:~:text=Floats%3A%20e.g.%20Literal%5B3.14%5D) – such as `inf`.
+We don't want to make the type description here less specific to users, so instead, you could handle this with a less constrained inline type annotation like
+```python
+ord: Literal[1, -1, 2, -2, 'fro', 'nuc'] | float
+```
+Docstub will include the latter less constrained type in the stubs.
+This allows you to keep the information in the docstring while still having valid – if a bit less constrained – stubs.
+
+
+### Preserve code with comment directive
+
+At its heart, docstub transforms Python source files into stub files.
+You can tell docstub to temporarily stop that transformation for a specific area with a comment directive.
+Wrapping lines of code with `docstub: off` and `docstub: on` comments will preserve these lines completely.
+
+E.g., consider the following example:
 ```python
 class Foo:
     # docstub: off
@@ -184,7 +212,7 @@ class Foo:
     c: int = None
     d: str = ""
 ```
-will leave the parameters within the `# docstub` guards untouched in the resulting stub file:
+will leave the guarded parameters untouched in the resulting stub file:
 ```python
 class Foo:
     a: int = None
@@ -193,5 +221,7 @@ class Foo:
     d: str
 ```
 
-If that is not possible, you can – for now – fallback to writing a correct stub file by hand.
+### Write a manual stub file
+
+If all of the above does not solve your issue, you can fall back to writing a correct stub file by hand.
 Docstub will preserve this file and integrated it with other automatically generated stubs.

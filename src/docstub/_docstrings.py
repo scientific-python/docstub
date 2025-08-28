@@ -16,7 +16,7 @@ import numpydoc.docscrape as npds
 #   It should be possible to transform docstrings without matching to valid
 #   types and imports. I think that could very well be done at a higher level,
 #   e.g. in the stubs module.
-from ._analysis import KnownImport, TypeMatcher
+from ._analysis import PyImport, TypeMatcher
 from ._utils import DocstubError, ErrorReporter, escape_qualname
 
 logger = logging.getLogger(__name__)
@@ -61,14 +61,14 @@ class Annotation:
     """Python-ready type annotation with attached import information."""
 
     value: str
-    imports: frozenset[KnownImport] = field(default_factory=frozenset)
+    imports: frozenset[PyImport] = field(default_factory=frozenset)
 
     def __post_init__(self):
         object.__setattr__(self, "imports", frozenset(self.imports))
         if "~" in self.value:
             raise ValueError(f"unexpected '~' in annotation value: {self.value}")
         for import_ in self.imports:
-            if not isinstance(import_, KnownImport):
+            if not isinstance(import_, PyImport):
                 raise TypeError(f"unexpected type {type(import_)} in `imports`")
 
     def __str__(self) -> str:
@@ -134,20 +134,23 @@ class Annotation:
             value = f"{value}, {return_annotation.value}"
 
         value = f"Generator[{value}]"
-        imports |= {KnownImport(import_path="collections.abc", import_name="Generator")}
+        imports |= {PyImport(from_="collections.abc", import_="Generator")}
         generator = cls(value=value, imports=imports)
         return generator
 
-    def as_optional(self):
-        """Return optional version of this annotation by appending `| None`.
+    def as_union_with_none(self):
+        """Return a union with `| None` of the current annotation.
+
+        .. note::
+            Doesn't check for `| None` or `Optional[...]` being present.
 
         Returns
         -------
-        optional : Annotation
+        union : Annotation
 
         Examples
         --------
-        >>> Annotation(value="int").as_optional()
+        >>> Annotation(value="int").as_union_with_none()
         Annotation(value='int | None', imports=frozenset())
         """
         # TODO account for `| None` or `Optional` already being included?
@@ -166,7 +169,7 @@ class Annotation:
         Returns
         -------
         values : list[str]
-        imports : set[~.KnownImport]
+        imports : set[PyImport]
         """
         values = []
         imports = set()
@@ -177,7 +180,7 @@ class Annotation:
 
 
 FallbackAnnotation = Annotation(
-    value="Incomplete", imports=frozenset([KnownImport.typeshed_Incomplete()])
+    value="Incomplete", imports=frozenset([PyImport.typeshed_Incomplete()])
 )
 
 
@@ -383,9 +386,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
             )
 
         if self.matcher is not None:
-            _, known_import = self.matcher.match("Literal")
-            if known_import:
-                self._collected_imports.add(known_import)
+            _, py_import = self.matcher.match("Literal")
+            if py_import.has_import:
+                self._collected_imports.add(py_import)
         return out
 
     def natlang_container(self, tree):
@@ -460,7 +463,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping optional / default info")
         return lark.Discard
 
-    def extra_info(self, tree):
+    def optional_info(self, tree):
         """
         Parameters
         ----------
@@ -470,7 +473,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : lark.visitors._DiscardType
         """
-        logger.debug("dropping extra info")
+        logger.debug("dropping optional info")
         return lark.Discard
 
     def __default__(self, data, children, meta):
@@ -536,13 +539,13 @@ class DoctypeTransformer(lark.visitors.Transformer):
             Possibly modified or normalized qualname.
         """
         if self.matcher is not None:
-            annotation_name, known_import = self.matcher.match(qualname)
+            annotation_name, py_import = self.matcher.match(qualname)
         else:
             annotation_name = None
-            known_import = None
+            py_import = None
 
-        if known_import and known_import.has_import:
-            self._collected_imports.add(known_import)
+        if py_import and py_import.has_import:
+            self._collected_imports.add(py_import)
 
         if annotation_name:
             matched_qualname = annotation_name
@@ -550,10 +553,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
             # Unknown qualname, alias to `Incomplete`
             self._unknown_qualnames.append((qualname, meta.start_pos, meta.end_pos))
             matched_qualname = escape_qualname(qualname)
-            any_alias = KnownImport(
-                import_path="_typeshed",
-                import_name="Incomplete",
-                import_alias=matched_qualname,
+            any_alias = PyImport(
+                from_="_typeshed",
+                import_="Incomplete",
+                as_=matched_qualname,
             )
             self._collected_imports.add(any_alias)
         return matched_qualname
@@ -567,11 +570,11 @@ def _uncombine_numpydoc_params(params):
 
     Parameters
     ----------
-    params : list[numpydoc.docsrape.Parameter]
+    params : list[npds.Parameter]
 
     Yields
     ------
-    param : numpydoc.docscrape.Parameter
+    param : npds.Parameter
     """
     for param in params:
         if "," in param.name:
@@ -689,30 +692,11 @@ class DocstringAnnotations:
         -------
         attributes : dict[str, Annotation]
             A dictionary mapping attribute names to their annotations.
-            Attributes without annotations fall back to :class:`_typeshed.Incomplete`.
+            Attributes without annotations fall back to
+            :class:`FallbackAnnotation` which corresponds to
+            :class:`_typeshed.Incomplete`.
         """
-        annotations = {}
-        for attribute in self.np_docstring["Attributes"]:
-            self._handle_missing_whitespace(attribute)
-            if not attribute.type:
-                continue
-
-            ds_line = 0
-            for i, line in enumerate(self.docstring.split("\n")):
-                if attribute.name in line and attribute.type in line:
-                    ds_line = i
-                    break
-
-            if attribute.name in annotations:
-                self.reporter.message(
-                    "duplicate attribute name in docstring",
-                    details=self.reporter.underline(attribute.name),
-                )
-                continue
-
-            annotation = self._doctype_to_annotation(attribute.type, ds_line=ds_line)
-            annotations[attribute.name.strip()] = annotation
-
+        annotations = self._section_annotations("Attributes")
         return annotations
 
     @cached_property
@@ -723,7 +707,9 @@ class DocstringAnnotations:
         -------
         parameters : dict[str, Annotation]
             A dictionary mapping parameters names to their annotations.
-            Parameters without annotations fall back to :class:`_typeshed.Incomplete`.
+            Parameters without annotations fall back to
+            :class:`FallbackAnnotation` which corresponds to
+            :class:`_typeshed.Incomplete`.
         """
         param_section = self._section_annotations("Parameters")
         other_section = self._section_annotations("Other Parameters")
@@ -803,11 +789,11 @@ class DocstringAnnotations:
 
         Parameters
         ----------
-        param : numpydoc.docscrape.Parameter
+        param : npds.Parameter
 
         Returns
         -------
-        param : numpydoc.docscrape.Parameter
+        param : npds.Parameter
         """
         if ":" in param.name and param.type == "":
             msg = "Possibly missing whitespace between parameter and colon in docstring"

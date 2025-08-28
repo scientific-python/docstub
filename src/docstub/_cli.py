@@ -1,4 +1,5 @@
 import logging
+import shutil
 import sys
 import time
 from collections import Counter
@@ -8,24 +9,33 @@ from pathlib import Path
 import click
 
 from ._analysis import (
-    KnownImport,
+    PyImport,
     TypeCollector,
     TypeMatcher,
     common_known_types,
 )
-from ._cache import FileCache
+from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
 from ._config import Config
-from ._stubs import (
+from ._path_utils import (
     STUB_HEADER_COMMENT,
-    Py2StubTransformer,
-    try_format_stub,
-    walk_python_package,
     walk_source_and_targets,
+    walk_source_package,
 )
+from ._stubs import Py2StubTransformer, try_format_stub
 from ._utils import ErrorReporter, GroupedErrorReporter
 from ._version import __version__
 
 logger = logging.getLogger(__name__)
+
+
+def _cache_dir_in_cwd():
+    """Return cache directory for and in current working directory.
+
+    Returns
+    -------
+    cache_dir : Path
+    """
+    return Path.cwd() / CACHE_DIR_NAME
 
 
 def _load_configuration(config_paths=None):
@@ -43,22 +53,24 @@ def _load_configuration(config_paths=None):
     numpy_config = Config.from_toml(Config.NUMPY_PATH)
     config = config.merge(numpy_config)
 
-    pyproject_toml = Path.cwd() / "pyproject.toml"
-    if pyproject_toml.is_file():
-        logger.info("using %s", pyproject_toml)
-        add_config = Config.from_toml(pyproject_toml)
-        config = config.merge(add_config)
+    if config_paths:
+        for path in config_paths:
+            logger.info("using %s", path)
+            add_config = Config.from_toml(path)
+            config = config.merge(add_config)
 
-    docstub_toml = Path.cwd() / "docstub.toml"
-    if docstub_toml.is_file():
-        logger.info("using %s", docstub_toml)
-        add_config = Config.from_toml(docstub_toml)
-        config = config.merge(add_config)
+    else:
+        pyproject_toml = Path.cwd() / "pyproject.toml"
+        if pyproject_toml.is_file():
+            logger.info("using %s", pyproject_toml)
+            add_config = Config.from_toml(pyproject_toml)
+            config = config.merge(add_config)
 
-    for path in config_paths:
-        logger.info("using %s", path)
-        add_config = Config.from_toml(path)
-        config = config.merge(add_config)
+        docstub_toml = Path.cwd() / "docstub.toml"
+        if docstub_toml.is_file():
+            logger.info("using %s", docstub_toml)
+            add_config = Config.from_toml(docstub_toml)
+            config = config.merge(add_config)
 
     return config
 
@@ -78,32 +90,53 @@ def _setup_logging(*, verbose):
     )
 
 
-def _collect_types(root_path):
+def _collect_type_info(root_path, *, ignore=(), cache=False):
     """Collect types.
 
     Parameters
     ----------
     root_path : Path
+    ignore : Sequence[str], optional
+        Don't yield files matching these glob-like patterns. The pattern is
+        interpreted relative to the root of the Python package unless it starts
+        with "/". See :ref:`glob.translate(..., recursive=True, include_hidden=True)`
+        for more details on the precise implementation.
+    cache : bool, optional
+        Cache collected types.
 
     Returns
     -------
-    types : dict[str, ~.KnownImport]
+    types : dict[str, PyImport]
+    type_prefixes : dict[str, PyImport]
     """
     types = common_known_types()
+    type_prefixes = {}
 
-    collect_cached_types = FileCache(
-        func=TypeCollector.collect,
-        serializer=TypeCollector.ImportSerializer(),
-        cache_dir=Path.cwd() / ".docstub_cache",
-        name=f"{__version__}/collected_types",
-    )
-    if root_path.is_dir():
-        for source_path in walk_python_package(root_path):
-            logger.info("collecting types in %s", source_path)
-            types_in_source = collect_cached_types(source_path)
-            types.update(types_in_source)
+    if cache:
+        collect = FileCache(
+            func=TypeCollector.collect,
+            serializer=TypeCollector.ImportSerializer(),
+            cache_dir=_cache_dir_in_cwd(),
+        )
+    else:
+        collect = TypeCollector.collect
 
-    return types
+    for source_path in walk_source_package(root_path, ignore=ignore):
+        if cache:
+            module = source_path.relative_to(root_path.parent)
+            collect.sub_dir = f"{__version__}/{module}"
+
+        types_in_file, prefixes_in_file = collect(source_path)
+        types.update(types_in_file)
+        type_prefixes.update(prefixes_in_file)
+
+        logger.info(
+            "collected types in %s%s",
+            source_path,
+            " (cached)" if cache and collect.cached_last_call else "",
+        )
+
+    return types, type_prefixes
 
 
 @contextmanager
@@ -123,6 +156,11 @@ def report_execution_time():
             formated_duration = f"{minutes} min {formated_duration}"
         if hours:
             formated_duration = f"{hours} h {formated_duration}"
+
+        # FIXME A hack to ensure that closing message is printed last, instead
+        #   it would be got to use the same mechanism for all output
+        for handler in logger.handlers:
+            handler.flush()
 
         click.echo()
         click.echo(f"Finished in {formated_duration}")
@@ -163,6 +201,13 @@ def cli():
     "current directory.",
 )
 @click.option(
+    "--ignore",
+    type=str,
+    multiple=True,
+    metavar="GLOB",
+    help="Ignore files matching this glob-style pattern. Can be used multiple times.",
+)
+@click.option(
     "--group-errors",
     is_flag=True,
     help="Group identical errors together and list where they occurred. "
@@ -179,10 +224,25 @@ def cli():
     "If docstub reports more, exit with error code '1'. "
     "This is useful to adopt docstub gradually.",
 )
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Ignore pre-existing cache and don't create a new one.",
+)
 @click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
 @click.help_option("-h", "--help")
 @report_execution_time()
-def run(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
+def run(
+    *,
+    root_path,
+    out_dir,
+    config_paths,
+    ignore,
+    group_errors,
+    allow_errors,
+    no_cache,
+    verbose,
+):
     """Generate Python stub files.
 
     Given a `PACKAGE_PATH` to a Python package, generate stub files for it.
@@ -194,10 +254,12 @@ def run(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
     ----------
     root_path : Path
     out_dir : Path
-    config_paths : list[Path]
+    config_paths : Sequence[Path]
+    ignore : Sequence[str]
     group_errors : bool
     allow_errors : int
-    verbose : str
+    no_cache : bool
+    verbose : int
     """
 
     # Setup -------------------------------------------------------------------
@@ -207,24 +269,29 @@ def run(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
     root_path = Path(root_path)
     if root_path.is_file():
         logger.warning(
-            "Running docstub on a single file is experimental. Relative imports "
-            "or type references won't work."
+            "Running docstub on a single file. Relative imports "
+            "or type references outside this file won't work."
         )
 
     config = _load_configuration(config_paths)
+    config = config.merge(Config(ignore_files=list(ignore)))
 
-    types = common_known_types()
-    types |= _collect_types(root_path)
+    types, type_prefixes = _collect_type_info(
+        root_path, ignore=config.ignore_files, cache=not no_cache
+    )
+
+    # Add declared types from configuration
     types |= {
-        type_name: KnownImport(import_path=module, import_name=type_name)
+        type_name: PyImport(from_=module, import_=type_name)
         for type_name, module in config.types.items()
     }
 
-    type_prefixes = {
+    # Add declared type prefixes from configuration
+    type_prefixes |= {
         prefix: (
-            KnownImport(import_name=module, import_alias=prefix)
+            PyImport(import_=module, as_=prefix)
             if module != prefix
-            else KnownImport(import_name=prefix)
+            else PyImport(import_=prefix)
         )
         for prefix, module in config.type_prefixes.items()
     }
@@ -245,7 +312,9 @@ def run(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
 
     # Stub generation ---------------------------------------------------------
 
-    for source_path, stub_path in walk_source_and_targets(root_path, out_dir):
+    for source_path, stub_path in walk_source_and_targets(
+        root_path, out_dir, ignore=config.ignore_files
+    ):
         if source_path.suffix.lower() == ".pyi":
             logger.debug("using existing stub file %s", source_path)
             with source_path.open() as fo:
@@ -300,3 +369,41 @@ def run(root_path, out_dir, config_paths, group_errors, allow_errors, verbose):
     if allow_errors < total_errors:
         logger.debug("number of allowed errors %i was exceeded")
         sys.exit(1)
+
+
+# docstub: off
+@cli.command()
+# docstub: on
+@click.option("-v", "--verbose", count=True, help="Print more details (repeatable).")
+@click.help_option("-h", "--help")
+def clean(verbose):
+    """Clean the cache.
+
+    Looks for a cache directory relative to the current working directory.
+    If one exists, remove it.
+    \f
+
+    Parameters
+    ----------
+    verbose : int
+    """
+    _setup_logging(verbose=verbose)
+
+    path = _cache_dir_in_cwd()
+    if path.exists():
+        try:
+            validate_cache(path)
+        except (FileNotFoundError, ValueError) as e:
+            logger.error(
+                "'%s' might not be a valid cache or might be corrupted. Not "
+                "removing it out of caution. Manually remove it after checking "
+                "if it is safe to do so.\n\nDetails: %s",
+                path,
+                "\n".join(e.args),
+            )
+            sys.exit(1)
+        else:
+            shutil.rmtree(_cache_dir_in_cwd())
+            logger.info("cleaned %s", path)
+    else:
+        logger.info("no cache to clean")

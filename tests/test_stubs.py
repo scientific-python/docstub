@@ -220,14 +220,14 @@ class Test_Py2StubTransformer:
     @pytest.mark.parametrize(
         ("assign", "doctype", "expected"),
         [
-            # ("plain = 3",       "plain : int",  "plain: int"),
-            # ("plain = None",    "plain : int",  "plain: int"),
-            # ("x, y = (1, 2)",   "x : int",      "x: int; y: Incomplete"),
-            # Replace pre-existing annotations
-            ("annotated: float = 1.0", "annotated : int", "annotated: int"),
+            ("plain = 3",       "plain : int",  "plain: int"),
+            ("plain = None",    "plain : int",  "plain: int"),
+            ("x, y = (1, 2)",   "x : int",      "x: int; y: Incomplete"),
+            # Keep pre-existing annotations
+            ("annotated: float = 1.0", "annotated : int", "annotated: float"),
             # Type aliases are untouched
-            # ("alias: TypeAlias = int", "alias : str",     "alias: TypeAlias = int"),
-            # ("type alias = int",       "alias : str",     "type alias = int"),
+            ("alias: TypeAlias = int", "alias : str",     "alias: TypeAlias = int"),
+            ("type alias = int",       "alias : str",     "type alias = int"),
         ],
     )
     @pytest.mark.parametrize("scope", ["module", "class", "nested class"])
@@ -283,7 +283,7 @@ class Test_Py2StubTransformer:
                 a: int
                 b: float
 
-                c: tuple
+                c: list
                 d: ClassVar[bool]
 
                 def __init__(self, a) -> None: ...
@@ -298,7 +298,202 @@ class Test_Py2StubTransformer:
         #  https://typing.readthedocs.io/en/latest/guides/writing_stubs.html#undocumented-objects
         pass
 
-    def test_existing_typed_return(self):
+    def test_keep_assign_param(self):
+        source = dedent(
+            """
+            a: str
+            """
+        )
+        expected = dedent(
+            """
+            a: str
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    def test_module_assign_conflict(self, capsys):
+        source = dedent(
+            '''
+            """
+            Attributes
+            ----------
+            a : int
+            """
+            a: str
+            '''
+        )
+        expected = dedent(
+            """
+            a: str
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+        captured = capsys.readouterr()
+        assert captured.out == (
+            "Keeping existing inline annotation for assignment\n"
+            "    str\n"
+            "    ^^^ ignoring docstring: int\n"
+            "\n"
+        )
+
+    def test_module_assign_no_conflict(self, capsys):
+        source = dedent(
+            '''
+            """
+            Attributes
+            ----------
+            a :
+                No type info here; it's already inlined.
+            b : float
+            """
+            a: int
+            b = 3
+            '''
+        )
+        expected = dedent(
+            """
+            a: int
+            b: float
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+        # No warning should have been raised, since there is no conflict
+        # between docstring and inline annotation
+        output = capsys.readouterr()
+        assert output.out == ""
+
+    def test_class_assign_keep_inline_annotation(self):
+        source = dedent(
+            """
+            class Foo:
+                a: str
+            """
+        )
+        expected = dedent(
+            """
+            class Foo:
+                a: str
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    def test_class_assign_conflict(self, capsys):
+        source = dedent(
+            '''
+            class Foo:
+                """
+                Attributes
+                ----------
+                a : Sized
+                """
+                a: str
+            '''
+        )
+        expected = dedent(
+            """
+            class Foo:
+                a: str
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+        captured = capsys.readouterr()
+        assert captured.out == (
+            "Keeping existing inline annotation for assignment\n"
+            "    str\n"
+            "    ^^^ ignoring docstring: Sized\n"
+            "\n"
+        )
+
+    def test_class_assign_no_conflict(self, capsys):
+        source = dedent(
+            '''
+            class Foo:
+                """
+                Attributes
+                ----------
+                a :
+                    No type info here; it's already inlined.
+                b : float
+                """
+                a: int
+                b = 3
+            '''
+        )
+        expected = dedent(
+            """
+            class Foo:
+                a: int
+                b: float
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+        # No warning should have been raised, since there is no conflict
+        # between docstring and inline annotation
+        output = capsys.readouterr()
+        assert output.out == ""
+
+    def test_param_keep_inline_annotation(self):
+        source = dedent(
+            """
+            def foo(a: str) -> None:
+                pass
+            """
+        )
+        expected = dedent(
+            """
+            def foo(a: str) -> None: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+    def test_param_conflict(self, capsys):
+        source = dedent(
+            '''
+            def foo(a: int) -> None:
+                """
+                Parameters
+                ----------
+                a : Sized
+                """
+                pass
+            '''
+        )
+        expected = dedent(
+            """
+            def foo(a: int) -> None: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+
+        captured = capsys.readouterr()
+        assert captured.out == (
+            "Keeping existing inline parameter annotation\n"
+            "    int\n"
+            "    ^^^ ignoring docstring: Sized\n"
+            "\n"
+        )
+
+    def test_return_keep_inline_annotation(self):
         source = dedent(
             """
             def foo() -> str:
@@ -314,14 +509,14 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-    def test_overwriting_typed_return(self, capsys):
+    def test_return_conflict(self, capsys):
         source = dedent(
             '''
-            def foo() -> dict[str, int]:
+            def foo() -> int:
                 """
                 Returns
                 -------
-                out : int
+                out : Sized
                 """
                 pass
             '''
@@ -336,7 +531,12 @@ class Test_Py2StubTransformer:
         assert expected == result
 
         captured = capsys.readouterr()
-        assert "Replacing existing inline return annotation" in captured.out
+        assert captured.out == (
+            "Keeping existing inline return annotation\n"
+            "    int\n"
+            "    ^^^ ignoring docstring: Sized\n"
+            "\n"
+        )
 
     def test_preserved_type_comment(self):
         source = dedent(

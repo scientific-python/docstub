@@ -1,18 +1,26 @@
 """Basic docstring examples.
 
 Docstrings, including module-level ones, are stripped.
+
+Attributes
+----------
+logger : logging.Logger
 """
 
 # Existing imports are preserved
 import logging
+from configparser import ConfigParser as Cfg  # noqa: F401
+from typing import Literal
+
+from . import AnotherType  # noqa: F401
 
 # Assign-statements are preserved
 logger = logging.getLogger(__name__)  # Inline comments are stripped
 
 
 __all__ = [
-    "func_empty",
     "ExampleClass",
+    "func_empty",
 ]
 
 
@@ -51,6 +59,25 @@ def func_literals(a1, a2="uno"):
     """
 
 
+def override_docstring_param(d1, d2: dict[Literal["a", "b", "c"], int]):
+    """Check type hint is kept and overrides docstring.
+
+    Parameters
+    ----------
+    d1 : dict of {str : float}
+    d2 : dict of {str : int}
+    """
+
+
+def override_docstring_return() -> list[Literal[-1, 0, 1] | float]:
+    """Check type hint is kept and overrides docstring.
+
+    Returns
+    -------
+    {"-inf", 0, 1, "inf"}
+    """
+
+
 def func_use_from_elsewhere(a1, a2, a3, a4):
     """Check if types with full import names are matched.
 
@@ -68,6 +95,16 @@ def func_use_from_elsewhere(a1, a2, a3, a4):
     """
 
 
+def func_use_from_import(a1, a2):
+    """Check using symbols made available in this module with from imports.
+
+    Parameters
+    ----------
+    a1 : AnotherType
+    a2 : Cfg
+    """
+
+
 class ExampleClass:
     """Dummy.
 
@@ -75,10 +112,15 @@ class ExampleClass:
     ----------
     a1 : str
     a2 : float, default 0
+
+    Attributes
+    ----------
+    b1 : Sized
     """
 
-    class NestedClass:
+    b1: int
 
+    class NestedClass:
         def method_in_nested_class(self, a1):
             """
 

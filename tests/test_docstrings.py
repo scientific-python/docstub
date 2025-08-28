@@ -3,7 +3,7 @@ from textwrap import dedent
 import lark
 import pytest
 
-from docstub._analysis import KnownImport
+from docstub._analysis import PyImport
 from docstub._docstrings import Annotation, DocstringAnnotations, DoctypeTransformer
 
 
@@ -11,20 +11,18 @@ class Test_Annotation:
     def test_str(self):
         annotation = Annotation(
             value="Path",
-            imports=frozenset({KnownImport(import_name="Path", import_path="pathlib")}),
+            imports=frozenset({PyImport(import_="Path", from_="pathlib")}),
         )
         assert str(annotation) == annotation.value
 
     def test_as_return_tuple(self):
         path_anno = Annotation(
             value="Path",
-            imports=frozenset({KnownImport(import_name="Path", import_path="pathlib")}),
+            imports=frozenset({PyImport(import_="Path", from_="pathlib")}),
         )
         sequence_anno = Annotation(
             value="Sequence",
-            imports=frozenset(
-                {KnownImport(import_name="Sequence", import_path="collections.abc")}
-            ),
+            imports=frozenset({PyImport(import_="Sequence", from_="collections.abc")}),
         )
         return_annotation = Annotation.many_as_tuple([path_anno, sequence_anno])
         assert return_annotation.value == "tuple[Path, Sequence]"
@@ -36,6 +34,48 @@ class Test_Annotation:
 
 
 class Test_DoctypeTransformer:
+    @pytest.mark.parametrize(
+        "doctype",
+        [
+            "((float))",
+            "(float,)",
+            "(, )",
+            "...",
+            "(..., ...)",
+            "{}",
+            "{:}",
+            "{a:}",
+            "{:b}",
+            "{'a',}",
+            "a or (b or c)",
+            ",, optional",
+        ],
+    )
+    def test_edge_case_errors(self, doctype):
+        transformer = DoctypeTransformer()
+        with pytest.raises(lark.exceptions.UnexpectedInput):
+            transformer.doctype_to_annotation(doctype)
+
+    @pytest.mark.parametrize("doctype", DoctypeTransformer.blacklisted_qualnames)
+    def test_reserved_keywords(self, doctype):
+        assert DoctypeTransformer.blacklisted_qualnames
+
+        transformer = DoctypeTransformer()
+        with pytest.raises(lark.exceptions.VisitError):
+            transformer.doctype_to_annotation(doctype)
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("int or float", "int | float"),
+            ("int or float or str", "int | float | str"),
+        ],
+    )
+    def test_natlang_union(self, doctype, expected):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(doctype)
+        assert annotation.value == expected
+
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
@@ -69,6 +109,7 @@ class Test_DoctypeTransformer:
             ("list of int", "list[int]"),
             ("list of int(s)", "list[int]"),
             ("list of (int or float)", "list[int | float]"),
+            ("list of (list of int)", "list[list[int]]"),
             # Natural tuple variant
             ("tuple of (float, int, str)", "tuple[float, int, str]"),
             ("tuple of (float, ...)", "tuple[float, ...]"),
@@ -76,7 +117,11 @@ class Test_DoctypeTransformer:
             ("dict of {str: int}", "dict[str, int]"),
             ("dict of {str: int | float}", "dict[str, int | float]"),
             ("dict of {str: int or float}", "dict[str, int | float]"),
-            ("dict[list of str]", "dict[list[str]]"),
+            # Nesting is possible but probably rarely a good idea
+            ("list of (list of int(s))", "list[list[int]]"),
+            ("tuple of (tuple of (float, ...), ...)", "tuple[tuple[float, ...], ...]"),
+            ("dict of {str: dict of {str: float}}", "dict[str, dict[str, float]]"),
+            ("dict of {str: list of (list of int(s))}", "dict[str, list[list[int]]]"),
         ],
     )
     def test_natlang_container(self, doctype, expected):
@@ -88,7 +133,7 @@ class Test_DoctypeTransformer:
         "doctype",
         [
             "list of int (s)",
-            "list of (float)",
+            "list of ((float))",
             "list of (float,)",
             "list of (, )",
             "list of ...",
@@ -138,21 +183,29 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
-            ("int, optional", "int"),
-            ("int | None, optional", "int | None"),
-            ("int, default -1", "int"),
-            ("int, default = 1", "int"),
-            ("int, default: 0", "int"),
-            ("float, default: 1.0", "float"),
-            ("{'a', 'b'}, default : 'a'", "Literal['a', 'b']"),
+            ("int", "int"),
+            ("int | None", "int | None"),
+            ("tuple of (int, float)", "tuple[int, float]"),
+            ("{'a', 'b'}", "Literal['a', 'b']"),
         ],
     )
-    @pytest.mark.parametrize("extra_info", [None, "int", ", extra, info"])
-    def test_optional_extra_info(self, doctype, expected, extra_info):
-        if extra_info:
-            doctype = f"{doctype}, {extra_info}"
+    @pytest.mark.parametrize(
+        "optional_info",
+        [
+            "",
+            ", optional",
+            ", default -1",
+            ", default: -1",
+            ", default = 1",
+            ", in range (0, 1), optional",
+            ", optional, in range [0, 1]",
+            ", see parameter `image`, optional",
+        ],
+    )
+    def test_optional_info(self, doctype, expected, optional_info):
+        doctype_with_optional = doctype + optional_info
         transformer = DoctypeTransformer()
-        annotation, _ = transformer.doctype_to_annotation(doctype)
+        annotation, _ = transformer.doctype_to_annotation(doctype_with_optional)
         assert annotation.value == expected
 
     @pytest.mark.parametrize(
@@ -229,9 +282,7 @@ class Test_DoctypeTransformer:
         annotation, unknown_names = transformer.doctype_to_annotation("a")
         assert annotation.value == "a"
         assert annotation.imports == {
-            KnownImport(
-                import_name="Incomplete", import_path="_typeshed", import_alias="a"
-            )
+            PyImport(import_="Incomplete", from_="_typeshed", as_="a")
         }
         assert unknown_names == [("a", 0, 1)]
 
@@ -241,9 +292,7 @@ class Test_DoctypeTransformer:
         annotation, unknown_names = transformer.doctype_to_annotation("a.b")
         assert annotation.value == "a_b"
         assert annotation.imports == {
-            KnownImport(
-                import_name="Incomplete", import_path="_typeshed", import_alias="a_b"
-            )
+            PyImport(import_="Incomplete", from_="_typeshed", as_="a_b")
         }
         assert unknown_names == [("a.b", 0, 3)]
 
@@ -253,12 +302,8 @@ class Test_DoctypeTransformer:
         annotation, unknown_names = transformer.doctype_to_annotation("a.b of c")
         assert annotation.value == "a_b[c]"
         assert annotation.imports == {
-            KnownImport(
-                import_name="Incomplete", import_path="_typeshed", import_alias="a_b"
-            ),
-            KnownImport(
-                import_name="Incomplete", import_path="_typeshed", import_alias="c"
-            ),
+            PyImport(import_="Incomplete", from_="_typeshed", as_="a_b"),
+            PyImport(import_="Incomplete", from_="_typeshed", as_="c"),
         }
         assert unknown_names == [("a.b", 0, 3), ("c", 7, 8)]
 
@@ -294,9 +339,7 @@ class Test_DocstringAnnotations:
         assert len(annotations.parameters) == 2
         assert annotations.parameters["a"].value == expected
         assert annotations.parameters["b"].value == "Incomplete"
-        assert annotations.parameters["b"].imports == {
-            KnownImport.typeshed_Incomplete()
-        }
+        assert annotations.parameters["b"].imports == {PyImport.typeshed_Incomplete()}
 
     @pytest.mark.parametrize(
         ("doctypes", "expected"),
@@ -333,7 +376,7 @@ class Test_DocstringAnnotations:
         assert annotations.returns is not None
         assert annotations.returns.value == "Generator[tuple[int, str]]"
         assert annotations.returns.imports == {
-            KnownImport(import_path="collections.abc", import_name="Generator")
+            PyImport(from_="collections.abc", import_="Generator")
         }
 
     def test_receives(self, caplog):
@@ -358,7 +401,7 @@ class Test_DocstringAnnotations:
             == "Generator[tuple[int, str], tuple[float, bytes]]"
         )
         assert annotations.returns.imports == {
-            KnownImport(import_path="collections.abc", import_name="Generator")
+            PyImport(from_="collections.abc", import_="Generator")
         }
 
     def test_full_generator(self, caplog):
@@ -386,7 +429,7 @@ class Test_DocstringAnnotations:
             "Generator[tuple[int, str], tuple[float, bytes], bool]"
         )
         assert annotations.returns.imports == {
-            KnownImport(import_path="collections.abc", import_name="Generator")
+            PyImport(from_="collections.abc", import_="Generator")
         }
 
     def test_yields_and_returns(self, caplog):
@@ -407,7 +450,7 @@ class Test_DocstringAnnotations:
         assert annotations.returns is not None
         assert annotations.returns.value == ("Generator[tuple[int, str], None, bool]")
         assert annotations.returns.imports == {
-            KnownImport(import_path="collections.abc", import_name="Generator")
+            PyImport(from_="collections.abc", import_="Generator")
         }
 
     def test_duplicate_parameters(self, caplog):
@@ -491,9 +534,5 @@ class Test_DocstringAnnotations:
 
         assert annotations.parameters["d"].value == "Incomplete"
         assert annotations.parameters["e"].value == "Incomplete"
-        assert annotations.parameters["d"].imports == {
-            KnownImport.typeshed_Incomplete()
-        }
-        assert annotations.parameters["e"].imports == {
-            KnownImport.typeshed_Incomplete()
-        }
+        assert annotations.parameters["d"].imports == {PyImport.typeshed_Incomplete()}
+        assert annotations.parameters["e"].imports == {PyImport.typeshed_Incomplete()}

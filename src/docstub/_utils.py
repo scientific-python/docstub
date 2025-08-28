@@ -65,7 +65,7 @@ def escape_qualname(name):
     return qualname
 
 
-@lru_cache(maxsize=10)
+@lru_cache(maxsize=100)
 def module_name_from_path(path):
     """Find the full name of a module within its package from its file path.
 
@@ -235,7 +235,7 @@ class ErrorReporter:
 
     @staticmethod
     def underline(line):
-        underlined = f"{line}\n" f"{click.style('^' * len(line), fg='red', bold=True)}"
+        underlined = f"{line}\n{click.style('^' * len(line), fg='red', bold=True)}"
         return underlined
 
 

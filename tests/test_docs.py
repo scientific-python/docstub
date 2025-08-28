@@ -56,7 +56,8 @@ def test_user_guide_example(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("command", "name"), [(_cli.cli, "docstub"), (_cli.run, "docstub run")]
+    ("command", "name"),
+    [(_cli.cli, "docstub"), (_cli.run, "docstub run"), (_cli.clean, "docstub clean")],
 )
 def test_command_line_reference(command, name):
     ctx = click.Context(command, info_name=name)
@@ -69,7 +70,7 @@ def test_command_line_reference(command, name):
     with md_file.open("r") as io:
         md_content = io.read()
 
-    guard_name = f"cli-{name.replace(" ", "-")}"
+    guard_name = f"cli-{name.replace(' ', '-')}"
     regex = rf"<!--- begin {guard_name} --->(.*)<!--- end {guard_name} --->"
     matches = re.findall(regex, md_content, flags=re.DOTALL)
     assert len(matches) == 1
