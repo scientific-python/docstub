@@ -1,11 +1,13 @@
-# User guide
+# Introduction
 
-> [!NOTE]
-> **In early development!**
-> Expect bugs, missing features, and incomplete documentation.
-> Docstub is still evaluating which features it needs to support as the community gives feedback.
-> Several features are experimental and included to make adoption of docstub easier.
-> Long-term, some of these might be discouraged or removed as docstub matures.
+:::{admonition} In early development!
+:class: tip
+
+Expect bugs, missing features, and incomplete documentation.
+Docstub is still evaluating which features it needs to support as the community gives feedback.
+Several features are experimental and included to make adoption of docstub easier.
+Long-term, some of these might be discouraged or removed as docstub matures.
+:::
 
 
 ## Installation
@@ -19,7 +21,7 @@ pip install docstub
 In case you want to check out an unreleased version you can install directly from the repository with:
 
 ```shell
-pip install docstub @ git+https://github.com/scientific-python/docstub'
+pip install 'docstub @ git+https://github.com/scientific-python/docstub'
 ```
 
 To pin to a specific commit you can append `@COMMIT_SHA` to the repository URL above.

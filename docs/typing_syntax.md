@@ -1,11 +1,13 @@
 # Typing syntax in docstrings
 
-> [!NOTE]
-> **In early development!**
-> Expect bugs, missing features, and incomplete documentation.
-> Docstub is still evaluating which features it needs to support as the community gives feedback.
-> Several features are experimental and included to make adoption of docstub easier.
-> Long-term, some of these might be discouraged or removed as docstub matures.
+:::{admonition} In early development!
+:class: tip
+
+Expect bugs, missing features, and incomplete documentation.
+Docstub is still evaluating which features it needs to support as the community gives feedback.
+Several features are experimental and included to make adoption of docstub easier.
+Long-term, some of these might be discouraged or removed as docstub matures.
+:::
 
 Docstub defines its own [grammar](../src/docstub/doctype.lark) to parse and transform type information in docstrings (doctypes) into valid Python type expressions.
 This grammar fully supports [Python's conventional typing syntax](https://typing.python.org/en/latest/index.html).
