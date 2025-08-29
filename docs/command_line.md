@@ -5,7 +5,7 @@
 <!--- The following block is checked by the test suite --->
 <!--- begin cli-docstub --->
 
-```plain
+```none
 Usage: docstub [OPTIONS] COMMAND [ARGS]...
 
   Generate Python stub files from docstrings.
@@ -27,7 +27,7 @@ Commands:
 <!--- The following block is checked by the test suite --->
 <!--- begin cli-docstub-run --->
 
-```plain
+```none
 Usage: docstub run [OPTIONS] PACKAGE_PATH
 
   Generate Python stub files.
@@ -66,7 +66,7 @@ Options:
 <!--- The following block is checked by the test suite --->
 <!--- begin cli-docstub-clean --->
 
-```plain
+```none
 Usage: docstub clean [OPTIONS]
 
   Clean the cache.
