@@ -11,10 +11,10 @@ else:
     from ._vendored.stdlib import glob_translate
 
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
-STUB_HEADER_COMMENT = "# File generated with docstub"
+STUB_HEADER_COMMENT: str = "# File generated with docstub"
 
 
 def is_docstub_generated(stub_path):

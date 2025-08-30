@@ -2,12 +2,13 @@
 
 import dataclasses
 import logging
+from collections import defaultdict
 from pathlib import Path
 from textwrap import indent
 
 import click
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
@@ -101,7 +102,7 @@ class ContextReporter:
 
         self.logger.log(log_level, msg=short, extra=extra, **log_kw)
 
-    def info(self, short, *, details=None):
+    def debug(self, short, *, details=None, **log_kw):
         """Log information with context of the relevant source.
 
         Parameters
@@ -111,9 +112,21 @@ class ContextReporter:
         details : str, optional
             An optional multiline report with more details.
         """
-        return self.report(short, log_level=logging.INFO, details=details)
+        return self.report(short, log_level=logging.DEBUG, details=details, **log_kw)
 
-    def warn(self, short, *, details=None):
+    def info(self, short, *, details=None, **log_kw):
+        """Log information with context of the relevant source.
+
+        Parameters
+        ----------
+        short : str
+            A short summarizing report that shouldn't wrap over multiple lines.
+        details : str, optional
+            An optional multiline report with more details.
+        """
+        return self.report(short, log_level=logging.INFO, details=details, **log_kw)
+
+    def warn(self, short, *, details=None, **log_kw):
         """Log a warning with context of the relevant source.
 
         Parameters
@@ -123,7 +136,7 @@ class ContextReporter:
         details : str, optional
             An optional multiline report with more details.
         """
-        return self.report(short, log_level=logging.WARNING, details=details)
+        return self.report(short, log_level=logging.WARNING, details=details, **log_kw)
 
     def error(self, short, *, details=None, **log_kw):
         """Log an error with context of the relevant source.
@@ -161,7 +174,16 @@ class ContextReporter:
 
 
 class ReportHandler(logging.StreamHandler):
-    """Custom handler to group and style reports from :cls:`ContextReporter`."""
+    """Custom handler to group and style reports from :cls:`ContextReporter`.
+
+    Attributes
+    ----------
+    group_errors : bool
+        If ``True``, hold errors until :func:`emit_grouped` is called.
+    error_count : int
+    warning_count : int
+    char_to_color : ClassVar[str]
+    """
 
     char_to_color = {  # noqa: RUF012
         "I": "cyan",
@@ -180,9 +202,12 @@ class ReportHandler(logging.StreamHandler):
         group_errors : bool, optional
         """
         super().__init__(stream=stream)
-        self.group_errors = False
         self.group_errors = group_errors
         self._records = []
+
+        self.error_count = 0
+        self.warning_count = 0
+        self.class_count = defaultdict(lambda: 0)
 
         # Be defensive about using click's non-public `should_strip_ansi`
         try:
@@ -208,6 +233,16 @@ class ReportHandler(logging.StreamHandler):
         """
 
     def format(self, record):
+        """Format a log record.
+
+        Parameters
+        ----------
+        record : logging.LogRecord
+
+        Returns
+        -------
+        formatted : str
+        """
         msg = super().format(record)
 
         if record.levelno >= logging.WARNING:
@@ -233,6 +268,8 @@ class ReportHandler(logging.StreamHandler):
 
         details = getattr(record, "details", None)
         if details:
+            if isinstance(details, tuple):
+                details = details[0] % details[1:]
             indented = indent(details, prefix="    ").rstrip()
             msg = f"{msg}\n{indented}"
 
@@ -246,12 +283,30 @@ class ReportHandler(logging.StreamHandler):
         return msg
 
     def emit(self, record):
+        """Handle a log record.
+
+        Parameters
+        ----------
+        record : logging.LogRecord
+        """
+        if record.levelno >= logging.ERROR:
+            self.error_count += 1
+        elif record.levelno == logging.WARNING:
+            self.warning_count += 1
+        self.class_count[getattr(record, "class", None)] += 1
+
         if self.group_errors and logging.WARNING <= record.levelno <= logging.ERROR:
             self._records.append(record)
         else:
             super().emit(record)
 
     def emit_grouped(self):
+        """Emit all saved log records in groups.
+
+        Saved log records that were not yet emitted will be emitted. Records
+        whose "message" including an optional "details" field are identical
+        will be grouped together.
+        """
         # Group by report
         groups = {}
         for record in self._records:
@@ -269,6 +324,8 @@ class ReportHandler(logging.StreamHandler):
                 getattr(r, "src_location", "<unknown location?>") for r in records
             ]
             super().emit(merged_record)
+
+        self._records = []
 
 
 def setup_logging(*, verbosity, group_errors):
@@ -293,23 +350,20 @@ def setup_logging(*, verbosity, group_errors):
 
     format_ = "%(message)s"
     if verbosity >= 2:
-        format_ += (
-            "\n    loc:     %(pathname)s:%(lineno)d"
-            "\n    func:    %(funcName)s"
-            "\n    asctime: %(asctime)s"
-            "\n    --"
-        )
+        format_ += " [loc=%(pathname)s:%(lineno)d, func=%(funcName)s, time=%(asctime)s]"
 
     formatter = logging.Formatter(format_)
     handler = ReportHandler(group_errors=group_errors)
     handler.setLevel(_VERBOSITY_LEVEL[verbosity])
     handler.setFormatter(formatter)
 
-    # Make sure to filter out
+    # Only allow logging by docstub itself
     handler.addFilter(logging.Filter("docstub"))
 
     logging.basicConfig(
         level=_VERBOSITY_LEVEL[verbosity],
         handlers=[handler],
     )
+    logging.captureWarnings(True)
+
     return handler

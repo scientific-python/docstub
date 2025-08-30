@@ -76,6 +76,17 @@ def _load_configuration(config_paths=None):
 
 
 def _calc_verbosity(*, verbose, quiet):
+    """Calculate the verbosity from the "--verbose" or "--quiet" flags.
+
+    Parameters
+    ----------
+    verbose : {0, 1, 2}
+    quiet : {0, 1, 2}
+
+    Returns
+    -------
+    verbosity : {-2, -1, 0, 1, 2}
+    """
     if verbose and quiet:
         raise click.UsageError(
             "Options '-v/--verbose' and '-q/--quiet' cannot be used together"
@@ -105,7 +116,6 @@ def _collect_type_info(root_path, *, ignore=(), cache=False):
     type_prefixes : dict[str, PyImport]
     """
     types = common_known_types()
-    type_prefixes = {}
 
     if cache:
         collect = FileCache(
@@ -116,25 +126,47 @@ def _collect_type_info(root_path, *, ignore=(), cache=False):
     else:
         collect = TypeCollector.collect
 
+    collected_types = {}
+    collected_type_prefixes = {}
     for source_path in walk_source_package(root_path, ignore=ignore):
         if cache:
             module = source_path.relative_to(root_path.parent)
             collect.sub_dir = f"{__version__}/{module}"
 
         types_in_file, prefixes_in_file = collect(source_path)
-        types.update(types_in_file)
-        type_prefixes.update(prefixes_in_file)
+        collected_types.update(types_in_file)
+        collected_type_prefixes.update(prefixes_in_file)
 
         logger.info(
-            "Collected types in %s%s",
+            "Collected%s types in %s",
+            " cached" if cache and collect.cached_last_call else "",
             source_path,
-            " (cached)" if cache and collect.cached_last_call else "",
+        )
+        logger.debug(
+            "%i types, %i type prefixes in %s",
+            len(types_in_file),
+            len(prefixes_in_file),
+            source_path,
         )
 
-    return types, type_prefixes
+    logger.debug("Collected %i types", len(collected_types))
+    logger.debug("Collected %i type prefixes", len(collected_type_prefixes))
+    types |= collected_types
+    return types, collected_type_prefixes
 
 
-def format_unknown_names(unknown_names):
+def _format_unknown_names(unknown_names):
+    """Format unknown type names as a list for printing.
+
+    Parameters
+    ----------
+    unknown_names : Iterable[str]
+
+    Returns
+    -------
+    formatted : str
+        A multiline string.
+    """
     lines = [click.style(f"Unknown type names: {len(unknown_names)}", bold=True)]
     counter = Counter(unknown_names)
     sorted_item_counts = sorted(counter.items(), key=lambda x: x[1], reverse=True)
@@ -222,7 +254,14 @@ def cli():
     metavar="INT",
     help="Allow this many or fewer errors. "
     "If docstub reports more, exit with error code '1'. "
-    "This is useful to adopt docstub gradually.",
+    "This is useful to adopt docstub gradually. ",
+)
+@click.option(
+    "-W",
+    "--fail-on-warning",
+    is_flag=True,
+    help="Return non-zero exit code when a warning is raised. "
+    "Will add to '--allow-errors'.",
 )
 @click.option(
     "--no-cache",
@@ -253,6 +292,7 @@ def run(
     ignore,
     group_errors,
     allow_errors,
+    fail_on_warning,
     no_cache,
     verbose,
     quiet,
@@ -272,6 +312,7 @@ def run(
     ignore : Sequence[str]
     group_errors : bool
     allow_errors : int
+    fail_on_warnings : bool
     no_cache : bool
     verbose : int
     quiet : int
@@ -337,7 +378,7 @@ def run(
         else:
             with source_path.open() as fo:
                 py_content = fo.read()
-            logger.debug("Creating stub from %s", source_path)
+            logger.debug("Transforming %s", source_path)
             try:
                 stub_content = stub_transformer.python_to_stub(
                     py_content, module_path=source_path
@@ -363,22 +404,27 @@ def run(
 
     # Report basic statistics
     successful_queries = matcher.successful_queries
+    transformed_doctypes = stub_transformer.transformer.stats["transformed"]
     syntax_error_count = stub_transformer.transformer.stats["syntax_errors"]
     unknown_type_names = matcher.unknown_qualnames
-    total_errors = len(unknown_type_names) + syntax_error_count
+    total_warnings = error_handler.warning_count
+    total_errors = error_handler.error_count
 
-    logger.info("Machted annotations: %i", successful_queries)
+    logger.info("Recognized type names: %i", successful_queries)
+    logger.info("Transformed doctypes: %i", transformed_doctypes)
+    if total_warnings:
+        logger.warning("Warnings: %i", total_warnings)
     if syntax_error_count:
         logger.warning("Syntax errors: %i", syntax_error_count)
     if unknown_type_names:
-        logger.warning(format_unknown_names(unknown_type_names))
-    logger.error(
-        click.style(
-            f"Total errors: {total_errors} (allowed: {allow_errors})", bold=True
-        )
-    )
+        logger.warning(_format_unknown_names(unknown_type_names))
+    if total_errors:
+        logger.error("Total errors: %", total_errors)
 
-    if allow_errors < total_errors:
+    total_fails = total_errors
+    if fail_on_warning:
+        total_fails += total_warnings
+    if allow_errors < total_fails:
         sys.exit(1)
 
 

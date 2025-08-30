@@ -19,7 +19,7 @@ from ._docstrings import DocstringAnnotations, DoctypeTransformer, FallbackAnnot
 from ._report import ContextReporter
 from ._utils import module_name_from_path
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 def try_format_stub(stub: str) -> str:
@@ -106,7 +106,7 @@ def _get_docstring_node(node):
 
     Returns
     -------
-    docstring_node :  cst.SimpleString | cst.ConcatenatedString | None
+    docstring_node : cst.SimpleString | cst.ConcatenatedString | None
         The node of the docstring if found.
     """
     docstring_node = None
@@ -192,6 +192,11 @@ def _docstub_comment_directives(cls):
     """
     state = {"is_off": False}
 
+    class Filter:
+        @staticmethod
+        def filter(record):
+            return False
+
     def wrap_leave_Comment(method):
         """Detect docstub comment directives and record the state."""
 
@@ -213,10 +218,15 @@ def _docstub_comment_directives(cls):
         @wraps(method)
         def wrapped(self, original_node, updated_node):
             if state["is_off"]:
-                # Pass a copy of updated_node and return unmodified one
-                updated_node_copy = updated_node.deep_clone()
-                method(self, original_node, updated_node_copy)
-                return updated_node
+                self.reporter.logger.addFilter(Filter)
+                try:
+                    # Pass a copy of updated_node and return unmodified one
+                    updated_node_copy = updated_node.deep_clone()
+                    method(self, original_node, updated_node_copy)
+                    return updated_node
+                finally:
+                    self.reporter.logger.removeFilter(Filter)
+
             # Just pass through
             return method(self, original_node, updated_node)
 

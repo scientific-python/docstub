@@ -19,17 +19,17 @@ from ._analysis import PyImport, TypeMatcher
 from ._report import ContextReporter
 from ._utils import DocstubError, escape_qualname
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
-here = Path(__file__).parent
-grammar_path = here / "doctype.lark"
+here: Path = Path(__file__).parent
+grammar_path: Path = here / "doctype.lark"
 
 
 with grammar_path.open() as file:
-    _grammar = file.read()
+    _grammar: str = file.read()
 
-_lark = lark.Lark(_grammar, propagate_positions=True, strict=True)
+_lark: lark.Lark = lark.Lark(_grammar, propagate_positions=True, strict=True)
 
 
 def _find_one_token(tree, *, name):
@@ -179,7 +179,7 @@ class Annotation:
         return values, imports
 
 
-FallbackAnnotation = Annotation(
+FallbackAnnotation: Annotation = Annotation(
     value="Incomplete", imports=frozenset([PyImport.typeshed_Incomplete()])
 )
 
@@ -271,7 +271,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         super().__init__(**kwargs)
 
-        self.stats = {"syntax_errors": 0}
+        self.stats = {
+            "syntax_errors": 0,
+            "transformed": 0,
+        }
 
     def doctype_to_annotation(self, doctype):
         """Turn a type description in a docstring into a type annotation.
@@ -297,6 +300,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
             annotation = Annotation(
                 value=value, imports=frozenset(self._collected_imports)
             )
+            self.stats["transformed"] += 1
             return annotation, self._unknown_qualnames
         except (
             lark.exceptions.LexError,
@@ -472,7 +476,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : lark.visitors._DiscardType
         """
-        logger.debug("Dropping optional info %r", tree)
+        # logger.debug("Dropping optional info %r", tree)
         return lark.Discard
 
     def __default__(self, data, children, meta):
@@ -626,6 +630,9 @@ class DocstringAnnotations:
         try:
             annotation, unknown_qualnames = self.transformer.doctype_to_annotation(
                 doctype
+            )
+            reporter.debug(
+                "Transformed doctype", details=("   %s\n-> %s", doctype, annotation)
             )
 
         except (lark.exceptions.LexError, lark.exceptions.ParseError) as error:

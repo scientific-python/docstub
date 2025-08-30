@@ -2,13 +2,13 @@ import logging
 from functools import cached_property
 from typing import Any, Protocol
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
-CACHE_DIR_NAME = ".docstub_cache"
+CACHE_DIR_NAME: str = ".docstub_cache"
 
 
-CACHEDIR_TAG_CONTENT = """\
+CACHEDIR_TAG_CONTENT: str = """\
 Signature: 8a477f597d28d172789f06886806bc55
 # Mark this directory as a cache [1], created by docstub [2]
 # [1] https://bford.info/cachedir/
@@ -16,7 +16,7 @@ Signature: 8a477f597d28d172789f06886806bc55
 """
 
 
-GITHUB_IGNORE_CONTENT = """\
+GITHUB_IGNORE_CONTENT: str = """\
 # Make git ignore this cache directory, created by docstub [1]
 # [1] https://github.com/scientific-python/docstub
 *

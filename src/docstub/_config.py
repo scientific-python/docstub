@@ -4,7 +4,7 @@ import tomllib
 from pathlib import Path
 from typing import ClassVar
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -74,6 +74,16 @@ class Config:
 
     @staticmethod
     def validate(mapping):
+        """Make sure that a valid Config can be created from `mapping`.
+
+        Parameters
+        ----------
+        mapping : Mapping
+
+        Raises
+        ------
+        TypeError
+        """
         for field in ["types", "type_prefixes", "type_nicknames"]:
             table = mapping[field]
             if not isinstance(table, dict):
