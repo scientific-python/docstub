@@ -91,6 +91,7 @@ class ContextReporter:
             The logging level.
         details : str, optional
             An optional multiline report with more details.
+        **log_kw : Any
         """
         extra = {"details": details}
 
@@ -111,6 +112,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         details : str, optional
             An optional multiline report with more details.
+        **log_kw : Any
         """
         return self.report(short, log_level=logging.DEBUG, details=details, **log_kw)
 
@@ -123,6 +125,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         details : str, optional
             An optional multiline report with more details.
+        **log_kw : Any
         """
         return self.report(short, log_level=logging.INFO, details=details, **log_kw)
 
@@ -135,6 +138,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         details : str, optional
             An optional multiline report with more details.
+        **log_kw : Any
         """
         return self.report(short, log_level=logging.WARNING, details=details, **log_kw)
 
@@ -147,6 +151,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         details : str, optional
             An optional multiline report with more details.
+        **log_kw : Any
         """
         return self.report(short, log_level=logging.ERROR, details=details, **log_kw)
 

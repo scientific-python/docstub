@@ -312,7 +312,7 @@ def run(
     ignore : Sequence[str]
     group_errors : bool
     allow_errors : int
-    fail_on_warnings : bool
+    fail_on_warning : bool
     no_cache : bool
     verbose : int
     quiet : int
@@ -454,6 +454,7 @@ def clean(verbose, quiet):
     Parameters
     ----------
     verbose : int
+    quiet : int
     """
     verbosity = _calc_verbosity(verbose=verbose, quiet=quiet)
     setup_logging(verbosity=verbosity, group_errors=False)
