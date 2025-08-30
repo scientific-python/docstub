@@ -17,12 +17,11 @@ class ContextReporter:
 
     Attributes
     ----------
+    logger
     path :
         Path to a file for the current context.
     line :
         The line in the given file.
-    column :
-        The column in the given line.
 
     Examples
     --------
@@ -52,7 +51,6 @@ class ContextReporter:
     logger: logging.Logger
     path: Path | None = None
     line: int | None = None
-    column: int | None = None
 
     def copy_with(self, *, logger=None, path=None, line=None, line_offset=None):
         """Return a new copy with the modified attributes.
