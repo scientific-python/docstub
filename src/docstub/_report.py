@@ -182,16 +182,16 @@ class ReportHandler(logging.StreamHandler):
         If ``True``, hold errors until :func:`emit_grouped` is called.
     error_count : int
     warning_count : int
-    char_to_color : ClassVar[str]
+    level_to_color : ClassVar[dict[int, str]]
     """
 
-    char_to_color = {  # noqa: RUF012
-        "I": "cyan",
-        "E": "red",
-        "C": "red",
-        "F": "red",
-        "D": "white",
-        "W": "yellow",
+    level_to_color = {  # noqa: RUF012
+        logging.DEBUG: "white",
+        logging.INFO: "cyan",
+        logging.WARNING: "yellow",
+        logging.ERROR: "red",
+        logging.CRITICAL: "red",
+        logging.FATAL: "red",
     }
 
     def __init__(self, stream=None, group_errors=False):
@@ -248,14 +248,15 @@ class ReportHandler(logging.StreamHandler):
         if record.levelno == logging.DEBUG:
             msg = click.style(msg, fg="white")
 
-        # Add a colored character for the error level
-        levelchar = record.levelname[0]
-        levelchar = click.style(
-            levelchar,
-            bold=True,
-            fg=self.char_to_color[levelchar],
-        )
-        msg = f"{levelchar} {msg}"
+        # Add a colored log IDs
+        log_id = getattr(record, "log_id", record.levelname[0])
+        if log_id:
+            log_id = click.style(
+                log_id,
+                bold=True,
+                fg=self.level_to_color.get(record.levelno),
+            )
+            msg = f"{log_id} {msg}"
 
         src_locations = getattr(record, "src_location", [])
         if not isinstance(src_locations, list):

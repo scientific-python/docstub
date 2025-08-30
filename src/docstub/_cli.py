@@ -417,7 +417,7 @@ def run(
     if unknown_type_names:
         logger.warning(_format_unknown_names(unknown_type_names))
     if total_errors:
-        logger.error("Total errors: %", total_errors)
+        logger.error("Total errors: %i", total_errors)
 
     total_fails = total_errors
     if fail_on_warning:
