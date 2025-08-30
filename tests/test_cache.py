@@ -48,7 +48,6 @@ def test_create_validate_cache(tmp_path):
 
 class Test_FileCache:
     def test_basic(self, tmp_path):
-
         class Serializer:
             suffix = ".txt"
 

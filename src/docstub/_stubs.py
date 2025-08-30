@@ -25,7 +25,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 def try_format_stub(stub: str) -> str:
     """Try to format a stub file with isort and black if available."""
     try:
-        import isort
+        import isort  # noqa: PLC0415
 
         stub = isort.code(stub)
     except ImportError:
@@ -33,7 +33,7 @@ def try_format_stub(stub: str) -> str:
     except Exception:
         logger.exception("Unexpected error while running isort")
     try:
-        import black
+        import black  # noqa: PLC0415
 
         stub = black.format_str(stub, mode=black.Mode(is_pyi=True))
     except ImportError:
