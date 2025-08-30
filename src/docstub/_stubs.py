@@ -965,7 +965,7 @@ class Py2StubTransformer(cst.CSTTransformer):
 
         Parameters
         ----------
-        node : cst.Node
+        node : cst.CSTNode
 
         Returns
         -------

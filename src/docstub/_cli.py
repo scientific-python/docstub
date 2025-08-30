@@ -25,7 +25,7 @@ from ._report import setup_logging
 from ._stubs import Py2StubTransformer, try_format_stub
 from ._version import __version__
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 def _cache_dir_in_cwd():
