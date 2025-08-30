@@ -28,19 +28,17 @@ def try_format_stub(stub: str) -> str:
         import isort
 
         stub = isort.code(stub)
-    except (SystemExit, KeyboardInterrupt):
-        raise
     except ImportError:
         logger.warning("isort is not available, couldn't sort imports")
+    except Exception:
+        logger.exception("Unexpected error while running isort")
     try:
         import black
 
         stub = black.format_str(stub, mode=black.Mode(is_pyi=True))
-    except (SystemExit, KeyboardInterrupt):
-        raise
     except ImportError:
         logger.warning("black is not available, couldn't format stubs")
-    except:  # noqa: E722
+    except Exception:
         logger.exception("Unexpected error while formatting with black")
     return stub
 
@@ -146,8 +144,6 @@ def _log_error_with_line_context(cls):
         def wrapped(self, original_node, updated_node):
             try:
                 return func(self, original_node, updated_node)
-            except (SystemError, KeyboardInterrupt):
-                raise
             except Exception:
                 position = self.get_metadata(
                     cst.metadata.PositionProvider, original_node
@@ -886,7 +882,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                 )
             except (SystemExit, KeyboardInterrupt):
                 raise
-            except:  # noqa: E722
+            except Exception:
                 reporter.error("could not parse docstring", exc_info=True)
         return annotations
 

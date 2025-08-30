@@ -385,9 +385,7 @@ def run(
                 )
                 stub_content = f"{STUB_HEADER_COMMENT}\n\n{stub_content}"
                 stub_content = try_format_stub(stub_content)
-            except (SystemExit, KeyboardInterrupt):
-                raise
-            except:  # noqa: E722
+            except Exception:
                 logger.exception("Failed creating stub for %s", source_path)
                 continue
         stub_path.parent.mkdir(parents=True, exist_ok=True)

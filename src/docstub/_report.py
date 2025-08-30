@@ -214,9 +214,7 @@ class ReportHandler(logging.StreamHandler):
             from click._compat import should_strip_ansi
 
             self.strip_ansi = should_strip_ansi(self.stream)
-        except (SystemExit, KeyboardInterrupt):
-            raise
-        except:  # noqa: E722
+        except Exception:
             self.strip_ansi = True
             logger.exception("Unexpected error while using click's `should_strip_ansi`")
 
