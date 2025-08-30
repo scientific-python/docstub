@@ -14,7 +14,7 @@ import libcst.matchers as cstm
 
 from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 def _shared_leading_qualname(*qualnames):
@@ -104,6 +104,18 @@ class PyImport:
         return import_
 
     def format_import(self, relative_to=None):
+        """Format import as valid Python import statement.
+
+        Parameters
+        ----------
+        relative_to : str, optional
+            If a dot-delimited module name is given, format the import relative
+            to it.
+
+        Returns
+        -------
+        formatted : str
+        """
         if self.implicit:
             msg = f"cannot import implicit object: {self.implicit!r}"
             raise RuntimeError(msg)
@@ -265,20 +277,6 @@ def common_known_types():
     return types
 
 
-@dataclass(slots=True, kw_only=True)
-class TypeCollectionResult:
-    types: dict[str, PyImport]
-    type_prefixes: dict[str, PyImport]
-
-    @classmethod
-    def serialize(cls, result):
-        pass
-
-    @classmethod
-    def deserialize(cls, result):
-        pass
-
-
 class TypeCollector(cst.CSTVisitor):
     """Collect types from a given Python file.
 
@@ -296,7 +294,13 @@ class TypeCollector(cst.CSTVisitor):
     """
 
     class ImportSerializer:
-        """Implements the `FuncSerializer` protocol to cache `TypeCollector.collect`."""
+        """Implements the `FuncSerializer` protocol to cache `TypeCollector.collect`.
+
+        Attributes
+        ----------
+        suffix : ClassVar[str]
+        encoding : ClassVar[str]
+        """
 
         suffix = ".json"
         encoding = "utf-8"
@@ -524,7 +528,7 @@ class TypeMatcher:
             resolved = name
         else:
             logger.warning(
-                "reached limit while resolving nicknames for %r in %s, using %r",
+                "Reached limit while resolving nicknames for %r in %s, using %r",
                 original,
                 self.current_file or "<file not known>",
                 resolved,
@@ -572,7 +576,7 @@ class TypeMatcher:
                     "%r (original %r) in %s matches multiple types %r, using %r",
                     search,
                     original_search,
-                    self.current_file or "<file not known>",
+                    self.current_file or "<file?>",
                     matches.keys(),
                     shortest_key,
                 )

@@ -37,25 +37,30 @@ Usage: docstub run [OPTIONS] PACKAGE_PATH
   annotations or to override them.
 
 Options:
-  -o, --out-dir PATH  Set output directory explicitly. Stubs will be directly
-                      written into that directory while preserving the
-                      directory structure under `PACKAGE_PATH`. Otherwise,
-                      stubs are generated inplace.
-  --config PATH       Set one or more configuration file(s) explicitly.
-                      Otherwise, it will look for a `pyproject.toml` or
-                      `docstub.toml` in the current directory.
-  --ignore GLOB       Ignore files matching this glob-style pattern. Can be
-                      used multiple times.
-  --group-errors      Group identical errors together and list where they
-                      occurred. Will delay showing errors until all files have
-                      been processed. Otherwise, simply report errors as the
-                      occur.
-  --allow-errors INT  Allow this many or fewer errors. If docstub reports
-                      more, exit with error code '1'. This is useful to adopt
-                      docstub gradually.  [default: 0; x>=0]
-  --no-cache          Ignore pre-existing cache and don't create a new one.
-  -v, --verbose       Print more details (repeatable).
-  -h, --help          Show this message and exit.
+  -o, --out-dir PATH     Set output directory explicitly. Stubs will be
+                         directly written into that directory while preserving
+                         the directory structure under `PACKAGE_PATH`.
+                         Otherwise, stubs are generated inplace.
+  --config PATH          Set one or more configuration file(s) explicitly.
+                         Otherwise, it will look for a `pyproject.toml` or
+                         `docstub.toml` in the current directory.
+  --ignore GLOB          Ignore files matching this glob-style pattern. Can be
+                         used multiple times.
+  --group-errors         Group identical errors together and list where they
+                         occurred. Will delay showing errors until all files
+                         have been processed. Otherwise, simply report errors
+                         as the occur.
+  --allow-errors INT     Allow this many or fewer errors. If docstub reports
+                         more, exit with error code '1'. This is useful to
+                         adopt docstub gradually.   [default: 0; x>=0]
+  -W, --fail-on-warning  Return non-zero exit code when a warning is raised.
+                         Will add to '--allow-errors'.
+  --no-cache             Ignore pre-existing cache and don't create a new one.
+  -v, --verbose          Print more details. Use once to show information
+                         messages. Use '-vv' to print debug messages.
+  -q, --quiet            Print less details. Use once to hide warnings. Use
+                         '-qq' to completely silence output.
+  -h, --help             Show this message and exit.
 ```
 
 <!--- end cli-docstub-run --->
@@ -75,7 +80,10 @@ Usage: docstub clean [OPTIONS]
   one exists, remove it.
 
 Options:
-  -v, --verbose  Print more details (repeatable).
+  -v, --verbose  Print more details. Use once to show information messages.
+                 Use '-vv' to print debug messages.
+  -q, --quiet    Print less details. Use once to hide warnings. Use '-qq' to
+                 completely silence output.
   -h, --help     Show this message and exit.
 ```
 
