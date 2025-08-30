@@ -211,7 +211,7 @@ class ReportHandler(logging.StreamHandler):
 
         # Be defensive about using click's non-public `should_strip_ansi`
         try:
-            from click._compat import should_strip_ansi
+            from click._compat import should_strip_ansi  # noqa: PLC0415
 
             self.strip_ansi = should_strip_ansi(self.stream)
         except Exception:
