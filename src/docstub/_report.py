@@ -41,12 +41,12 @@ class ContextReporter:
     >>> rep = rep.copy_with(path=Path("file/with/problems.py"))
     >>> rep.copy_with(line=3).error("Message with line info")
     E Message with line info
-        file/with/problems.py:3
+        file...problems.py:3
 
     >>> rep.copy_with(line=4).warn("With details", details="More details")
     W With details
         More details
-        file/with/problems.py:4
+        file...problems.py:4
     """
 
     logger: logging.Logger
