@@ -1,9 +1,10 @@
 import logging
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
 
-from docstub._report import ContextReporter
+from docstub._report import ContextReporter, ReportHandler
 
 
 class Test_ContextReporter:
@@ -66,4 +67,69 @@ class Test_ContextReporter:
         assert caplog.records[2].src_location == "foo.py:11"
 
 
-# TODO test ReportHandler
+@pytest.fixture
+def log_record():
+    record = logging.LogRecord(
+        name="testing",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=0,
+        msg="The actual log message",
+        args=(),
+        exc_info=None,
+    )
+    return record
+
+
+class Test_ReportHandler:
+    def test_format(self, log_record):
+        log_record.details = "Multiline\ndetails"
+        log_record.src_location = "foo.py:42"
+        log_record.log_id = "E321"
+
+        handler = ReportHandler()
+        result = handler.format(log_record)
+
+        expected = dedent(
+            """
+            E321 The actual log message
+                Multiline
+                details
+                foo.py:42
+            """
+        ).strip()
+        assert result == expected
+
+    def test_format_multiple_locations(self, log_record):
+        log_record.details = "Some details"
+        log_record.src_location = ["foo.py:42", "bar.py", "a/path.py:100"]
+        log_record.log_id = "E321"
+
+        handler = ReportHandler()
+        result = handler.format(log_record)
+
+        expected = dedent(
+            """
+            E321 The actual log message (3x)
+                Some details
+                a/path.py:100
+                bar.py
+                foo.py:42
+            """
+        ).strip()
+        assert result == expected
+
+    def test_format_details_with_args(self, log_record):
+        log_record.details = ("Details with args: %i, %f", 3, 0.5)
+        log_record.log_id = "E321"
+
+        handler = ReportHandler()
+        result = handler.format(log_record)
+
+        expected = dedent(
+            """
+            E321 The actual log message
+                Details with args: 3, 0.500000
+            """
+        ).strip()
+        assert result == expected

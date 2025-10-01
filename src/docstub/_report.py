@@ -2,7 +2,6 @@
 
 import dataclasses
 import logging
-from collections import defaultdict
 from pathlib import Path
 from textwrap import indent
 
@@ -13,7 +12,9 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class ContextReporter:
-    """Log error messages in context of a location in a file.
+    """Log messages in context of a file path and line number.
+
+    This is basically a custom :class:`logging.LoggingAdapter`.
 
     Attributes
     ----------
@@ -210,7 +211,6 @@ class ReportHandler(logging.StreamHandler):
 
         self.error_count = 0
         self.warning_count = 0
-        self.class_count = defaultdict(lambda: 0)
 
         # Be defensive about using click's non-public `should_strip_ansi`
         try:
@@ -220,18 +220,6 @@ class ReportHandler(logging.StreamHandler):
         except Exception:
             self.strip_ansi = True
             logger.exception("Unexpected error while using click's `should_strip_ansi`")
-
-    @staticmethod
-    def format_location(location):
-        """
-        Parameters
-        ----------
-        location : str or tuple of (str, None or str) or None
-
-        Returns
-        -------
-        formatted : str
-        """
 
     def format(self, record):
         """Format a log record.
@@ -246,12 +234,13 @@ class ReportHandler(logging.StreamHandler):
         """
         msg = super().format(record)
 
+        # Except for INFO level, style message
         if record.levelno >= logging.WARNING:
             msg = click.style(msg, bold=True)
         if record.levelno == logging.DEBUG:
             msg = click.style(msg, fg="white")
 
-        # Add a colored log IDs
+        # Prefix with a colored log ID, fallback to first char of level name
         log_id = getattr(record, "log_id", record.levelname[0])
         if log_id:
             log_id = click.style(
@@ -261,20 +250,26 @@ class ReportHandler(logging.StreamHandler):
             )
             msg = f"{log_id} {msg}"
 
+        # Normalize `src_location` to `list[str]`
+        # (may also be missing or a single `str`)
         src_locations = getattr(record, "src_location", [])
         if not isinstance(src_locations, list):
             src_locations = [src_locations]
 
+        # and append number if multiple locations exist
         if len(src_locations) > 1:
             msg = f"{msg} ({len(src_locations)}x)"
 
+        # Append `details` with indent if present
         details = getattr(record, "details", None)
         if details:
+            # Allow same %-based formatting as for general log messages
             if isinstance(details, tuple):
                 details = details[0] % details[1:]
             indented = indent(details, prefix="    ").rstrip()
             msg = f"{msg}\n{indented}"
 
+        # Append locations
         for location in sorted(src_locations):
             location_styled = click.style(location, fg="magenta")
             msg = f"{msg}\n    {location_styled}"
@@ -295,7 +290,6 @@ class ReportHandler(logging.StreamHandler):
             self.error_count += 1
         elif record.levelno == logging.WARNING:
             self.warning_count += 1
-        self.class_count[getattr(record, "class", None)] += 1
 
         if self.group_errors and logging.WARNING <= record.levelno <= logging.ERROR:
             self._records.append(record)
@@ -327,6 +321,7 @@ class ReportHandler(logging.StreamHandler):
             ]
             super().emit(merged_record)
 
+        # Clear now emitted records
         self._records = []
 
 
