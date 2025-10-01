@@ -29,7 +29,7 @@ class Test_Annotation:
         assert return_annotation.imports == path_anno.imports | sequence_anno.imports
 
     def test_unexpected_value(self):
-        with pytest.raises(ValueError, match="unexpected '~' in annotation value"):
+        with pytest.raises(ValueError, match=r"unexpected '~' in annotation value"):
             Annotation(value="~.foo")
 
 
