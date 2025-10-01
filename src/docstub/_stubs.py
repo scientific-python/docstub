@@ -191,17 +191,25 @@ def _docstub_comment_directives(cls):
     class Filter:
         @staticmethod
         def filter(record):
-            return False
+            # Demote any logging event to DEBUG level. Don't hide completely
+            # in case there are bugs in this code itself
+            record.levelno = logging.DEBUG
+            record.levelname = logging.getLevelName(logging.DEBUG)
+            record.msg = f"{record.msg} ('docstub: off' directive active!)"
+            return True
 
     def wrap_leave_Comment(method):
         """Detect docstub comment directives and record the state."""
 
         @wraps(method)
         def wrapped(self, original_node, updated_node):
+            reporter = self._reporter_with_ctx(original_node)
             if cstm.matches(original_node, cstm.Comment(value="# docstub: off")):
+                reporter.debug("Comment directive 'docstub: off'")
                 state["is_off"] = True
                 return cst.RemovalSentinel.REMOVE
             if cstm.matches(original_node, cstm.Comment(value="# docstub: on")):
+                reporter.debug("Comment directive 'docstub: on'")
                 state["is_off"] = False
                 return cst.RemovalSentinel.REMOVE
             return method(self, original_node, updated_node)
