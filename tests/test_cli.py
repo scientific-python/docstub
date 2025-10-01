@@ -1,7 +1,6 @@
 """Test command line interface."""
 
 import logging
-import os
 from pathlib import Path
 
 import pytest
@@ -11,22 +10,6 @@ from docstub import _cli
 from docstub._cache import create_cache
 
 PROJECT_ROOT = Path(__file__).parent.parent
-
-
-@pytest.fixture
-def tmp_path_cwd(tmp_path):
-    """Fixture: Create temporary directory and use it as working directory.
-
-    .. warning::
-        Not written with parallelization in mind!
-    """
-    previous_cwd = Path.cwd()
-    os.chdir(tmp_path)
-    try:
-        yield tmp_path
-    except:
-        os.chdir(previous_cwd)
-        raise
 
 
 class Test_run:
@@ -51,7 +34,7 @@ class Test_run:
         assert run_result.exit_code == 0
         assert _cli._cache_dir_in_cwd().exists()
         # Check that no collected file was logged as "(cached)"
-        assert "(cached)" not in "\n".join(caplog.messages)
+        assert "cached" not in "\n".join(caplog.messages)
 
         # Third run with existing cache should use cache
         caplog.clear()
@@ -60,7 +43,7 @@ class Test_run:
         assert run_result.exception is None
         assert run_result.exit_code == 0
         # Check that at least one collected file was logged as "(cached)"
-        assert "(cached)" in "\n".join(caplog.messages)
+        assert "cached" in "\n".join(caplog.messages)
 
         # Fourth run with '--no-cache' should ignore existing cache
         caplog.clear()
@@ -69,7 +52,7 @@ class Test_run:
         assert run_result.exception is None
         assert run_result.exit_code == 0
         # Check that at least one collected file was logged as "(cached)"
-        assert "(cached)" not in "\n".join(caplog.messages)
+        assert "cached" not in "\n".join(caplog.messages)
 
 
 class Test_clean:

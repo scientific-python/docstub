@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)  # Inline comments are stripped
 
 
 __all__ = [
-    "func_empty",
     "ExampleClass",
+    "func_empty",
 ]
 
 

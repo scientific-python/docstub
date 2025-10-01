@@ -11,10 +11,10 @@ else:
     from ._vendored.stdlib import glob_translate
 
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
-STUB_HEADER_COMMENT = "# File generated with docstub"
+STUB_HEADER_COMMENT: str = "# File generated with docstub"
 
 
 def is_docstub_generated(stub_path):
@@ -130,7 +130,7 @@ def find_package_root(path):
 
     for _ in range(2**16):
         if not is_python_package_dir(root):
-            logger.debug("detected %s as the package root of %s", root, path)
+            logger.debug("Detected %s as the package root of %s", root, path)
             return root
         root = root.parent
 
@@ -212,8 +212,9 @@ def _walk_source_package(path, *, ignore_regex):
     source_path : Path
         Either a Python file or a stub file that takes precedence.
     """
-    if ignore_regex and ignore_regex.match(str(path)):
-        logger.info("ignoring %s", path)
+    # Make sure
+    if ignore_regex and ignore_regex.match(str(path.resolve())):
+        logger.info("Ignoring '%s'", path)
         return
 
     if is_python_package_dir(path):
@@ -234,10 +235,10 @@ def _walk_source_package(path, *, ignore_regex):
             yield path
 
     elif path.is_dir():
-        logger.debug("skipping directory %s which isn't a Python package", path)
+        logger.debug("Skipping directory '%s', not a Python package", path)
 
     elif path.is_file():
-        logger.debug("skipping non-Python file %s", path)
+        logger.debug("Skipping non-Python file '%s'", path)
 
 
 def walk_source_package(path, *, ignore=()):
