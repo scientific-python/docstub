@@ -46,7 +46,7 @@ jobs:
         runs-on:
           - { short: linux, name: ubuntu-latest }
           - { short: win, name: windows-latest }
-          - { short: macos, name: macos-14 }
+          - { short: macos, name: macos-latest }
         python-version: ["3.12", "3.13"]
 
     steps:
