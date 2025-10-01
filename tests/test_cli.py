@@ -34,7 +34,7 @@ class Test_run:
         assert run_result.exit_code == 0
         assert _cli._cache_dir_in_cwd().exists()
         # Check that no collected file was logged as "(cached)"
-        assert "(cached)" not in "\n".join(caplog.messages)
+        assert "cached" not in "\n".join(caplog.messages)
 
         # Third run with existing cache should use cache
         caplog.clear()
@@ -43,7 +43,7 @@ class Test_run:
         assert run_result.exception is None
         assert run_result.exit_code == 0
         # Check that at least one collected file was logged as "(cached)"
-        assert "(cached)" in "\n".join(caplog.messages)
+        assert "cached" in "\n".join(caplog.messages)
 
         # Fourth run with '--no-cache' should ignore existing cache
         caplog.clear()
@@ -52,7 +52,7 @@ class Test_run:
         assert run_result.exception is None
         assert run_result.exit_code == 0
         # Check that at least one collected file was logged as "(cached)"
-        assert "(cached)" not in "\n".join(caplog.messages)
+        assert "cached" not in "\n".join(caplog.messages)
 
 
 class Test_clean:
