@@ -94,6 +94,7 @@ def module_name_from_path(path):
         if is_in_package:
             name_parts.insert(0, directory.name)
             directory = directory.parent
+            break
         else:
             break
 
