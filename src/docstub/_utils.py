@@ -93,8 +93,9 @@ def module_name_from_path(path):
         is_in_package = (directory / "__init__.py").is_file()
         if is_in_package:
             name_parts.insert(0, directory.name)
+            if directory.parent == directory:
+                break
             directory = directory.parent
-            break
         else:
             break
 
