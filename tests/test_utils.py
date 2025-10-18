@@ -1,4 +1,17 @@
+import os
+from pathlib import Path
+
 from docstub import _utils
+
+
+def _create_dummy_package(root, structure):
+    """Create a dummy Python package in `root` based on subpaths in `structure`."""
+    for item in structure:
+        path = root / item
+        if item.endswith(".py"):
+            path.touch()
+        else:
+            path.mkdir()
 
 
 class Test_module_name_from_path:
@@ -12,12 +25,7 @@ class Test_module_name_from_path:
             "foo/baz/__init__.py",
             "foo/baz/qux.py",
         ]
-        for item in structure:
-            path = tmp_path / item
-            if item.endswith(".py"):
-                path.touch()
-            else:
-                path.mkdir()
+        _create_dummy_package(tmp_path, structure)
 
         assert _utils.module_name_from_path(tmp_path / "foo/__init__.py") == "foo"
         assert _utils.module_name_from_path(tmp_path / "foo/bar.py") == "foo.bar"
@@ -27,6 +35,28 @@ class Test_module_name_from_path:
         assert (
             _utils.module_name_from_path(tmp_path / "foo/baz/qux.py") == "foo.baz.qux"
         )
+
+    def test_relative_path(self, tmp_path_cwd):
+        structure = [
+            "foo/",
+            "foo/__init__.py",
+            "foo/bar.py",
+            "foo/baz/",
+            "foo/baz/__init__.py",
+            "foo/baz/bar.py",
+        ]
+        _create_dummy_package(tmp_path_cwd, structure)
+        os.chdir(tmp_path_cwd / "foo")
+        cwd = Path()
+
+        assert _utils.module_name_from_path(cwd / "__init__.py") == "foo"
+        assert _utils.module_name_from_path(cwd / "bar.py") == "foo.bar"
+
+        # `./__init__.py` and `./bar.py` should return different results in
+        # different working directories
+        os.chdir(tmp_path_cwd / "foo/baz")
+        assert _utils.module_name_from_path(cwd / "__init__.py") == "foo.baz"
+        assert _utils.module_name_from_path(cwd / "bar.py") == "foo.baz.bar"
 
 
 def test_pyfile_checksum(tmp_path):
