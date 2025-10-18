@@ -107,7 +107,7 @@ def is_python_package_dir(path):
 
 
 def find_package_root(path):
-    """Determine the root a Python package from any path pointing inside it.
+    """Determine the root of a Python package from any path pointing inside it.
 
     Parameters
     ----------
@@ -121,18 +121,21 @@ def find_package_root(path):
     --------
     >>> from pathlib import Path
     >>> package_root = find_package_root(Path(__file__))
-    >>> (package_root / "docstub").is_dir()
+    >>> package_root.name
+    'docstub'
+
+    >>> find_package_root(package_root) == package_root
     True
     """
-    root = path
-    if root.is_file():
-        root = root.parent
+    root = path.resolve()  # `Path.parent` can't move past relative "." part
 
     for _ in range(2**16):
-        if not is_python_package_dir(root):
+        parent = root.parent
+        assert parent
+        if not is_python_package_dir(parent):
             logger.debug("Detected %s as the package root of %s", root, path)
             return root
-        root = root.parent
+        root = parent
 
     msg = f"exceeded iteration length while trying to find package root for {path}"
     raise RuntimeError(msg)
