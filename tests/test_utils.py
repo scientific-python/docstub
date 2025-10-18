@@ -4,7 +4,7 @@ from pathlib import Path
 from docstub import _utils
 
 
-def _create_dummy_package(root, structure):
+def _create_dummy_package(root: Path, structure: list[str]):
     """Create a dummy Python package in `root` based on subpaths in `structure`."""
     for item in structure:
         path = root / item
