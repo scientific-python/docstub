@@ -1,0 +1,9 @@
+html {
+    scroll-behavior: auto;
+}
+
+/* Left-align tables instead of centering them */
+article .align-default {
+    margin-left: unset;
+    margin-right: unset;
+}
