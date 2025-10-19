@@ -304,6 +304,7 @@ class ReportHandler(logging.StreamHandler):
         will be grouped together.
         """
         # Group by report
+        # TODO use itertools.groupby here?
         groups = {}
         for record in self._records:
             group_id = record.getMessage(), getattr(record, "details", "")
