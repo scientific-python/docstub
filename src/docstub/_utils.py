@@ -320,6 +320,7 @@ class GroupedErrorReporter(ErrorReporter):
                 message["column"] or -1,
             )
 
+        # TODO use itertools.groupby here?
         groups = {}
         for message in sorted(self._messages, key=key):
             group_name = (message["short"], message["details"])
