@@ -49,15 +49,24 @@ docstub = "docstub.__main__:cli"
 
 
 [dependency-groups]
-dev = [
-    "pre-commit >=4.3.0",
-    "ipython",
-]
 test = [
     "pytest >=8.4.1",
     "pytest-cov >= 5.0.0",
     "mypy >=1.17.0",
     "basedpyright >=1.31",
+]
+docs = [
+    "sphinx",
+    "furo",
+    "numpydoc",
+    "myst-parser",
+    "sphinx-copybutton",
+]
+dev = [
+    {include-group = "test"},
+    {include-group = "docs"},
+    "pre-commit >=4.3.0",
+    "ipython",
 ]
 
 

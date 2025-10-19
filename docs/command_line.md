@@ -1,11 +1,14 @@
-# Command line reference
+# Command line
 
-## Command `docstub`
+The reference for docstub's command line interface.
+It uses [Click](https://click.palletsprojects.com/en/stable/), so [shell completion](https://click.palletsprojects.com/en/stable/shell-completion/) can be enabled.
+
+## `docstub`
 
 <!--- The following block is checked by the test suite --->
 <!--- begin cli-docstub --->
 
-```plain
+```none
 Usage: docstub [OPTIONS] COMMAND [ARGS]...
 
   Generate Python stub files from docstrings.
@@ -22,12 +25,12 @@ Commands:
 <!--- end cli-docstub --->
 
 
-## Command `docstub run`
+## `docstub run`
 
 <!--- The following block is checked by the test suite --->
 <!--- begin cli-docstub-run --->
 
-```plain
+```none
 Usage: docstub run [OPTIONS] PACKAGE_PATH
 
   Generate Python stub files.
@@ -66,12 +69,12 @@ Options:
 <!--- end cli-docstub-run --->
 
 
-## Command `docstub clean`
+## `docstub clean`
 
 <!--- The following block is checked by the test suite --->
 <!--- begin cli-docstub-clean --->
 
-```plain
+```none
 Usage: docstub clean [OPTIONS]
 
   Clean the cache.
