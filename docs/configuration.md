@@ -60,7 +60,6 @@ NDArray = "numpy.typing"
 - Will allow using `NDarray` in docstrings and will use `from numpy.typing import NDArray` to import the type.
 
 
-(config-type-prefixes)=
 ### `type_prefixes`
 
 [TOML type](https://toml.io/en/latest): table, mapping string to string

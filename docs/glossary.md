@@ -19,6 +19,6 @@ type prefix
     A dot-delimited prefix that is part of a {term}`type name`.
     The prefix can describe the full path of a type or consist of an alias.
     For example, `collections.abc.Iterable` has the type prefix `collections.abc`.
-    `np.int` as the prefix `np` which may be an alias for `numpy`.
-    [Type prefixes can be defined in the configuration](#config-type-prefixes) or are inferred by docstub from import statements it can see.
+    `np.int` has the prefix `np` which may be an alias for `numpy`.
+    [Type prefixes can be defined in the configuration](configuration.md#type_prefixes) or are inferred by docstub from import statements it can see.
 :::
