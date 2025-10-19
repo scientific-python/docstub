@@ -29,7 +29,7 @@ class Test_Annotation:
         assert return_annotation.imports == path_anno.imports | sequence_anno.imports
 
     def test_unexpected_value(self):
-        with pytest.raises(ValueError, match="unexpected '~' in annotation value"):
+        with pytest.raises(ValueError, match=r"unexpected '~' in annotation value"):
             Annotation(value="~.foo")
 
 
@@ -498,7 +498,7 @@ class Test_DocstringAnnotations:
         assert "kwargs" in annotations.parameters
         assert "**kargs" not in annotations.parameters
 
-    def test_missing_whitespace(self, capsys):
+    def test_missing_whitespace(self, caplog):
         """Check for warning if a whitespace is missing between parameter and colon.
 
         In this case, NumPyDoc parses the entire thing as the parameter name.
@@ -513,8 +513,8 @@ class Test_DocstringAnnotations:
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
         assert annotations.parameters["a"].value == "int"
-        captured = capsys.readouterr()
-        assert "Possibly missing whitespace" in captured.out
+        assert len(caplog.records) == 1
+        assert "Possibly missing whitespace" in caplog.text
 
     def test_combined_numpydoc_params(self):
         docstring = dedent(

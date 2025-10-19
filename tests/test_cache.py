@@ -8,7 +8,7 @@ from docstub import _cache
 
 def test_directory_size():
     assert _cache._directory_size(Path(__file__).parent) > 0
-    with pytest.raises(FileNotFoundError, match="doesn't exist, can't determine size"):
+    with pytest.raises(FileNotFoundError, match=r"doesn't exist, can't determine size"):
         _cache._directory_size(Path("i/don't/exist"))
 
 
@@ -42,7 +42,7 @@ def test_create_validate_cache(tmp_path):
     _cache.create_cache(cache_dir)
     _cache.validate_cache(cache_dir)
 
-    with pytest.raises(FileNotFoundError, match="expected directory .* named .*"):
+    with pytest.raises(FileNotFoundError, match=r"expected directory .* named .*"):
         _cache.validate_cache(tmp_path)
 
 

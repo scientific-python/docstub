@@ -5,6 +5,8 @@ updates:
     directory: "/"
     schedule:
       interval: "quarterly"
+    cooldown:
+      default-days: 14
     labels:
       - "devops"
       - "bot"

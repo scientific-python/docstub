@@ -27,8 +27,13 @@ repos:
         args: [--markdown-linebreak-ext=md]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "0acff885bcb16381b67930fefb91e460202f172c"  # frozen: v0.12.10
+    rev: "f298305809c552671cc47e0fec0ba43e96c146a2"  # frozen: v0.13.2
     hooks:
       - id: ruff-check
         args: ["--fix", "--show-fixes", "--exit-non-zero-on-fix"]
       - id: ruff-format
+
+  - repo: https://github.com/woodruffw/zizmor-pre-commit
+    rev: 3c10df247c55cf21f75003105b879f145096bd4a  # frozen: v1.14.2
+    hooks:
+      - id: zizmor

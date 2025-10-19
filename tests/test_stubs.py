@@ -313,7 +313,7 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-    def test_module_assign_conflict(self, capsys):
+    def test_module_assign_conflict(self, caplog):
         source = dedent(
             '''
             """
@@ -333,13 +333,8 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-        captured = capsys.readouterr()
-        assert captured.out == (
-            "Keeping existing inline annotation for assignment\n"
-            "    str\n"
-            "    ^^^ ignoring docstring: int\n"
-            "\n"
-        )
+        assert caplog.messages == ["Keeping existing inline annotation for assignment"]
+        assert "ignoring docstring: int" in caplog.records[0].details
 
     def test_module_assign_no_conflict(self, capsys):
         source = dedent(
@@ -387,7 +382,7 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-    def test_class_assign_conflict(self, capsys):
+    def test_class_assign_conflict(self, caplog):
         source = dedent(
             '''
             class Foo:
@@ -409,15 +404,9 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-        captured = capsys.readouterr()
-        assert captured.out == (
-            "Keeping existing inline annotation for assignment\n"
-            "    str\n"
-            "    ^^^ ignoring docstring: Sized\n"
-            "\n"
-        )
+        assert caplog.messages == ["Keeping existing inline annotation for assignment"]
 
-    def test_class_assign_no_conflict(self, capsys):
+    def test_class_assign_no_conflict(self, caplog):
         source = dedent(
             '''
             class Foo:
@@ -445,8 +434,7 @@ class Test_Py2StubTransformer:
 
         # No warning should have been raised, since there is no conflict
         # between docstring and inline annotation
-        output = capsys.readouterr()
-        assert output.out == ""
+        assert caplog.messages == []
 
     def test_param_keep_inline_annotation(self):
         source = dedent(
@@ -464,7 +452,7 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-    def test_param_conflict(self, capsys):
+    def test_param_conflict(self, caplog):
         source = dedent(
             '''
             def foo(a: int) -> None:
@@ -485,13 +473,8 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-        captured = capsys.readouterr()
-        assert captured.out == (
-            "Keeping existing inline parameter annotation\n"
-            "    int\n"
-            "    ^^^ ignoring docstring: Sized\n"
-            "\n"
-        )
+        assert caplog.messages == ["Keeping existing inline parameter annotation"]
+        assert "ignoring docstring: Sized" in caplog.records[0].details
 
     def test_return_keep_inline_annotation(self):
         source = dedent(
@@ -509,7 +492,7 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-    def test_return_conflict(self, capsys):
+    def test_return_conflict(self, caplog):
         source = dedent(
             '''
             def foo() -> int:
@@ -530,13 +513,8 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-        captured = capsys.readouterr()
-        assert captured.out == (
-            "Keeping existing inline return annotation\n"
-            "    int\n"
-            "    ^^^ ignoring docstring: Sized\n"
-            "\n"
-        )
+        assert caplog.messages == ["Keeping existing inline return annotation"]
+        assert "ignoring docstring: Sized" in caplog.records[0].details
 
     def test_preserved_type_comment(self):
         source = dedent(
