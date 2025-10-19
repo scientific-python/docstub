@@ -32,5 +32,6 @@ introduction
 command_line
 configuration
 typing_syntax
+glossary
 release_notes/index
 :::
