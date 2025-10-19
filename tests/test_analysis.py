@@ -320,6 +320,19 @@ class Test_TypeMatcher:
         assert type_name == "cal.January"
         assert py_import == PyImport(implicit="sub.module:cal")
 
+    def test_nicknames(self, caplog):
+        types = {
+            "Buffer": PyImport(from_="collections.abc", import_="Buffer"),
+        }
+        type_nicknames = {
+            "buffer": "collections.abc.Buffer",
+        }
+        matcher = TypeMatcher(types=types, type_nicknames=type_nicknames)
+
+        type_name, py_import = matcher.match("buffer")
+        assert type_name == "Buffer"
+        assert py_import == PyImport(from_="collections.abc", import_="Buffer")
+
     def test_nested_nicknames(self, caplog):
         types = {
             "Foo": PyImport(implicit="Foo"),
