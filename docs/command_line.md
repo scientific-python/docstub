@@ -1,6 +1,9 @@
-# Command line reference
+# Command line
 
-## Command `docstub`
+The reference for docstub's command line interface.
+It uses [Click](https://click.palletsprojects.com/en/stable/), so [shell completion](https://click.palletsprojects.com/en/stable/shell-completion/) can be enabled.
+
+## `docstub`
 
 <!--- The following block is checked by the test suite --->
 <!--- begin cli-docstub --->
@@ -22,7 +25,7 @@ Commands:
 <!--- end cli-docstub --->
 
 
-## Command `docstub run`
+## `docstub run`
 
 <!--- The following block is checked by the test suite --->
 <!--- begin cli-docstub-run --->
@@ -61,7 +64,7 @@ Options:
 <!--- end cli-docstub-run --->
 
 
-## Command `docstub clean`
+## `docstub clean`
 
 <!--- The following block is checked by the test suite --->
 <!--- begin cli-docstub-clean --->

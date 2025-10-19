@@ -1,15 +1,17 @@
-# Configuration reference
+# Configuration files
 
-Docstub will automatically look for configuration in files named
+Docstub will automatically look for configuration files in the current directory.
+These files must be named
 
-- `pyproject.toml`, and
+- `pyproject.toml`
 - `docstub.toml`
 
-in the current working directory.
-If config files are explicitly passed to the command line interface via the `--config` option, docstub won't look implicitly look for files in the current directory.
-Multiple configuration files can be used, whose content will be merged.
+Alternatively, config files can also be passed in the command line with the `--config` option.
+In this case, docstub will not look for configuration files in the current directory.
+When multiple configuration files are passed explicitly, their content is merged.
 
-Out of the box, docstub makes use of an internal configuration file [`numpy_config.toml`](../src/docstub/numpy_config.toml) which provides defaults to use NumPy types.
+Out of the box, docstub makes use of an internal configuration files are always loaded.
+One such file is [`numpy_config.toml`](../src/docstub/numpy_config.toml) which provides defaults for NumPy types.
 
 
 ## Configuration fields in `[tool.docstub]`
@@ -19,7 +21,7 @@ All configuration must be declared inside a `[tool.docstub]` table.
 
 ### `ignore_files`
 
-- [TOML type](https://toml.io/en/latest): array of string(s)
+[TOML type](https://toml.io/en/latest): array of string(s)
 
 Ignore files and directories matching these [glob-style patterns](https://docs.python.org/3/library/glob.html#glob.translate).
 Patterns that don't start with "/" are interpreted as relative to the
@@ -39,7 +41,7 @@ ignore_files = [
 
 ### `types`
 
-- [TOML type](https://toml.io/en/latest): table, mapping string to string
+[TOML type](https://toml.io/en/latest): table, mapping string to string
 
 Types and their external modules to use in docstrings.
 Docstub can't yet automatically discover where to import types from other packages from.
@@ -60,7 +62,7 @@ NDArray = "numpy.typing"
 
 ### `type_prefixes`
 
-- [TOML type](https://toml.io/en/latest): table, mapping string to string
+[TOML type](https://toml.io/en/latest): table, mapping string to string
 
 Prefixes for external modules to match types in docstrings.
 Docstub can't yet automatically discover where to import types from other packages from.
@@ -81,7 +83,7 @@ plt = "matplotlib.pyplot
 
 ### `type_nicknames`
 
-- [TOML type](https://toml.io/en/latest): table, mapping string to string
+[TOML type](https://toml.io/en/latest): table, mapping string to string
 
 Nicknames for types that can be used in docstrings to describe valid Python types or annotations.
 
@@ -90,6 +92,8 @@ Example:
 ```toml
 [tool.docstub.type_nicknames]
 func = "Callable"
+buffer = "collections.abc.Buffer"
 ```
 
-- Will map `func` to the `Callable` type from the `typing` module.
+- Will map `func` to the `Callable`.
+- Will map `buffer` to `collections.abc.Buffer`.
