@@ -1,8 +1,6 @@
-"""
-Copyright (c) 2024 Lars Grüter. All rights reserved.
+# Copyright (c) 2024 Lars Grüter. All rights reserved.
 
-docstub: Generate Python stub files (PYI) from docstrings
-"""
+"""Generate Python stub files (PYI) from docstrings."""
 
 from ._version import __version__
 
