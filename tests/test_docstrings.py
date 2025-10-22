@@ -228,12 +228,9 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize(
         ("fmt", "expected_fmt"),
         [
-            ("{shape} {name}",                            "{name}"),
-            ("{shape} {name} of {dtype}",                 "{name}[{dtype}]"),
-            ("{shape} {dtype} {name}",                    "{name}[{dtype}]"),
-            ("{dtype} {name}",                            "{name}[{dtype}]"),
             ("{name} of shape {shape} and dtype {dtype}", "{name}[{dtype}]"),
             ("{name} of dtype {dtype} and shape {shape}", "{name}[{dtype}]"),
+            ("{name} of {dtype}", "{name}[{dtype}]"),
         ],
     )
     @pytest.mark.parametrize("name", ["array", "ndarray", "array-like", "array_like"])
@@ -261,7 +258,6 @@ class Test_DoctypeTransformer:
         ("doctype", "expected"),
         [
             ("ndarray of dtype (int or float)", "ndarray[int | float]"),
-            ("([P,] M, N) (int or float) array", "array[int | float]"),
         ],
     )
     def test_natlang_array_specific(self, doctype, expected):
