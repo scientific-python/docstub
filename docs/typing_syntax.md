@@ -1,12 +1,5 @@
 # Typing syntax in docstrings
 
-> [!NOTE]
-> **In early development!**
-> Expect bugs, missing features, and incomplete documentation.
-> Docstub is still evaluating which features it needs to support as the community gives feedback.
-> Several features are experimental and included to make adoption of docstub easier.
-> Long-term, some of these might be discouraged or removed as docstub matures.
-
 Docstub defines its own [grammar](../src/docstub/doctype.lark) to parse and transform type information in docstrings (doctypes) into valid Python type expressions.
 This grammar fully supports [Python's conventional typing syntax](https://typing.python.org/en/latest/index.html).
 So any type expression that is valid in Python, can be used in a docstrings as is.
@@ -21,10 +14,10 @@ name : doctype, optional_info
 ```
 
 - `name` might be the name of a parameter, attribute or similar.
-- `doctype` the actual type information that will be transformed into a Python type.
-- `optional_info` is optional and captures anything after the first comma (that is not inside a type expression).
+- `doctype` contains the actual type information that will be transformed into a Python type (see also {term}`doctype`).
+- `optional_info` is optional and captures anything after the first (top-level) comma.
   It is useful to provide additional information for readers.
-  Its presence and content doesn't currently affect the resulting type annotation.
+  Its presence and content doesn't currently affect the generated {term}`annotation expression`.
 
 
 ## Unions
@@ -65,10 +58,11 @@ and **mappings** exist.
 | `dict of {str: int}` | `dict[str, int]`       |
 
 
-> [!TIP]
-> While it is possible to nest these variants repeatedly, it is discouraged to do so to keep type descriptions readable.
-> For complex annotations with nested containers, consider using Python's conventional syntax.
-> In the future, docstub may warn against or disallow nesting these natural language variants.
+:::{tip}
+While it is possible to nest these variants repeatedly, it decreases the readability.
+For complex nested annotations with nested containers, consider using Python's conventional syntax.
+In the future, docstub may warn against or disallow nesting these natural language variants.
+:::
 
 
 ## Shape and dtype syntax for arrays
@@ -94,9 +88,10 @@ E.g.
 | `array_like of shape (M, 2)`             | `ArrayLike`            |
 
 
-> [!NOTE]
-> Noting the **shape** of an array in the docstring is supported.
-> However, [support for including shapes in generated stubs](https://github.com/scientific-python/docstub/issues/76) is not yet included in docstub.
+:::{note}
+Noting the **shape** of an array in the docstring is supported.
+However, [support for including shapes in generated stubs](https://github.com/scientific-python/docstub/issues/76) is not yet included in docstub.
+:::
 
 
 ## Literals
@@ -109,16 +104,17 @@ Instead of using [`typing.Literal`](https://docs.python.org/3/library/typing.htm
 | `{-1, 0, 3, True, False}` | `Literal[-1, 0, 3, True, False]` |
 | `{"red", "blue", None}`   | `Literal["red", "blue", None]`   |
 
-> [!TIP]
-> Enclosing a single value `{X}` is currently allowed but discouraged.
-> Instead consider the more explicit `Literal[X]`.
+:::{tip}
+Enclosing a single value `{X}` is allowed.
+However, `Literal[X]` is more explicit.
+:::
 
-> [!WARNING]
-> Python's `typing.Literal` only supports a restricted set of parameters.
-> E.g., `float` literals are not yet supported by the type system but are allowed by docstub.
-> Addressing this use case is on the roadmap.
-> See [issue 47](https://github.com/scientific-python/docstub/issues/47) for more details.
-
+:::{warning}
+Python's `typing.Literal` only supports a restricted set of parameters.
+E.g., `float` literals are not yet supported by the type system but are allowed by docstub.
+Addressing this use case is on the roadmap.
+See [issue 47](https://github.com/scientific-python/docstub/issues/47) for more details.
+:::
 
 ## reStructuredText role
 

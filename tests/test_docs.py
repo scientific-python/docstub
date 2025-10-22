@@ -12,16 +12,16 @@ from docstub import _cli
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
-def test_user_guide_example(tmp_path):
-    # Load user guide
-    md_file = PROJECT_ROOT / "docs/user_guide.md"
+def test_introduction_example(tmp_path):
+    # Load introduction
+    md_file = PROJECT_ROOT / "docs/introduction.md"
     with md_file.open("r") as io:
         md_content = io.read()
 
     # Extract code block for example.py
     regex_py = (
         r"<!--- begin example.py --->"
-        r"\n+```python(.*)```\n+"
+        r"\n+```{code-block} python(.*)```\n+"
         r"<!--- end example.py --->"
     )
     matches_py = re.findall(regex_py, md_content, flags=re.DOTALL)
@@ -35,7 +35,7 @@ def test_user_guide_example(tmp_path):
     runner = CliRunner()
     run_result = runner.invoke(_cli.run, [str(py_file)])  # noqa: F841
 
-    # Load created PYI file, this is what we expect to find in the user guide's
+    # Load created PYI file, this is what we expect to find in the introduction's
     # code block for example.pyi
     pyi_file = py_file.with_suffix(".pyi")
     assert pyi_file.is_file()
@@ -45,7 +45,7 @@ def test_user_guide_example(tmp_path):
     # Extract code block for example.pyi from guide
     regex_pyi = (
         r"<!--- begin example.pyi --->"
-        r"\n+```python(.*)```\n+"
+        r"\n+```{code-block} python(.*)```\n+"
         r"<!--- end example.pyi --->"
     )
     matches_pyi = re.findall(regex_pyi, md_content, flags=re.DOTALL)
@@ -62,7 +62,7 @@ def test_user_guide_example(tmp_path):
 def test_command_line_reference(command, name):
     ctx = click.Context(command, info_name=name)
     expected_help = f"""
-```plain
+```none
 {command.get_help(ctx)}
 ```
 """.strip()

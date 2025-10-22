@@ -50,7 +50,10 @@ jobs:
           - { short: linux, name: ubuntu-latest }
           - { short: win, name: windows-latest }
           - { short: macos, name: macos-latest }
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.12", "3.14"]
+        include:
+          - runs-on: { short: linux, name: ubuntu-latest }
+            python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v5

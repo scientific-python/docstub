@@ -1,0 +1,13 @@
+html {
+    scroll-behavior: auto;
+}
+
+/* Left-align tables instead of centering them */
+article .align-default {
+    margin-left: unset;
+    margin-right: unset;
+}
+
+.ethical-ad-padding {
+    padding: var(--sidebar-item-spacing-vertical) var(--sidebar-item-spacing-horizontal);
+}
