@@ -57,7 +57,7 @@ test = [
 ]
 docs = [
     "sphinx",
-    "furo",
+    "furo ==2025.9.25",
     "numpydoc",
     "myst-parser",
     "sphinx-copybutton",
