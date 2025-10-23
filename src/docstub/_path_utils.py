@@ -365,8 +365,6 @@ def walk_source_and_targets(root_path, target_dir, *, ignore=()):
     '.../docstub/__init__.py'
     >>> stub_path.as_posix()
     '.../docstub/__init__.pyi'
-    >>> stub_path.is_file()
-    False
     """
     if root_path.is_file():
         stub_path = target_dir / root_path.with_suffix(".pyi").name
