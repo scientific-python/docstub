@@ -17,7 +17,6 @@ env:
   # Many color libraries just need this to be set to any value, but at least
   # one distinguishes color depth, where "3" -> "256-bit color".
   FORCE_COLOR: 3
-  MYPYPATH: ${{ github.workspace }}/stubs
 
 defaults:
   run:
@@ -84,11 +83,12 @@ jobs:
               --config=examples/docstub.toml \
               --out-dir=examples/example_pkg-stubs \
               examples/example_pkg
-          git diff --exit-code examples/ && echo "Stubs for example_pkg did not change"
+          .github/scripts/assert-unchanged.sh examples/
 
       - name: Generate stubs for docstub
         run: |
-          python -m docstub run -v src/docstub -o ${MYPYPATH}/docstub
+          python -m docstub run -v src/docstub
+          .github/scripts/assert-unchanged.sh src/docstub
 
       - name: Check with mypy.stubtest
         run: |

@@ -163,5 +163,4 @@ ignore_missing_imports = true
 
 
 [tool.basedpyright]
-stubPath = "stubs/"
 typeCheckingMode = "standard"
