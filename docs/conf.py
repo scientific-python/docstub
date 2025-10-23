@@ -3,10 +3,17 @@
 
 from datetime import date
 
+import setuptools_scm
+
 # -- Project information ------------------------------------------------------
 
 project = "docstub"
-copyright = f"{date.today().year}, docstub contributors"
+
+version = setuptools_scm.get_version(search_parent_directories=True)
+version = f"v{version}"
+version = version.replace("+", "<wbr>+")  # Insert wrapping hint for long dev version
+
+copyright = f"{date.today().year} docstub contributors."
 
 templates_path = ["templates"]
 
@@ -62,6 +69,7 @@ html_theme_options = {
 html_sidebars = {
     "**": [
         "sidebar/brand.html",
+        "version.html",
         "sidebar/search.html",
         "sidebar/scroll-start.html",
         "sidebar/navigation.html",
