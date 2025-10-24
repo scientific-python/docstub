@@ -20,8 +20,10 @@ set -e
 
 # Display changes in tracked files and capture exit status
 if [ $GIT_DIFF_HEAD_EXIT_CODE -ne 0 ] ||  [ -n "$UNTRACKED" ]; then
-  echo "::error::Uncommited changes in directory: $CHECK_DIR"
+  echo "::error::Uncommited changes in directory '$CHECK_DIR'"
   exit 1
+else
+  echo "::notice::No Uncommited changes, directory '$CHECK_DIR' is clean"
 fi
 
 set +e
