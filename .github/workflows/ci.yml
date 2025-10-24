@@ -81,6 +81,7 @@ jobs:
         # Check that stubs for example_pkg are up-to-date by regenerating them
         # with docstub and looking for differences.
         run: |
+          rm -rf examples/example_pkg-stubs
           python -m docstub run -v \
               --config=examples/docstub.toml \
               --out-dir=examples/example_pkg-stubs \
