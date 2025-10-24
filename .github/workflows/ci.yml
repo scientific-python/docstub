@@ -77,7 +77,9 @@ jobs:
 
       # TODO upload coverage statistics, and fail on decrease?
 
-      - name: Compare example stubs
+      - name: Check example_pkg-stubs
+        # Check that stubs for example_pkg are up-to-date by regenerating them
+        # with docstub and looking for differences.
         run: |
           python -m docstub run -v \
               --config=examples/docstub.toml \
