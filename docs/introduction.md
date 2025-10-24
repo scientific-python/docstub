@@ -1,7 +1,7 @@
 # Introduction
 
-This introduction will teach you how to use docstub and cover critical concepts.
-It assumes familiarity with Python and some familiarity with [static Typing](https://typing.python.org) and [packaging](https://packaging.python.org/en/latest/).
+This section will introduce you to using docstub and cover important concepts.
+It assumes familiarity with Python and some familiarity with [static Typing](https://typing.python.org).
 
 
 ## First example
