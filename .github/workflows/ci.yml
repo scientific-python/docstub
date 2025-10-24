@@ -91,6 +91,7 @@ jobs:
         # Check that stubs for docstub are up-to-date by regenerating them
         # with docstub and looking for differences.
         run: |
+          rm -rf src/docstub-stubs
           python -m docstub run -v src/docstub -o src/docstub-stubs
           .github/scripts/assert-unchanged.sh src/docstub-stubs/
 
