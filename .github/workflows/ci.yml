@@ -85,10 +85,12 @@ jobs:
               examples/example_pkg
           .github/scripts/assert-unchanged.sh examples/
 
-      - name: Generate stubs for docstub
+      - name: Check docstub-stubs
+        # Check that stubs for docstub are up-to-date by regenerating them
+        # with docstub and looking for differences.
         run: |
-          python -m docstub run -v src/docstub
-          .github/scripts/assert-unchanged.sh src/docstub
+          python -m docstub run -v src/docstub -o src/docstub-stubs
+          .github/scripts/assert-unchanged.sh src/docstub-stubs/
 
       - name: Check with mypy.stubtest
         run: |

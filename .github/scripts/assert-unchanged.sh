@@ -7,28 +7,21 @@ set -e
 
 CHECK_DIR=$1
 
-# Add untracked files so the following command picks them up
+# Find untracked files
 UNTRACKED=$(git ls-files --others --exclude-standard "$CHECK_DIR")
+# and display their content by comparing with '/dev/null'
+echo "$UNTRACKED" | xargs -I _ git --no-pager diff --no-index /dev/null _
 
-if [ -n "$UNTRACKED" ]; then
-  git add "$UNTRACKED"
-fi
-
-set +e
 # Display changes in tracked files and capture non-zero exit code if so
+set +e
 git diff --exit-code HEAD "$CHECK_DIR"
-GIT_DIFF_EXIT_CODE=$?
+GIT_DIFF_HEAD_EXIT_CODE=$?
 set -e
 
-# Unstage again (useful for local debugging)
-if [ -n "$UNTRACKED" ]; then
-   git restore --staged "$UNTRACKED"
-fi
-
 # Display changes in tracked files and capture exit status
-if [ $GIT_DIFF_EXIT_CODE -ne 0 ]; then
+if [ $GIT_DIFF_HEAD_EXIT_CODE -ne 0 ] ||  [ -n "$UNTRACKED" ]; then
   echo "::error::Uncommited changes in directory: $CHECK_DIR"
-  exit $GIT_DIFF_EXIT_CODE
+  exit 1
 fi
 
 set +e
