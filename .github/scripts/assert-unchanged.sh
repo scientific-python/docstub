@@ -3,7 +3,7 @@
 # Assert that there are no changes in a given directory compared to HEAD.
 # Expects a relative directory as the one and only argument.
 
-set -e
+set -ex
 
 CHECK_DIR=$1
 
@@ -24,4 +24,4 @@ if [ $GIT_DIFF_HEAD_EXIT_CODE -ne 0 ] ||  [ -n "$UNTRACKED" ]; then
   exit 1
 fi
 
-set +e
+set +ex
