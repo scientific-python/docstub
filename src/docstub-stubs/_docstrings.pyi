@@ -1,19 +1,21 @@
 # File generated with docstub
 
 import logging
+import traceback
 from collections.abc import Generator, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
 from typing import Any, ClassVar
 
+import click
 import lark
 import lark.visitors
 import numpydoc.docscrape as npds
 
 from ._analysis import PyImport, TypeMatcher
 from ._report import ContextReporter
-from ._utils import DocstubError
+from ._utils import DocstubError, escape_qualname
 
 logger: logging.Logger
 
@@ -28,6 +30,7 @@ _lark: lark.Lark
 def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token: ...
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Annotation:
+
     value: str
     imports: frozenset[PyImport] = ...
 

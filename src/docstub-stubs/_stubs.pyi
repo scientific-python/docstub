@@ -3,24 +3,30 @@
 import enum
 import logging
 from dataclasses import dataclass
+from functools import wraps
 from pathlib import Path
 from typing import ClassVar, Literal
 
 import libcst as cst
+import libcst.matchers as cstm
+from _typeshed import Incomplete
 
 from ._analysis import PyImport, TypeMatcher
 from ._docstrings import (
     Annotation,
     DocstringAnnotations,
     DoctypeTransformer,
+    FallbackAnnotation,
 )
 from ._report import ContextReporter
+from ._utils import module_name_from_path
 
 logger: logging.Logger
 
 def try_format_stub(stub: str) -> str: ...
 
 class ScopeType(enum.StrEnum):
+
     MODULE = "module"
     CLASS = "class"
     FUNC = "func"
@@ -30,6 +36,7 @@ class ScopeType(enum.StrEnum):
 
 @dataclass(slots=True, frozen=True)
 class _Scope:
+
     type: ScopeType
     node: cst.CSTNode | None = ...
 
@@ -112,7 +119,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         *,
         name: str,
         trailing_semicolon: bool = ...,
-        reporter: ContextReporter | None = ...,
+        reporter: ContextReporter | None = ...
     ) -> cst.AnnAssign: ...
     def _insert_instance_attributes(
         self, updated_node: cst.ClassDef, attributes: dict[str, Annotation]

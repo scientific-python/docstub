@@ -1,7 +1,11 @@
 # File generated with docstub
 
+import itertools
+import re
 from collections.abc import Callable
+from functools import lru_cache, wraps
 from pathlib import Path
+from zlib import crc32
 
 def accumulate_qualname(qualname: str, *, start_right: bool = ...) -> None: ...
 def escape_qualname(name: str) -> str: ...

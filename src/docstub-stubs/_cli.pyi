@@ -1,14 +1,29 @@
 # File generated with docstub
 
 import logging
+import shutil
+import sys
+import time
+from collections import Counter
 from collections.abc import Iterable, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Literal
 
 import click
 
-from ._analysis import PyImport
+from ._analysis import PyImport, TypeCollector, TypeMatcher, common_known_types
+from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
 from ._config import Config
+from ._path_utils import (
+    STUB_HEADER_COMMENT,
+    find_package_root,
+    walk_source_and_targets,
+    walk_source_package,
+)
+from ._report import setup_logging
+from ._stubs import Py2StubTransformer, try_format_stub
+from ._version import __version__
 
 logger: logging.Logger
 

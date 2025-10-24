@@ -1,5 +1,7 @@
 # File generated with docstub
 
+import os
+import re
 from collections.abc import Sequence
 
 def _fnmatch_translate(pat: str, STAR: str, QUESTION_MARK: str) -> str: ...

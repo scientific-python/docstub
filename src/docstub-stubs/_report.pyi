@@ -3,12 +3,16 @@
 import dataclasses
 import logging
 from pathlib import Path
+from textwrap import indent
 from typing import Any, ClassVar, Self, TextIO
+
+import click
 
 logger: logging.Logger
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class ContextReporter:
+
     logger: logging.Logger
     path: Path | None = ...
     line: int | None = ...
@@ -19,7 +23,7 @@ class ContextReporter:
         logger: logging.Logger | None = ...,
         path: Path | None = ...,
         line: int | None = ...,
-        line_offset: int | None = ...,
+        line_offset: int | None = ...
     ) -> Self: ...
     def report(
         self, short: str, *, log_level: int, details: str | None = ..., **log_kw: Any

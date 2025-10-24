@@ -4,12 +4,13 @@ import logging
 import re
 import sys
 from collections.abc import Generator, Sequence
+from functools import lru_cache
 from pathlib import Path
 
 if sys.version_info >= (3, 13):
-    pass
+    from glob import translate as glob_translate
 else:
-    pass
+    from ._vendored.stdlib import glob_translate
 
 logger: logging.Logger
 

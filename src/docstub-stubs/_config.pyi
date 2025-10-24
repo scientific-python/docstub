@@ -2,6 +2,7 @@
 
 import dataclasses
 import logging
+import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import ClassVar, Self

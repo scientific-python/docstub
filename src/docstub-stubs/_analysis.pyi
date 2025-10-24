@@ -1,18 +1,27 @@
 # File generated with docstub
 
+import builtins
+import importlib
+import json
 import logging
+import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from functools import cache
 from pathlib import Path
 from typing import Any, ClassVar
 
 import libcst as cst
+import libcst.matchers as cstm
+
+from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
 
 logger: logging.Logger
 
 def _shared_leading_qualname(*qualnames: tuple[str]) -> str: ...
 @dataclass(slots=True, frozen=True)
 class PyImport:
+
     import_: str | None = ...
     from_: str | None = ...
     as_: str | None = ...
@@ -36,6 +45,7 @@ def common_known_types() -> dict[str, PyImport]: ...
 
 class TypeCollector(cst.CSTVisitor):
     class ImportSerializer:
+
         suffix: ClassVar[str]
         encoding: ClassVar[str]
 
