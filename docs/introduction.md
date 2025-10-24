@@ -84,7 +84,7 @@ There are several interesting things to note here:
 
 ## Referencing types & nicknames
 
-To translate a type from a docstring into a valid type annotation, docstub needs to know where names in that type are defined from where to import them.
+To translate a type from a docstring into a valid type annotation, docstub needs to know how to import these types.
 Out of the box, docstub will know about builtin types such as `int` or `bool` that don't need an import, and types in `typing`, `collections.abc` from Python's standard library.
 It will source these from the Python environment it is installed in.
 In addition to that, docstub will collect all types in the package directory you are running it on.
