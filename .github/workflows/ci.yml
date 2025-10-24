@@ -17,6 +17,7 @@ env:
   # Many color libraries just need this to be set to any value, but at least
   # one distinguishes color depth, where "3" -> "256-bit color".
   FORCE_COLOR: 3
+  PIP_PROGRESS_BAR: "off"
 
 defaults:
   run:
@@ -81,6 +82,7 @@ jobs:
         # Check that stubs for example_pkg are up-to-date by regenerating them
         # with docstub and looking for differences.
         run: |
+          rm -rf examples/example_pkg-stubs
           python -m docstub run -v \
               --config=examples/docstub.toml \
               --out-dir=examples/example_pkg-stubs \
@@ -91,6 +93,7 @@ jobs:
         # Check that stubs for docstub are up-to-date by regenerating them
         # with docstub and looking for differences.
         run: |
+          rm -rf src/docstub-stubs
           python -m docstub run -v src/docstub -o src/docstub-stubs
           .github/scripts/assert-unchanged.sh src/docstub-stubs/
 

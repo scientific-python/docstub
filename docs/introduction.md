@@ -204,3 +204,13 @@ class Foo:
 
 If all of the above does not solve your issue, you can fall back to writing a correct stub file by hand.
 Docstub will preserve this file and integrated it with other automatically generated stubs.
+
+
+## Distributing stub files
+
+The simplest option is to include generated stubs in the [distribution package](https://packaging.python.org/en/latest/glossary/#term-Distribution-Package) alongside your source files.
+For more complex setups please consult the official guide on [Packaging Type Information](https://typing.python.org/en/latest/spec/distributing.html#packaging-type-information).
+
+As required, Docstub will automatically place an empty `py.typed` file in the root directory of generated stubs to support type checking.
+If you need to [mark your stubs as partial](https://typing.python.org/en/latest/spec/distributing.html#partial-stub-packages), create the `py.typed` file beforehand.
+Docstub will not overwrite it.

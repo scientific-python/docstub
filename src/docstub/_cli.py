@@ -399,6 +399,11 @@ def run(
             logger.info("Wrote %s", stub_path)
             fo.write(stub_content)
 
+    py_typed_out = out_dir / "py.typed"
+    if not py_typed_out.exists():
+        py_typed_out.touch()
+        logger.info("Created %s", py_typed_out)
+
     # Reporting --------------------------------------------------------------
 
     if group_errors:
