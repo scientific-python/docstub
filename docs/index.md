@@ -17,9 +17,10 @@ It does so by supporting widely used readable conventions such as `array of dtyp
 ---
 
 :::{toctree}
-:caption: User guides
+:caption: Guides
 :maxdepth: 1
 
+installation
 introduction
 :::
 
