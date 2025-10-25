@@ -45,7 +45,7 @@ This extends the basic subscription syntax for [generics](https://typing.python.
 | `CONTAINER of (X or Y)` | `CONTAINER[X \| Y]`    |
 
 For the simple case `CONTAINER of X`, where `X` is a name, you can append `(s)` to indicate the plural form.
-E.g., `list of float(s)`.
+For example, `list of float(s)`.
 
 Variants of for [**tuples**](https://typing.python.org/en/latest/spec/tuples.html)
 
@@ -82,7 +82,7 @@ This expression allows adding shape and datatype information for data structures
 | `ARRAY of shape SHAPE`                 | `ARRAY[DTYPE]`         |
 | `ARRAY of shape SHAPE and dtype DTYPE` | `ARRAY[DTYPE]`         |
 
-E.g.
+For example
 
 | Docstring type                           | Python type annotation |
 |------------------------------------------|------------------------|
@@ -115,7 +115,7 @@ However, `Literal[X]` is more explicit.
 
 :::{warning}
 Python's `typing.Literal` only supports a restricted set of parameters.
-E.g., `float` literals are not yet supported by the type system but are allowed by docstub.
+For example, `float` literals are not yet supported by the type system but are allowed by docstub.
 Addressing this use case is on the roadmap.
 See [issue 47](https://github.com/scientific-python/docstub/issues/47) for more details.
 :::

@@ -110,7 +110,7 @@ ski = "skimage"
 "sklearn.tree" = "sklearn.tree"
 ```
 
-which will enable any type that is prefixed with `ski.` or `sklearn.tree.`, e.g. `ski.transform.AffineTransform` or `sklearn.tree.DecisionTreeClassifier`.
+which will enable any type that is prefixed with `ski.` or `sklearn.tree.`, for example `ski.transform.AffineTransform` or `sklearn.tree.DecisionTreeClassifier`.
 
 :::{important}
 Docstub doesn't check that types actually exist or if a symbol is a valid type.
@@ -162,7 +162,7 @@ In those cases, you docstub provides a few approaches to dealing with this.
 Docstub will always preserve inline type annotations, regardless of what the docstring contains.
 This is useful for example, if you want to express something that isn't yet supported by Python's type system.
 
-E.g., consider the docstring type of `ord` parameter in [`numpy.linalg.matrix_norm`](https://numpy.org/doc/stable/reference/generated/numpy.linalg.matrix_norm.html)
+For example, consider the docstring type of `ord` parameter in [`numpy.linalg.matrix_norm`](https://numpy.org/doc/stable/reference/generated/numpy.linalg.matrix_norm.html)
 ```rst
 ord : {1, -1, 2, -2, inf, -inf, ‘fro’, ‘nuc’}, optional
 ```
@@ -181,7 +181,7 @@ At its heart, docstub transforms Python source files into stub files.
 You can tell docstub to temporarily stop that transformation for a specific area with a comment directive.
 Wrapping lines of code with `docstub: off` and `docstub: on` comments will preserve these lines completely.
 
-E.g., consider the following example:
+For example, consider the following example:
 ```python
 class Foo:
     # docstub: off
