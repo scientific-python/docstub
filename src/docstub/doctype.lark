@@ -89,10 +89,6 @@ _natlang_mapping: qualname "of" "{" type ":" type "}"
 // A natural language alternative to describe arrays with a dtype and shape.
 natlang_array: array_name "of dtype" dtype ("and shape" shape)?
     | array_name "of shape" shape ("and dtype" dtype)?
-    | shape array_name ("of" dtype)?
-    | shape? array_name "of" dtype
-    | shape dtype array_name
-    | dtype array_name
 
 
 // Currently a bit of a hack. Since the `array_expression` is ambiguous, we

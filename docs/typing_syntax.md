@@ -45,7 +45,7 @@ This extends the basic subscription syntax for [generics](https://typing.python.
 | `CONTAINER of (X or Y)` | `CONTAINER[X \| Y]`    |
 
 For the simple case `CONTAINER of X`, where `X` is a name, you can append `(s)` to indicate the plural form.
-E.g., `list of float(s)`.
+For example, `list of float(s)`.
 
 Variants of for [**tuples**](https://typing.python.org/en/latest/spec/tuples.html)
 
@@ -73,27 +73,29 @@ In the future, docstub may warn against or disallow nesting these natural langua
 
 This expression allows adding shape and datatype information for data structures like [NumPy arrays](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html).
 
-`array` and `ndarray`, and `array-like` and `array_like` can be used interchange-ably.
+`array` and `ndarray`, and `array-like` and `array_like` can be used interchange-ably for the variable `ARRAY` below.
 
-| Docstring type              | Python type annotation |
-|-----------------------------|------------------------|
-| `array of DTYPE`            | `ndarray[DTYPE]`       |
-| `ndarray of dtype DTYPE`    | `ndarray[DTYPE]`       |
-| `array-like of DTYPE`       | `ArrayLike[DTYPE]`     |
-| `array_like of dtype DTYPE` | `ArrayLike[DTYPE]`     |
+| Docstring type                         | Python type annotation |
+|----------------------------------------|------------------------|
+| `ARRAY of dtype DTYPE`                 | `ARRAY[DTYPE]`         |
+| `ARRAY of dtype DTYPE and shape SHAPE` | `ARRAY[DTYPE]`         |
+| `ARRAY of shape SHAPE`                 | `ARRAY[DTYPE]`         |
+| `ARRAY of shape SHAPE and dtype DTYPE` | `ARRAY[DTYPE]`         |
+
+For example
+
+| Docstring type                           | Python type annotation |
+|------------------------------------------|------------------------|
+| `array of dtype int`                     | `ndarray[int]`         |
+| `ndarray of dtype bool and shape (4, 4)` | `ndarray[bool]`        |
+| `array-like of dtype float`              | `ArrayLike[float]`     |
+| `array_like of shape (M, 2)`             | `ArrayLike`            |
+
 
 :::{note}
 Noting the **shape** of an array in the docstring is supported.
-However, Python's typing system is not yet able to express this information.
-It is therefore not included in the resulting type annotation.
+However, [support for including shapes in generated stubs](https://github.com/scientific-python/docstub/issues/76) is not yet included in docstub.
 :::
-
-| Docstring type           | Python type annotation |
-|--------------------------|------------------------|
-| `(3,) array of DTYPE`    | `ndarray[DTYPE]`       |
-| `(X, Y) array of DTYPE`  | `ndarray[DTYPE]`       |
-| `([P,] M, N) array-like` | `ArrayLike`            |
-| `(M, ...) ndarray`       | `ArrayLike`            |
 
 
 ## Literals
@@ -113,7 +115,7 @@ However, `Literal[X]` is more explicit.
 
 :::{warning}
 Python's `typing.Literal` only supports a restricted set of parameters.
-E.g., `float` literals are not yet supported by the type system but are allowed by docstub.
+For example, `float` literals are not yet supported by the type system but are allowed by docstub.
 Addressing this use case is on the roadmap.
 See [issue 47](https://github.com/scientific-python/docstub/issues/47) for more details.
 :::
