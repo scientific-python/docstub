@@ -12,7 +12,7 @@ doctype
 type name
     The name of a single (atomic) type.
     A type name can include a {term}`type prefix`.
-    An {term}`annotation expression` can contain multiple typen names.
+    An {term}`annotation expression` can contain multiple type names.
     For example, the annotation expression `collections.abc.Iterable[int or float]` consists of the three names `collections.abc.Iterable`, `int` and `float`.
 
 type prefix

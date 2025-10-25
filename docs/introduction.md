@@ -1,20 +1,7 @@
 # Introduction
 
-## Installation
-
-Docstub is available as a [package on PyPI](https://pypi.org/project/docstub/) and can be installed from there with your favorite package manager. E.g.:
-
-```shell
-pip install docstub
-```
-
-In case you want to check out an unreleased version you can install directly from the repository with:
-
-```shell
-pip install 'docstub @ git+https://github.com/scientific-python/docstub'
-```
-
-To pin to a specific commit you can append `@COMMIT_SHA` to the repository URL above.
+This introduction will teach you how to use docstub and cover critical concepts.
+It assumes familiarity with Python and some familiarity with [static Typing](https://typing.python.org) and [packaging](https://packaging.python.org/en/latest/).
 
 
 ## First example
@@ -97,7 +84,7 @@ There are several interesting things to note here:
 
 ## Referencing types & nicknames
 
-To translate a type from a docstring into a valid type annotation, docstub needs to know where names in that type are defined from where to import them.
+To translate a type from a docstring into a valid type annotation, docstub needs to know how to import these types.
 Out of the box, docstub will know about builtin types such as `int` or `bool` that don't need an import, and types in `typing`, `collections.abc` from Python's standard library.
 It will source these from the Python environment it is installed in.
 In addition to that, docstub will collect all types in the package directory you are running it on.

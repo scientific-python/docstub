@@ -18,6 +18,7 @@ from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
 from ._config import Config
 from ._path_utils import (
     STUB_HEADER_COMMENT,
+    find_package_root,
     walk_source_and_targets,
     walk_source_package,
 )
@@ -326,8 +327,13 @@ def run(
     root_path = Path(root_path)
     if root_path.is_file():
         logger.warning(
-            "Running docstub on a single file. Relative imports "
-            "or type references outside this file won't work."
+            "Running docstub on a single module. Relative imports "
+            "or type references pointing outside this module won't work."
+        )
+    elif find_package_root(root_path) != root_path.resolve():
+        logger.warning(
+            "Running docstub only on a subpackage. Relative imports "
+            "or type references pointing outside this subpackage won't work."
         )
 
     config = _load_configuration(config_paths)

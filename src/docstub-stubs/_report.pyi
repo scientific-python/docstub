@@ -1,0 +1,57 @@
+# File generated with docstub
+
+import dataclasses
+import logging
+from pathlib import Path
+from textwrap import indent
+from typing import Any, ClassVar, Self, TextIO
+
+import click
+
+logger: logging.Logger
+
+@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
+class ContextReporter:
+
+    logger: logging.Logger
+    path: Path | None = ...
+    line: int | None = ...
+
+    def copy_with(
+        self,
+        *,
+        logger: logging.Logger | None = ...,
+        path: Path | None = ...,
+        line: int | None = ...,
+        line_offset: int | None = ...
+    ) -> Self: ...
+    def report(
+        self, short: str, *, log_level: int, details: str | None = ..., **log_kw: Any
+    ) -> None: ...
+    def debug(
+        self, short: str, *, details: str | None = ..., **log_kw: Any
+    ) -> None: ...
+    def info(self, short: str, *, details: str | None = ..., **log_kw: Any) -> None: ...
+    def warn(self, short: str, *, details: str | None = ..., **log_kw: Any) -> None: ...
+    def error(
+        self, short: str, *, details: str | None = ..., **log_kw: Any
+    ) -> None: ...
+    def __post_init__(self) -> None: ...
+    @staticmethod
+    def underline(line: str, *, char: str = ...) -> str: ...
+
+class ReportHandler(logging.StreamHandler):
+    group_errors: bool
+    error_count: int
+    warning_count: int
+
+    level_to_color: ClassVar[dict[int, str]]
+
+    def __init__(
+        self, stream: TextIO | None = ..., group_errors: bool = ...
+    ) -> None: ...
+    def format(self, record: logging.LogRecord) -> str: ...
+    def emit(self, record: logging.LogRecord) -> None: ...
+    def emit_grouped(self) -> None: ...
+
+def setup_logging(*, verbosity: int, group_errors: bool) -> ReportHandler: ...

@@ -1,23 +1,27 @@
 # Typing syntax in docstrings
 
-Docstub defines its own [grammar](../src/docstub/doctype.lark) to parse and transform type information in docstrings (doctypes) into valid Python type expressions.
+Docstub defines its own [grammar](../src/docstub/doctype.lark) to parse and transform type information in docstrings into valid Python type expressions.
 This grammar fully supports [Python's conventional typing syntax](https://typing.python.org/en/latest/index.html).
-So any type expression that is valid in Python, can be used in a docstrings as is.
+So any {term}`annotation expression` that is valid in Python, can be used in a docstrings as is.
 In addition, docstub extends this syntax with several "natural language" expressions that are commonly used in the scientific Python ecosystem.
 
-Docstrings should follow a form that is inspired by the NumPyDoc style:
-```
-Section name
+Docstrings should follow a form that is inspired by the [NumPyDoc style](https://numpydoc.readthedocs.io/en/latest/format.html):
+```none
+Section namew
 ------------
 name : doctype, optional_info
   Description.
 ```
 
 - `name` might be the name of a parameter, attribute or similar.
-- `doctype` contains the actual type information that will be transformed into a Python type (see also {term}`doctype`).
+- `doctype` contains the actual type information that will be transformed into an {term}`annotation expression`.
+  Here you can use the "natural language" expressions that are documented below.
 - `optional_info` is optional and captures anything after the first (top-level) comma.
   It is useful to provide additional information for readers.
-  Its presence and content doesn't currently affect the generated {term}`annotation expression`.
+  Its presence and content doesn't affect the generated {term}`annotation expression`.
+
+Combining multiple names that share a doctype and description is supported.
+  For example `a, b : int` is equivalent to defining both separately.
 
 
 ## Unions
@@ -118,12 +122,13 @@ See [issue 47](https://github.com/scientific-python/docstub/issues/47) for more 
 
 ## reStructuredText role
 
-Since docstrings are also used to generate documentation with Sphinx, you may want to use [restructuredText roles](https://docutils.sourceforge.io/docs/ref/rst/roles.html) in your type annotations.
-Docstub allows for this anywhere where a qualified name can be used.
+Since docstrings are also used to generate documentation with Sphinx, you may want to use [restructuredText roles](https://docutils.sourceforge.io/docs/ref/rst/roles.html).
+This is supported anywhere in where a {term}`type name` is used in a {term}`doctype`.
 
-| Docstring type       | Python type annotation |
-|----------------------|------------------------|
-| `` `X` ``            | `X`                    |
-| ``:ref:`X` ``        | `X`                    |
-| ``:class:`Y.X` ``    | `Y.X`                  |
-| ``:py:class:`Y.X` `` | `Y.X`                  |
+| Docstring type          | Python type annotation |
+|-------------------------|------------------------|
+| `` `X` ``               | `X`                    |
+| ``:ref:`X` ``           | `X`                    |
+| ``:class:`X`[Y, ...] `` | `X[Y, ...]`            |
+| ``:class:`Y.X` ``       | `Y.X`                  |
+| ``:py:class:`Y.X` ``    | `Y.X`                  |

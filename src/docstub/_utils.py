@@ -1,6 +1,6 @@
 import itertools
 import re
-from functools import lru_cache
+from functools import lru_cache, wraps
 from zlib import crc32
 
 
@@ -60,6 +60,33 @@ def escape_qualname(name):
     return qualname
 
 
+def _resolve_path_before_caching(func):
+    """Resolve relative paths passed to :func:`module_name_from_path`.
+
+    :func:`module_name_from_path` makes use of Python's :func:`lru_cache`
+    decorator. Caching results based on relative paths may return wrong results
+    if the current working directory changes.
+
+    Access the :func:`lru_cache` specific attributes with ``func.__wrapped__``.
+
+    Parameters
+    ----------
+    func : Callable
+
+    Returns
+    -------
+    wrapped : Callable
+    """
+
+    @wraps(func)
+    def wrapped(file_path):
+        file_path = file_path.resolve()
+        return func(file_path)
+
+    return wrapped
+
+
+@_resolve_path_before_caching
 @lru_cache(maxsize=100)
 def module_name_from_path(path):
     """Find the full name of a module within its package from its file path.
@@ -86,16 +113,25 @@ def module_name_from_path(path):
 
     name_parts = []
     if path.name != "__init__.py":
+        assert path.stem
         name_parts.insert(0, path.stem)
 
+    iter_limit = 10_000
     directory = path.parent
-    while True:
+    for _ in range(iter_limit):
         is_in_package = (directory / "__init__.py").is_file()
         if is_in_package:
+            assert directory.name
             name_parts.insert(0, directory.name)
             directory = directory.parent
         else:
             break
+    else:
+        msg = (
+            f"Reached iteration limit ({iter_limit}) "
+            f"while trying to find module name for {path!r}"
+        )
+        raise RuntimeError(msg)
 
     name = ".".join(name_parts)
     return name

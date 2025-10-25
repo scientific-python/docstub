@@ -3,6 +3,7 @@
 exclude: |
     (?x)^(
         examples/.*-stubs/.*|
+        src/docstub-stubs/.*|
     )$
 
 repos:
