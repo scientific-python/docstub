@@ -4,7 +4,7 @@ import dataclasses
 import logging
 from pathlib import Path
 from textwrap import indent
-from typing import Any, ClassVar, Self, TextIO
+from typing import Any, ClassVar, Literal, Self, TextIO
 
 import click
 
@@ -54,4 +54,6 @@ class ReportHandler(logging.StreamHandler):
     def emit(self, record: logging.LogRecord) -> None: ...
     def emit_grouped(self) -> None: ...
 
-def setup_logging(*, verbosity: int, group_errors: bool) -> ReportHandler: ...
+def setup_logging(
+    *, verbosity: Literal[-2, -1, 0, 1, 2, 3], group_errors: bool
+) -> ReportHandler: ...
