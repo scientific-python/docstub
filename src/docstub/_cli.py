@@ -156,24 +156,38 @@ def _collect_type_info(root_path, *, ignore=(), cache=False):
     return types, collected_type_prefixes
 
 
-def _format_unknown_names(unknown_names):
+def _format_unknown_names(names):
     """Format unknown type names as a list for printing.
 
     Parameters
     ----------
-    unknown_names : Iterable[str]
+    names : Iterable[str]
 
     Returns
     -------
     formatted : str
         A multiline string.
+
+    Examples
+    --------
+    >>> names = ["path-like", "values", "arrays", "values"] + ["string"] * 11
+    >>> print(_format_unknown_names(names))
+    11  string
+     2  values
+     1  arrays
+     1  path-like
     """
-    lines = [click.style(f"Unknown type names: {len(unknown_names)}", bold=True)]
-    counter = Counter(unknown_names)
-    sorted_item_counts = sorted(counter.items(), key=lambda x: x[1], reverse=True)
-    for item, count in sorted_item_counts:
-        lines.append(f"    {item} (x{count})")
-    return "\n".join(lines)
+    counter = Counter(names)
+    sorted_alphabetical = sorted(counter.items(), key=lambda x: x[0])
+    sorted_by_frequency = sorted(sorted_alphabetical, key=lambda x: x[1], reverse=True)
+
+    lines = []
+    pad_left = len(str(sorted_by_frequency[0][1]))
+    for item, count in sorted_by_frequency:
+        count_fmt = f"{count}".rjust(pad_left)
+        lines.append(f"{count_fmt}  {item}")
+    formatted = "\n".join(lines)
+    return formatted
 
 
 @contextmanager
@@ -426,7 +440,11 @@ def run(
     if syntax_error_count:
         logger.warning("Syntax errors: %i", syntax_error_count)
     if unknown_type_names:
-        logger.warning(_format_unknown_names(unknown_type_names))
+        logger.warning(
+            "Unknown type names: %i",
+            len(unknown_type_names),
+            extra={"details": _format_unknown_names(unknown_type_names)},
+        )
     if total_errors:
         logger.error("Total errors: %i", total_errors)
 
