@@ -190,7 +190,7 @@ class ReportHandler(logging.StreamHandler):
     """
 
     level_to_color = {  # noqa: RUF012
-        logging.DEBUG: "white",
+        logging.DEBUG: "bright_black",
         logging.INFO: "cyan",
         logging.WARNING: "yellow",
         logging.ERROR: "red",
@@ -238,7 +238,7 @@ class ReportHandler(logging.StreamHandler):
         if record.levelno >= logging.WARNING:
             msg = click.style(msg, bold=True)
         if record.levelno == logging.DEBUG:
-            msg = click.style(msg, fg="white")
+            msg = click.style(msg, fg=self.level_to_color[record.levelno])
 
         # Prefix with a colored log ID, fallback to first char of level name
         log_id = getattr(record, "log_id", record.levelname[0])
