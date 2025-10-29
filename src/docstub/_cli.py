@@ -81,19 +81,19 @@ def _calc_verbosity(*, verbose, quiet):
 
     Parameters
     ----------
-    verbose : {0, 1, 2}
+    verbose : {0, 1, 3}
     quiet : {0, 1, 2}
 
     Returns
     -------
-    verbosity : {-2, -1, 0, 1, 2}
+    verbosity : {-2, -1, 0, 1, 2, 3}
     """
     if verbose and quiet:
         raise click.UsageError(
             "Options '-v/--verbose' and '-q/--quiet' cannot be used together"
         )
     verbose -= quiet
-    verbose = min(2, max(-2, verbose))  # Limit to range [-2, 2]
+    verbose = min(3, max(-2, verbose))  # Limit to range [-2, 3]
     return verbose
 
 
