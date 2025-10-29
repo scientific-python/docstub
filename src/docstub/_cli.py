@@ -222,6 +222,34 @@ def cli():
     """Generate Python stub files from docstrings."""
 
 
+def _add_verbosity_options(func):
+    """Add verbose and quiet command line options.
+
+    Parameters
+    ----------
+    func : Callable
+
+    Returns
+    -------
+    decorated : Callable
+    """
+    func = click.option(
+        "-q",
+        "--quiet",
+        count=True,
+        help="Print less details. Use once to hide warnings. "
+        "Use -qq to completely silence output.",
+    )(func)
+    func = click.option(
+        "-v",
+        "--verbose",
+        count=True,
+        help="Print more details. Use once to show information messages. "
+        "Use -vv to print debug messages.",
+    )(func)
+    return func
+
+
 # Preserve click.command below to keep type checker happy
 # docstub: off
 @cli.command()
@@ -283,20 +311,7 @@ def cli():
     is_flag=True,
     help="Ignore pre-existing cache and don't create a new one.",
 )
-@click.option(
-    "-v",
-    "--verbose",
-    count=True,
-    help="Print more details. Use once to show information messages. "
-    "Use '-vv' to print debug messages.",
-)
-@click.option(
-    "-q",
-    "--quiet",
-    count=True,
-    help="Print less details. Use once to hide warnings. "
-    "Use '-qq' to completely silence output.",
-)
+@_add_verbosity_options
 @click.help_option("-h", "--help")
 @log_execution_time()
 def run(
@@ -458,20 +473,7 @@ def run(
 # docstub: off
 @cli.command()
 # docstub: on
-@click.option(
-    "-v",
-    "--verbose",
-    count=True,
-    help="Print more details. Use once to show information messages. "
-    "Use '-vv' to print debug messages.",
-)
-@click.option(
-    "-q",
-    "--quiet",
-    count=True,
-    help="Print less details. Use once to hide warnings. "
-    "Use '-qq' to completely silence output.",
-)
+@_add_verbosity_options
 @click.help_option("-h", "--help")
 def clean(verbose, quiet):
     """Clean the cache.
