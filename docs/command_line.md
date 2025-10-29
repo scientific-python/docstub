@@ -60,9 +60,9 @@ Options:
                          Will add to '--allow-errors'.
   --no-cache             Ignore pre-existing cache and don't create a new one.
   -v, --verbose          Print more details. Use once to show information
-                         messages. Use '-vv' to print debug messages.
+                         messages. Use -vv to print debug messages.
   -q, --quiet            Print less details. Use once to hide warnings. Use
-                         '-qq' to completely silence output.
+                         -qq to completely silence output.
   -h, --help             Show this message and exit.
 ```
 
@@ -84,8 +84,8 @@ Usage: docstub clean [OPTIONS]
 
 Options:
   -v, --verbose  Print more details. Use once to show information messages.
-                 Use '-vv' to print debug messages.
-  -q, --quiet    Print less details. Use once to hide warnings. Use '-qq' to
+                 Use -vv to print debug messages.
+  -q, --quiet    Print less details. Use once to hide warnings. Use -qq to
                  completely silence output.
   -h, --help     Show this message and exit.
 ```

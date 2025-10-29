@@ -81,19 +81,19 @@ def _calc_verbosity(*, verbose, quiet):
 
     Parameters
     ----------
-    verbose : {0, 1, 2}
+    verbose : {0, 1, 3}
     quiet : {0, 1, 2}
 
     Returns
     -------
-    verbosity : {-2, -1, 0, 1, 2}
+    verbosity : {-2, -1, 0, 1, 2, 3}
     """
     if verbose and quiet:
         raise click.UsageError(
             "Options '-v/--verbose' and '-q/--quiet' cannot be used together"
         )
     verbose -= quiet
-    verbose = min(2, max(-2, verbose))  # Limit to range [-2, 2]
+    verbose = min(3, max(-2, verbose))  # Limit to range [-2, 3]
     return verbose
 
 
@@ -156,24 +156,38 @@ def _collect_type_info(root_path, *, ignore=(), cache=False):
     return types, collected_type_prefixes
 
 
-def _format_unknown_names(unknown_names):
+def _format_unknown_names(names):
     """Format unknown type names as a list for printing.
 
     Parameters
     ----------
-    unknown_names : Iterable[str]
+    names : Iterable[str]
 
     Returns
     -------
     formatted : str
         A multiline string.
+
+    Examples
+    --------
+    >>> names = ["path-like", "values", "arrays", "values"] + ["string"] * 11
+    >>> print(_format_unknown_names(names))
+    11  string
+     2  values
+     1  arrays
+     1  path-like
     """
-    lines = [click.style(f"Unknown type names: {len(unknown_names)}", bold=True)]
-    counter = Counter(unknown_names)
-    sorted_item_counts = sorted(counter.items(), key=lambda x: x[1], reverse=True)
-    for item, count in sorted_item_counts:
-        lines.append(f"    {item} (x{count})")
-    return "\n".join(lines)
+    counter = Counter(names)
+    sorted_alphabetical = sorted(counter.items(), key=lambda x: x[0])
+    sorted_by_frequency = sorted(sorted_alphabetical, key=lambda x: x[1], reverse=True)
+
+    lines = []
+    pad_left = len(str(sorted_by_frequency[0][1]))
+    for item, count in sorted_by_frequency:
+        count_fmt = f"{count}".rjust(pad_left)
+        lines.append(f"{count_fmt}  {item}")
+    formatted = "\n".join(lines)
+    return formatted
 
 
 @contextmanager
@@ -206,6 +220,34 @@ def log_execution_time():
 @click.help_option("-h", "--help")
 def cli():
     """Generate Python stub files from docstrings."""
+
+
+def _add_verbosity_options(func):
+    """Add verbose and quiet command line options.
+
+    Parameters
+    ----------
+    func : Callable
+
+    Returns
+    -------
+    decorated : Callable
+    """
+    func = click.option(
+        "-q",
+        "--quiet",
+        count=True,
+        help="Print less details. Use once to hide warnings. "
+        "Use -qq to completely silence output.",
+    )(func)
+    func = click.option(
+        "-v",
+        "--verbose",
+        count=True,
+        help="Print more details. Use once to show information messages. "
+        "Use -vv to print debug messages.",
+    )(func)
+    return func
 
 
 # Preserve click.command below to keep type checker happy
@@ -269,20 +311,7 @@ def cli():
     is_flag=True,
     help="Ignore pre-existing cache and don't create a new one.",
 )
-@click.option(
-    "-v",
-    "--verbose",
-    count=True,
-    help="Print more details. Use once to show information messages. "
-    "Use '-vv' to print debug messages.",
-)
-@click.option(
-    "-q",
-    "--quiet",
-    count=True,
-    help="Print less details. Use once to hide warnings. "
-    "Use '-qq' to completely silence output.",
-)
+@_add_verbosity_options
 @click.help_option("-h", "--help")
 @log_execution_time()
 def run(
@@ -426,7 +455,11 @@ def run(
     if syntax_error_count:
         logger.warning("Syntax errors: %i", syntax_error_count)
     if unknown_type_names:
-        logger.warning(_format_unknown_names(unknown_type_names))
+        logger.warning(
+            "Unknown type names: %i",
+            len(unknown_type_names),
+            extra={"details": _format_unknown_names(unknown_type_names)},
+        )
     if total_errors:
         logger.error("Total errors: %i", total_errors)
 
@@ -440,20 +473,7 @@ def run(
 # docstub: off
 @cli.command()
 # docstub: on
-@click.option(
-    "-v",
-    "--verbose",
-    count=True,
-    help="Print more details. Use once to show information messages. "
-    "Use '-vv' to print debug messages.",
-)
-@click.option(
-    "-q",
-    "--quiet",
-    count=True,
-    help="Print less details. Use once to hide warnings. "
-    "Use '-qq' to completely silence output.",
-)
+@_add_verbosity_options
 @click.help_option("-h", "--help")
 def clean(verbose, quiet):
     """Clean the cache.

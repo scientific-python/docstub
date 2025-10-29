@@ -190,7 +190,7 @@ class ReportHandler(logging.StreamHandler):
     """
 
     level_to_color = {  # noqa: RUF012
-        logging.DEBUG: "white",
+        logging.DEBUG: "bright_black",
         logging.INFO: "cyan",
         logging.WARNING: "yellow",
         logging.ERROR: "red",
@@ -238,7 +238,7 @@ class ReportHandler(logging.StreamHandler):
         if record.levelno >= logging.WARNING:
             msg = click.style(msg, bold=True)
         if record.levelno == logging.DEBUG:
-            msg = click.style(msg, fg="white")
+            msg = click.style(msg, fg=self.level_to_color[record.levelno])
 
         # Prefix with a colored log ID, fallback to first char of level name
         log_id = getattr(record, "log_id", record.levelname[0])
@@ -327,11 +327,11 @@ class ReportHandler(logging.StreamHandler):
 
 
 def setup_logging(*, verbosity, group_errors):
-    """
+    """Setup logging to stderr for docstub's main process.
 
     Parameters
     ----------
-    verbosity : int
+    verbosity : {-2, -1, 0, 1, 2, 3}
     group_errors : bool
 
     Returns
@@ -344,11 +344,21 @@ def setup_logging(*, verbosity, group_errors):
         0: logging.WARNING,
         1: logging.INFO,
         2: logging.DEBUG,
+        3: logging.DEBUG,
     }
 
     format_ = "%(message)s"
-    if verbosity >= 2:
-        format_ += " [loc=%(pathname)s:%(lineno)d, func=%(funcName)s, time=%(asctime)s]"
+    if verbosity >= 3:
+        debug_info = (
+            "logger = '%(name)s'",
+            "loc    = '%(pathname)s:%(lineno)d'",
+            "func   = '%(funcName)s'",
+            "proc   = '%(processName)s'",
+            "thread = '%(threadName)s'",
+            "time   = '%(asctime)s'",
+        )
+        debug_info = indent(",\n".join(debug_info), prefix="    ")
+        format_ = f"{format_}\n  [\n{debug_info}\n  ]"
 
     formatter = logging.Formatter(format_)
     handler = ReportHandler(group_errors=group_errors)
