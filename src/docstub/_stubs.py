@@ -572,8 +572,11 @@ class Py2StubTransformer(cst.CSTTransformer):
                         details=details,
                     )
 
-        # Potentially use "Incomplete" except for first param in (class)methods
-        elif not is_self_or_cls and updated_node.annotation is None:
+        has_missing_annotation = (
+            "annotation" not in node_changes and updated_node.annotation is None
+        )
+        # Fallback to "Incomplete" except for first param in (class)methods
+        if has_missing_annotation and not is_self_or_cls:
             node_changes["annotation"] = self._Annotation_Incomplete
             import_ = PyImport.typeshed_Incomplete()
             self._required_imports.add(import_)
