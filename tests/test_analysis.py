@@ -256,6 +256,8 @@ class Test_TypeMatcher:
             ("collections.abc.Iterable", "collections.abc"),
             ("Literal", "typing"),
             ("typing.Literal", "typing"),
+            ("NoneType", "types"),
+            ("SimpleNamespace", "types"),
         ],
     )
     def test_common_known_types(self, search_name, import_path):
