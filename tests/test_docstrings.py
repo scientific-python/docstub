@@ -4,11 +4,11 @@ from textwrap import dedent
 import lark
 import pytest
 
+from docstub._analysis import PyImport
 from docstub._docstrings import (
     Annotation,
     DocstringAnnotations,
     DoctypeTransformer,
-    PyImport,
 )
 
 
