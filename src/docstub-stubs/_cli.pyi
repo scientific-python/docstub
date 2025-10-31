@@ -14,6 +14,7 @@ import click
 
 from ._analysis import PyImport, TypeCollector, TypeMatcher, common_known_types
 from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
+from ._cli_help import HelpFormatter
 from ._config import Config
 from ._path_utils import (
     STUB_HEADER_COMMENT,
@@ -37,6 +38,9 @@ def _collect_type_info(
 ) -> tuple[dict[str, PyImport], dict[str, PyImport]]: ...
 def _format_unknown_names(names: Iterable[str]) -> str: ...
 def log_execution_time() -> None: ...
+
+click.Context.formatter_class: click.formatting.HelpFormatter
+
 @click.group()
 def cli() -> None: ...
 def _add_verbosity_options(func: Callable) -> Callable: ...
