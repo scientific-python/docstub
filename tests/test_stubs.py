@@ -523,6 +523,58 @@ class Test_Py2StubTransformer:
         assert caplog.messages == ["Missing annotation for parameter 'b'"]
         assert caplog.records[0].levelno == logging.WARNING
 
+    def test_missing_attr(self, caplog):
+        source = dedent(
+            '''
+            class Foo:
+                """
+                Attributes
+                ----------
+                a : ClassVar[int]
+                """
+                a = 3
+                b = True
+            '''
+        )
+        expected = dedent(
+            """
+            from _typeshed import Incomplete
+            from typing import ClassVar
+            class Foo:
+                a: ClassVar[int]
+                b: Incomplete
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+        assert caplog.messages == ["Missing annotation for assignment 'b'"]
+        assert caplog.records[0].levelno == logging.WARNING
+
+    def test_missing_attr_inline(self, caplog):
+        source = dedent(
+            """
+            from typing import ClassVar
+            class Foo:
+                a: ClassVar[int] = 3
+                b = True
+            """
+        )
+        expected = dedent(
+            """
+            from _typeshed import Incomplete
+            from typing import ClassVar
+            class Foo:
+                a: ClassVar[int]
+                b: Incomplete
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+        assert caplog.messages == ["Missing annotation for assignment 'b'"]
+        assert caplog.records[0].levelno == logging.WARNING
+
     def test_return_keep_inline_annotation(self):
         source = dedent(
             """
