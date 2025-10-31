@@ -78,7 +78,7 @@ There are several interesting things to note here:
   The `optional` or `default = ...` part don't influence the annotation.
 
 - Referencing the `float` and `Iterable` worked out of the box.
-  All [built-in types](https://docs.python.org/3/library/stdtypes.html#built-in-types) as well as types from the standard library's `typing` and `collections.abc` module can be used like this.
+  All [built-in types](https://docs.python.org/3/library/stdtypes.html#built-in-types) as well as types from the standard library's `typing`, `types` and `collections.abc` module can be used like this.
   Necessary imports will be added automatically to the stub file.
 
 

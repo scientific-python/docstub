@@ -274,6 +274,7 @@ def common_known_types():
     types |= _runtime_types_in_module("typing")
     # Overrides containers from typing
     types |= _runtime_types_in_module("collections.abc")
+    types |= _runtime_types_in_module("types")
     return types
 
 
