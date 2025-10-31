@@ -1,10 +1,15 @@
+import logging
 from textwrap import dedent
 
 import lark
 import pytest
 
 from docstub._analysis import PyImport
-from docstub._docstrings import Annotation, DocstringAnnotations, DoctypeTransformer
+from docstub._docstrings import (
+    Annotation,
+    DocstringAnnotations,
+    DoctypeTransformer,
+)
 
 
 class Test_Annotation:
@@ -179,6 +184,17 @@ class Test_DoctypeTransformer:
         transformer = DoctypeTransformer()
         annotation, _ = transformer.doctype_to_annotation(doctype)
         assert annotation.value == expected
+
+    def test_single_natlang_literal_warning(self, caplog):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation("{True}")
+        assert annotation.value == "Literal[True]"
+        assert caplog.messages == ["Natural language literal with one item: `{True}`"]
+        assert caplog.records[0].levelno == logging.WARNING
+        assert (
+            caplog.records[0].details
+            == "Consider using `Literal[True]` to improve readability"
+        )
 
     @pytest.mark.parametrize(
         ("doctype", "expected"),

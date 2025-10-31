@@ -266,6 +266,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         self.matcher = matcher
 
+        self._reporter = None
         self._collected_imports = None
         self._unknown_qualnames = None
 
@@ -276,13 +277,14 @@ class DoctypeTransformer(lark.visitors.Transformer):
             "transformed": 0,
         }
 
-    def doctype_to_annotation(self, doctype):
+    def doctype_to_annotation(self, doctype, *, reporter=None):
         """Turn a type description in a docstring into a type annotation.
 
         Parameters
         ----------
         doctype : str
             The doctype to parse.
+        reporter : ~.ContextReporter
 
         Returns
         -------
@@ -293,6 +295,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
             end index relative to the given `doctype`.
         """
         try:
+            self._reporter = reporter or ContextReporter(logger=logger)
             self._collected_imports = set()
             self._unknown_qualnames = []
             tree = _lark.parse(doctype)
@@ -310,6 +313,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
             self.stats["syntax_errors"] += 1
             raise
         finally:
+            self._reporter = None
             self._collected_imports = None
             self._unknown_qualnames = None
 
@@ -394,11 +398,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = f"Literal[{out}]"
 
         if len(tree.children) == 1:
-            logger.warning(
-                "Natural language literal with one item `%s`, "
-                "consider using `%s` to improve readability",
+            self._reporter.warn(
+                "Natural language literal with one item: `{%s}`",
                 tree.children[0],
-                out,
+                details=f"Consider using `{out}` to improve readability",
             )
 
         if self.matcher is not None:
@@ -463,7 +466,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : lark.visitors._DiscardType
         """
-        logger.debug("Dropping shape information %r", tree)
+        # self._reporter.debug("Dropping shape information %r", tree)
         return lark.Discard
 
     def optional_info(self, tree):
@@ -476,7 +479,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : lark.visitors._DiscardType
         """
-        # logger.debug("Dropping optional info %r", tree)
+        # self._reporter.debug("Dropping optional info %r", tree)
         return lark.Discard
 
     def __default__(self, data, children, meta):
@@ -629,7 +632,7 @@ class DocstringAnnotations:
 
         try:
             annotation, unknown_qualnames = self.transformer.doctype_to_annotation(
-                doctype
+                doctype, reporter=reporter
             )
             reporter.debug(
                 "Transformed doctype", details=("   %s\n-> %s", doctype, annotation)

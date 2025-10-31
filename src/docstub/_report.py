@@ -79,13 +79,15 @@ class ContextReporter:
         new = type(self)(**kwargs)
         return new
 
-    def report(self, short, *, log_level, details=None, **log_kw):
+    def report(self, short, *args, log_level, details=None, **log_kw):
         """Log a report in context of the saved location.
 
         Parameters
         ----------
         short : str
             A short summarizing report that shouldn't wrap over multiple lines.
+        *args : Any
+            Optional formatting arguments for `short`.
         log_level : int
             The logging level.
         details : str, optional
@@ -100,59 +102,75 @@ class ContextReporter:
                 location = f"{location}:{self.line}"
             extra["src_location"] = location
 
-        self.logger.log(log_level, msg=short, extra=extra, **log_kw)
+        self.logger.log(log_level, short, *args, extra=extra, **log_kw)
 
-    def debug(self, short, *, details=None, **log_kw):
+    def debug(self, short, *args, details=None, **log_kw):
         """Log information with context of the relevant source.
 
         Parameters
         ----------
         short : str
             A short summarizing report that shouldn't wrap over multiple lines.
+        *args : Any
+            Optional formatting arguments for `short`.
         details : str, optional
             An optional multiline report with more details.
         **log_kw : Any
         """
-        return self.report(short, log_level=logging.DEBUG, details=details, **log_kw)
+        return self.report(
+            short, *args, log_level=logging.DEBUG, details=details, **log_kw
+        )
 
-    def info(self, short, *, details=None, **log_kw):
+    def info(self, short, *args, details=None, **log_kw):
         """Log information with context of the relevant source.
 
         Parameters
         ----------
         short : str
             A short summarizing report that shouldn't wrap over multiple lines.
+        *args : Any
+            Optional formatting arguments for `short`.
         details : str, optional
             An optional multiline report with more details.
         **log_kw : Any
         """
-        return self.report(short, log_level=logging.INFO, details=details, **log_kw)
+        return self.report(
+            short, *args, log_level=logging.INFO, details=details, **log_kw
+        )
 
-    def warn(self, short, *, details=None, **log_kw):
+    def warn(self, short, *args, details=None, **log_kw):
         """Log a warning with context of the relevant source.
 
         Parameters
         ----------
         short : str
             A short summarizing report that shouldn't wrap over multiple lines.
+        *args : Any
+            Optional formatting arguments for `short`.
         details : str, optional
             An optional multiline report with more details.
         **log_kw : Any
         """
-        return self.report(short, log_level=logging.WARNING, details=details, **log_kw)
+        return self.report(
+            short, *args, log_level=logging.WARNING, details=details, **log_kw
+        )
 
-    def error(self, short, *, details=None, **log_kw):
+    def error(self, short, *args, details=None, **log_kw):
         """Log an error with context of the relevant source.
 
         Parameters
         ----------
         short : str
             A short summarizing report that shouldn't wrap over multiple lines.
+        *args : Any
+            Optional formatting arguments for `short`.
         details : str, optional
             An optional multiline report with more details.
         **log_kw : Any
         """
-        return self.report(short, log_level=logging.ERROR, details=details, **log_kw)
+        return self.report(
+            short, *args, log_level=logging.ERROR, details=details, **log_kw
+        )
 
     def __post_init__(self):
         if self.path is not None and not isinstance(self.path, Path):
