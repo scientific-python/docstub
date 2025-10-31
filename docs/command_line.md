@@ -3,6 +3,9 @@
 The reference for docstub's command line interface.
 It uses [Click](https://click.palletsprojects.com/en/stable/), so [shell completion](https://click.palletsprojects.com/en/stable/shell-completion/) can be enabled.
 
+Colored command line output can be disabled by [setting the environment variable `NO_COLOR=1`](https://no-color.org).
+
+
 ## `docstub`
 
 <!--- The following block is checked by the test suite --->

@@ -8,6 +8,8 @@ from typing import Any, ClassVar, Literal, Self, TextIO
 
 import click
 
+from ._cli_help import should_strip_ansi
+
 logger: logging.Logger
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
