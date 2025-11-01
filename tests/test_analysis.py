@@ -164,12 +164,12 @@ class Test_TypeCollector:
 
 
 class Test_TypeMatcher:
-    type_prefixes = {  # noqa: RUF012
+    type_prefixes = {
         "np": PyImport(import_="numpy", as_="np"),
         "foo.bar.Baz": PyImport(from_="foo.bar", import_="Baz"),
     }
 
-    types = {  # noqa: RUF012
+    types = {
         "dict": PyImport(implicit="dict"),
         "foo.bar": PyImport(from_="foo", import_="bar"),
         "foo.bar.Baz": PyImport(from_="foo.bar", import_="Baz"),

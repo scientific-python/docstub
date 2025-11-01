@@ -15,6 +15,7 @@ from ._analysis import (
     common_known_types,
 )
 from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
+from ._cli_help import HelpFormatter
 from ._config import Config
 from ._path_utils import (
     STUB_HEADER_COMMENT,
@@ -213,7 +214,11 @@ def log_execution_time():
         logger.info("Finished in %s", formated_duration)
 
 
+# Overwrite click's default formatter class (stubtest balks at this)
 # docstub: off
+click.Context.formatter_class = HelpFormatter
+
+
 @click.group()
 # docstub: on
 @click.version_option(__version__)
@@ -262,7 +267,7 @@ def _add_verbosity_options(func):
     metavar="PATH",
     help="Set output directory explicitly. "
     "Stubs will be directly written into that directory while preserving the directory "
-    "structure under `PACKAGE_PATH`. "
+    "structure under PACKAGE_PATH. "
     "Otherwise, stubs are generated inplace.",
 )
 @click.option(
@@ -283,6 +288,7 @@ def _add_verbosity_options(func):
     help="Ignore files matching this glob-style pattern. Can be used multiple times.",
 )
 @click.option(
+    "-g",
     "--group-errors",
     is_flag=True,
     help="Group identical errors together and list where they occurred. "
@@ -296,7 +302,7 @@ def _add_verbosity_options(func):
     show_default=True,
     metavar="INT",
     help="Allow this many or fewer errors. "
-    "If docstub reports more, exit with error code '1'. "
+    "If docstub reports more, exit with error code 1. "
     "This is useful to adopt docstub gradually. ",
 )
 @click.option(
@@ -304,7 +310,7 @@ def _add_verbosity_options(func):
     "--fail-on-warning",
     is_flag=True,
     help="Return non-zero exit code when a warning is raised. "
-    "Will add to '--allow-errors'.",
+    "Will add to --allow-errors.",
 )
 @click.option(
     "--no-cache",
@@ -329,7 +335,7 @@ def run(
 ):
     """Generate Python stub files.
 
-    Given a `PACKAGE_PATH` to a Python package, generate stub files for it.
+    Given a PACKAGE_PATH to a Python package, generate stub files for it.
     Type descriptions in docstrings will be used to fill in missing inline type
     annotations or to override them.
     \f
@@ -456,7 +462,8 @@ def run(
         logger.warning("Syntax errors: %i", syntax_error_count)
     if unknown_type_names:
         logger.warning(
-            "Unknown type names: %i",
+            "Unknown type names: %i (locations: %i)",
+            len(set(unknown_type_names)),
             len(unknown_type_names),
             extra={"details": _format_unknown_names(unknown_type_names)},
         )

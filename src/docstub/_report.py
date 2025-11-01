@@ -7,6 +7,8 @@ from textwrap import indent
 
 import click
 
+from ._cli_help import should_strip_ansi
+
 logger: logging.Logger = logging.getLogger(__name__)
 
 
@@ -207,7 +209,7 @@ class ReportHandler(logging.StreamHandler):
     level_to_color : ClassVar[dict[int, str]]
     """
 
-    level_to_color = {  # noqa: RUF012
+    level_to_color = {
         logging.DEBUG: "bright_black",
         logging.INFO: "cyan",
         logging.WARNING: "yellow",
@@ -230,14 +232,7 @@ class ReportHandler(logging.StreamHandler):
         self.error_count = 0
         self.warning_count = 0
 
-        # Be defensive about using click's non-public `should_strip_ansi`
-        try:
-            from click._compat import should_strip_ansi  # noqa: PLC0415
-
-            self.strip_ansi = should_strip_ansi(self.stream)
-        except Exception:
-            self.strip_ansi = True
-            logger.exception("Unexpected error while using click's `should_strip_ansi`")
+        self.strip_ansi = should_strip_ansi(self.stream)
 
     def format(self, record):
         """Format a log record.
