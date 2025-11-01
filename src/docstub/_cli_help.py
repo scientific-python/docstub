@@ -26,7 +26,7 @@ except Exception:
 
         Returns
         -------
-        should_strip : Literal[True]
+        should_strip : bool
         """
         return True
 
@@ -151,13 +151,17 @@ class HelpFormatter(click.formatting.HelpFormatter):
         if not self.strip_ansi:
             self._highlight_last(n=1, rules=["heading"])
 
-    def write_usage(self, prog, args="", prefix="Usage: "):
+    def write_usage(self, prog, args="", prefix=None):
         """
         Parameters
         ----------
         prog : str
-        args, prefix : str, optional
+        args : str, optional
+        prefix : str, optional
         """
+        if prefix is None:
+            prefix = "Usage: "
+
         start = len(self.buffer)
         super().write_usage(prog, args, prefix=prefix)
 

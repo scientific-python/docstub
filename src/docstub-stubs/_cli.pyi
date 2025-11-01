@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 import click
+from _typeshed import Incomplete
 
 from ._analysis import PyImport, TypeCollector, TypeMatcher, common_known_types
 from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
@@ -39,7 +40,7 @@ def _collect_type_info(
 def _format_unknown_names(names: Iterable[str]) -> str: ...
 def log_execution_time() -> None: ...
 
-click.Context.formatter_class: click.formatting.HelpFormatter
+click.Context.formatter_class = HelpFormatter
 
 @click.group()
 def cli() -> None: ...

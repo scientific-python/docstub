@@ -214,11 +214,11 @@ def log_execution_time():
         logger.info("Finished in %s", formated_duration)
 
 
-# Overwrite click's default formatter class
-click.Context.formatter_class: click.formatting.HelpFormatter = HelpFormatter
-
-
+# Overwrite click's default formatter class (stubtest balks at this)
 # docstub: off
+click.Context.formatter_class = HelpFormatter
+
+
 @click.group()
 # docstub: on
 @click.version_option(__version__)
@@ -462,7 +462,8 @@ def run(
         logger.warning("Syntax errors: %i", syntax_error_count)
     if unknown_type_names:
         logger.warning(
-            "Unknown type names: %i",
+            "Unknown type names: %i (locations: %i)",
+            len(set(unknown_type_names)),
             len(unknown_type_names),
             extra={"details": _format_unknown_names(unknown_type_names)},
         )
