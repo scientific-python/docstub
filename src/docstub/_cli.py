@@ -355,11 +355,12 @@ def _transform_to_stub(source_path, stub_path, stub_transformer):
     "Will add to --allow-errors.",
 )
 @click.option(
-    "--jobs",
+    "--workers",
+    "desired_worker_count",
     type=click.IntRange(min=1),
     metavar="INT",
-    help="Set the number of jobs to use in parallel. By default docstub will "
-    "attempt to choose an appropriate number.",
+    help="Set the number of workers to process files in parallel. "
+    "By default docstub will attempt to choose an appropriate number.",
 )
 @click.option(
     "--no-cache",
@@ -378,7 +379,7 @@ def run(
     group_errors,
     allow_errors,
     fail_on_warning,
-    jobs,
+    desired_worker_count,
     no_cache,
     verbose,
     quiet,
@@ -399,7 +400,7 @@ def run(
     group_errors : bool
     allow_errors : int
     fail_on_warning : bool
-    jobs : int | None
+    desired_worker_count : int | None
     no_cache : bool
     verbose : int
     quiet : int
@@ -474,7 +475,7 @@ def run(
     tasks = [(*task, stub_transformer) for task in tasks]
 
     worker_count, chunk_size = guess_concurrency_params(
-        task_count=len(tasks), worker_count=jobs
+        task_count=len(tasks), worker_count=desired_worker_count
     )
     logger.info("Using %i parallel jobs to write %i stubs", worker_count, len(tasks))
     logger.debug("Using chunk size of %i", chunk_size)
