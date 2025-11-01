@@ -174,6 +174,23 @@ class ContextReporter:
             short, *args, log_level=logging.ERROR, details=details, **log_kw
         )
 
+    def critical(self, short, *args, details=None, **log_kw):
+        """Log a critical error with context of the relevant source.
+
+        Parameters
+        ----------
+        short : str
+            A short summarizing report that shouldn't wrap over multiple lines.
+        *args : Any
+            Optional formatting arguments for `short`.
+        details : str, optional
+            An optional multiline report with more details.
+        **log_kw : Any
+        """
+        return self.report(
+            short, *args, log_level=logging.CRITICAL, details=details, **log_kw
+        )
+
     def __post_init__(self):
         if self.path is not None and not isinstance(self.path, Path):
             msg = f"expected `path` to be of type `Path`, got {type(self.path)!r}"
