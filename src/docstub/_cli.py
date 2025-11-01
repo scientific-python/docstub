@@ -16,6 +16,7 @@ from ._analysis import (
 )
 from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
 from ._cli_help import HelpFormatter
+from ._concurrency import LoggingProcessExecutor, guess_concurrency_params
 from ._config import Config
 from ._path_utils import (
     STUB_HEADER_COMMENT,
@@ -255,6 +256,46 @@ def _add_verbosity_options(func):
     return func
 
 
+def _transform_to_stub(source_path, stub_path, stub_transformer):
+    """Transform a Python file into a stub file.
+
+    Parameters
+    ----------
+    source_path : Path
+    stub_path : Path
+    stub_transformer : Py2StubTransformer
+
+    Returns
+    -------
+    stats : dict of {str: int or list[str]}
+    """
+    if source_path.suffix.lower() == ".pyi":
+        logger.debug("Using existing stub file %s", source_path)
+        with source_path.open() as fo:
+            stub_content = fo.read()
+    else:
+        with source_path.open() as fo:
+            py_content = fo.read()
+        logger.debug("Transforming %s", source_path)
+        try:
+            stub_content = stub_transformer.python_to_stub(
+                py_content, module_path=source_path
+            )
+            stub_content = f"{STUB_HEADER_COMMENT}\n\n{stub_content}"
+            stub_content = try_format_stub(stub_content)
+        except Exception:
+            logger.exception("Failed creating stub for %s", source_path)
+            return None
+
+    stub_path.parent.mkdir(parents=True, exist_ok=True)
+    with stub_path.open("w") as fo:
+        logger.info("Wrote %s", stub_path)
+        fo.write(stub_content)
+
+    stats = stub_transformer.collect_stats()
+    return stats
+
+
 # Preserve click.command below to keep type checker happy
 # docstub: off
 @cli.command()
@@ -313,6 +354,13 @@ def _add_verbosity_options(func):
     "Will add to --allow-errors.",
 )
 @click.option(
+    "--jobs",
+    type=click.IntRange(min=1),
+    metavar="INT",
+    help="Set the number of jobs to use in parallel. By default docstub will "
+    "attempt to choose an appropriate number.",
+)
+@click.option(
     "--no-cache",
     is_flag=True,
     help="Ignore pre-existing cache and don't create a new one.",
@@ -329,6 +377,7 @@ def run(
     group_errors,
     allow_errors,
     fail_on_warning,
+    jobs,
     no_cache,
     verbose,
     quiet,
@@ -349,6 +398,7 @@ def run(
     group_errors : bool
     allow_errors : int
     fail_on_warning : bool
+    jobs : int | None
     no_cache : bool
     verbose : int
     quiet : int
@@ -357,7 +407,9 @@ def run(
     # Setup -------------------------------------------------------------------
 
     verbosity = _calc_verbosity(verbose=verbose, quiet=quiet)
-    error_handler = setup_logging(verbosity=verbosity, group_errors=group_errors)
+    output_handler, error_counter = setup_logging(
+        verbosity=verbosity, group_errors=group_errors
+    )
 
     root_path = Path(root_path)
     if root_path.is_file():
@@ -409,30 +461,32 @@ def run(
 
     # Stub generation ---------------------------------------------------------
 
-    for source_path, stub_path in walk_source_and_targets(
-        root_path, out_dir, ignore=config.ignore_files
-    ):
-        if source_path.suffix.lower() == ".pyi":
-            logger.debug("Using existing stub file %s", source_path)
-            with source_path.open() as fo:
-                stub_content = fo.read()
-        else:
-            with source_path.open() as fo:
-                py_content = fo.read()
-            logger.debug("Transforming %s", source_path)
-            try:
-                stub_content = stub_transformer.python_to_stub(
-                    py_content, module_path=source_path
-                )
-                stub_content = f"{STUB_HEADER_COMMENT}\n\n{stub_content}"
-                stub_content = try_format_stub(stub_content)
-            except Exception:
-                logger.exception("Failed creating stub for %s", source_path)
-                continue
-        stub_path.parent.mkdir(parents=True, exist_ok=True)
-        with stub_path.open("w") as fo:
-            logger.info("Wrote %s", stub_path)
-            fo.write(stub_content)
+    tasks = walk_source_and_targets(root_path, out_dir, ignore=config.ignore_files)
+
+    # We must pass the `stub_transformer` to each worker, but we want to copy
+    # only once per worker. Testing suggests, that using a large enough
+    # `chunksize` of `>= len(tasks) / jobs` for `ProcessPoolExecutor.map`,
+    # ensures that.
+    # Using an `initializer` that assigns the transformer as a global variable
+    # per worker seems like the more robust solution, but naive timing suggests
+    # it's actually slower (> 1s on skimage).
+    tasks = [(*task, stub_transformer) for task in tasks]
+
+    worker_count, chunk_size = guess_concurrency_params(
+        task_count=len(tasks), worker_count=jobs
+    )
+    logger.info("Using %i parallel jobs to write %i stubs", worker_count, len(tasks))
+    logger.debug("Using chunk size of %i", chunk_size)
+    with LoggingProcessExecutor(
+        max_workers=worker_count,
+        logging_handlers=(output_handler, error_counter),
+    ) as executor:
+        # Doesn't block
+        stats = executor.map(
+            _transform_to_stub, *zip(*tasks, strict=False), chunksize=chunk_size
+        )
+        # Iterate results (which blocks) until all tasks have been processed
+        stats = update_with_add_values(*stats)
 
     py_typed_out = out_dir / "py.typed"
     if not py_typed_out.exists():
@@ -442,9 +496,9 @@ def run(
     # Reporting --------------------------------------------------------------
 
     if group_errors:
-        error_handler.emit_grouped()
-        assert error_handler.group_errors is True
-        error_handler.group_errors = False
+        output_handler.emit_grouped()
+        assert output_handler.group_errors is True
+        output_handler.group_errors = False
 
     # Report basic statistics
     successful_queries = matcher.successful_queries

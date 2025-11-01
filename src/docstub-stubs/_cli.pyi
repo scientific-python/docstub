@@ -16,6 +16,7 @@ from _typeshed import Incomplete
 from ._analysis import PyImport, TypeCollector, TypeMatcher, common_known_types
 from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
 from ._cli_help import HelpFormatter
+from ._concurrency import LoggingProcessExecutor, guess_concurrency_params
 from ._config import Config
 from ._path_utils import (
     STUB_HEADER_COMMENT,
@@ -45,6 +46,9 @@ click.Context.formatter_class = HelpFormatter
 @click.group()
 def cli() -> None: ...
 def _add_verbosity_options(func: Callable) -> Callable: ...
+def _transform_to_stub(
+    source_path: Path, stub_path: Path, stub_transformer: Py2StubTransformer
+) -> dict[str, int | list[str]]: ...
 @cli.command()
 def run(
     *,
@@ -55,6 +59,7 @@ def run(
     group_errors: bool,
     allow_errors: int,
     fail_on_warning: bool,
+    jobs: int | None,
     no_cache: bool,
     verbose: int,
     quiet: int,
