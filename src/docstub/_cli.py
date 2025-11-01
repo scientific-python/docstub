@@ -505,8 +505,8 @@ def run(
     transformed_doctypes = stub_transformer.transformer.stats["transformed"]
     syntax_error_count = stub_transformer.transformer.stats["syntax_errors"]
     unknown_type_names = matcher.unknown_qualnames
-    total_warnings = error_handler.warning_count
-    total_errors = error_handler.error_count
+    total_warnings = error_counter.warning_count
+    total_errors = error_counter.error_count
 
     logger.info("Recognized type names: %i", successful_queries)
     logger.info("Transformed doctypes: %i", transformed_doctypes)
