@@ -273,8 +273,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         super().__init__(**kwargs)
 
         self.stats = {
-            "syntax_errors": 0,
-            "transformed": 0,
+            "doctype_syntax_errors": 0,
+            "transformed_doctypes": 0,
         }
 
     def doctype_to_annotation(self, doctype, *, reporter=None):
@@ -303,14 +303,14 @@ class DoctypeTransformer(lark.visitors.Transformer):
             annotation = Annotation(
                 value=value, imports=frozenset(self._collected_imports)
             )
-            self.stats["transformed"] += 1
+            self.stats["transformed_doctypes"] += 1
             return annotation, self._unknown_qualnames
         except (
             lark.exceptions.LexError,
             lark.exceptions.ParseError,
             QualnameIsKeyword,
         ):
-            self.stats["syntax_errors"] += 1
+            self.stats["doctype_syntax_errors"] += 1
             raise
         finally:
             self._reporter = None

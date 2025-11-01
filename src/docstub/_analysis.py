@@ -500,12 +500,14 @@ class TypeMatcher:
         type_prefixes : dict[str, PyImport]
         type_nicknames : dict[str, str]
         """
-
         self.types = common_known_types() | (types or {})
         self.type_prefixes = type_prefixes or {}
         self.type_nicknames = type_nicknames or {}
-        self.successful_queries = 0
-        self.unknown_qualnames = []
+
+        self.stats = {
+            "matched_type_names": 0,
+            "unknown_type_names": [],
+        }
 
         self.current_file = None
 
@@ -621,8 +623,8 @@ class TypeMatcher:
             type_name = type_name[type_name.find(py_import.target) :]
 
         if type_name is not None:
-            self.successful_queries += 1
+            self.stats["matched_type_names"] += 1
         else:
-            self.unknown_qualnames.append(search)
+            self.stats["unknown_type_names"].append(search)
 
         return type_name, py_import

@@ -19,7 +19,7 @@ from ._docstrings import (
     FallbackAnnotation,
 )
 from ._report import ContextReporter
-from ._utils import module_name_from_path
+from ._utils import module_name_from_path, update_with_add_values
 
 logger: logging.Logger
 
@@ -73,6 +73,9 @@ class Py2StubTransformer(cst.CSTTransformer):
     @property
     def is_inside_function_def(self) -> bool: ...
     def python_to_stub(self, source: str, *, module_path: Path | None = ...) -> str: ...
+    def collect_stats(
+        self, *, reset_after: bool = ...
+    ) -> dict[str, int | list[str]]: ...
     def visit_ClassDef(self, node: cst.ClassDef) -> Literal[True]: ...
     def leave_ClassDef(
         self, original_node: cst.ClassDef, updated_node: cst.ClassDef

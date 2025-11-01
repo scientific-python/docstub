@@ -67,6 +67,9 @@ Options:
   -W, --fail-on-warning
           Return non-zero exit code when a warning is raised. Will add to
           --allow-errors.
+      --workers INT
+          Set the number of workers to process files in parallel. By default
+          docstub will attempt to choose an appropriate number.  [x>=1]
       --no-cache
           Ignore pre-existing cache and don't create a new one.
   -v, --verbose

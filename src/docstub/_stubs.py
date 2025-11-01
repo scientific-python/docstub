@@ -17,7 +17,7 @@ import libcst.matchers as cstm
 from ._analysis import PyImport
 from ._docstrings import DocstringAnnotations, DoctypeTransformer, FallbackAnnotation
 from ._report import ContextReporter
-from ._utils import module_name_from_path
+from ._utils import module_name_from_path, update_with_add_values
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -384,6 +384,26 @@ class Py2StubTransformer(cst.CSTTransformer):
             self._pytypes_stack = None
             self._required_imports = None
             self.current_source = None
+
+    def collect_stats(self, *, reset_after=True):
+        """Return statistics from processing files.
+
+        Parameters
+        ----------
+        reset_after : bool, optional
+            Whether to reset counters and statistics after returning.
+
+        Returns
+        -------
+        stats : dict of {str: int or list[str]}
+        """
+        collected = [self.transformer.stats, self.transformer.matcher.stats]
+        merged = update_with_add_values(*collected)
+        if reset_after is True:
+            for stats in collected:
+                for key in stats:
+                    stats[key] = type(stats[key])()
+        return merged
 
     def visit_ClassDef(self, node):
         """Collect pytypes from class docstring and add scope to stack.
