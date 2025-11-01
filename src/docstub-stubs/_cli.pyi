@@ -26,6 +26,7 @@ from ._path_utils import (
 )
 from ._report import setup_logging
 from ._stubs import Py2StubTransformer, try_format_stub
+from ._utils import update_with_add_values
 from ._version import __version__
 
 logger: logging.Logger

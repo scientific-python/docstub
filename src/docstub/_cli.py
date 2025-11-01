@@ -26,6 +26,7 @@ from ._path_utils import (
 )
 from ._report import setup_logging
 from ._stubs import Py2StubTransformer, try_format_stub
+from ._utils import update_with_add_values
 from ._version import __version__
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -198,7 +199,7 @@ def log_execution_time():
     try:
         yield
     except KeyboardInterrupt:
-        logger.critical("Interrupt!")
+        logger.critical("Interrupted!")
     finally:
         stop = time.time()
         total_seconds = stop - start
@@ -501,25 +502,23 @@ def run(
         output_handler.group_errors = False
 
     # Report basic statistics
-    successful_queries = matcher.successful_queries
-    transformed_doctypes = stub_transformer.transformer.stats["transformed"]
-    syntax_error_count = stub_transformer.transformer.stats["syntax_errors"]
-    unknown_type_names = matcher.unknown_qualnames
     total_warnings = error_counter.warning_count
     total_errors = error_counter.error_count
 
-    logger.info("Recognized type names: %i", successful_queries)
-    logger.info("Transformed doctypes: %i", transformed_doctypes)
+    logger.info("Recognized type names: %i", stats["matched_type_names"])
+    logger.info("Transformed doctypes: %i", stats["transformed_doctypes"])
     if total_warnings:
         logger.warning("Warnings: %i", total_warnings)
-    if syntax_error_count:
-        logger.warning("Syntax errors: %i", syntax_error_count)
-    if unknown_type_names:
+    if stats["doctype_syntax_errors"]:
+        assert total_errors
+        logger.warning("Syntax errors: %i", stats["doctype_syntax_errors"])
+    if stats["unknown_type_names"]:
+        assert total_errors
         logger.warning(
             "Unknown type names: %i (locations: %i)",
-            len(set(unknown_type_names)),
-            len(unknown_type_names),
-            extra={"details": _format_unknown_names(unknown_type_names)},
+            len(set(stats["unknown_type_names"])),
+            len(stats["unknown_type_names"]),
+            extra={"details": _format_unknown_names(stats["unknown_type_names"])},
         )
     if total_errors:
         logger.error("Total errors: %i", total_errors)
