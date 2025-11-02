@@ -175,16 +175,16 @@ class LoggingProcessExecutor:
         return False
 
 
-def guess_concurrency_params(*, task_count, worker_count=None):
+def guess_concurrency_params(*, task_count, desired_worker_count=None):
     """Estimate how tasks should be distributed to how many workers.
 
     Parameters
     ----------
     task_count : int
         The number of task that need to be processed.
-    worker_count : int, optional
+    desired_worker_count : int, optional
         If not set, the number of workers is estimated. Set this explicitly
-        to force a number of workers.
+        to force a number of workers. Passing `-1` will also trigger estimation.
 
     Returns
     -------
@@ -196,15 +196,17 @@ def guess_concurrency_params(*, task_count, worker_count=None):
     Examples
     --------
     >>> worker_count, chunk_size = guess_concurrency_params(
-    ...     task_count=9, worker_count=None
+    ...     task_count=9, desired_worker_count=None
     ... )
-    >>> (worker_count, chunk_size)
+    >>> (desired_worker_count, chunk_size)
     (1, 9)
     """
+    worker_count = desired_worker_count
+
     # `process_cpu_count` was added in Python 3.13 onwards
     cpu_count = getattr(os, "process_cpu_count", os.cpu_count)()
 
-    if worker_count is None:
+    if worker_count is None or worker_count == -1:
         # These crude heuristics were only ever "measured" on one computer
         worker_count = cpu_count
         # Clip to `worker_count <= task_count // 3`

@@ -317,16 +317,6 @@ def _transform_to_stub(task):
     "Otherwise, stubs are generated inplace.",
 )
 @click.option(
-    "--config",
-    "config_paths",
-    type=click.Path(exists=True, dir_okay=False),
-    metavar="PATH",
-    multiple=True,
-    help="Set one or more configuration file(s) explicitly. "
-    "Otherwise, it will look for a `pyproject.toml` or `docstub.toml` in the "
-    "current directory.",
-)
-@click.option(
     "--ignore",
     type=str,
     multiple=True,
@@ -361,15 +351,27 @@ def _transform_to_stub(task):
 @click.option(
     "--workers",
     "desired_worker_count",
-    type=click.IntRange(min=1),
+    type=int,
+    default=1,
     metavar="INT",
-    help="Set the number of workers to process files in parallel. "
-    "By default docstub will attempt to choose an appropriate number.",
+    help="Experimental: Process files in parallel with the desired number of workers. "
+    "By default, no multiprocessing is used.",
+    show_default=True,
 )
 @click.option(
     "--no-cache",
     is_flag=True,
     help="Ignore pre-existing cache and don't create a new one.",
+)
+@click.option(
+    "--config",
+    "config_paths",
+    type=click.Path(exists=True, dir_okay=False),
+    metavar="PATH",
+    multiple=True,
+    help="Set one or more configuration file(s) explicitly. "
+    "Otherwise, it will look for a `pyproject.toml` or `docstub.toml` in the "
+    "current directory.",
 )
 @_add_verbosity_options
 @click.help_option("-h", "--help")
@@ -404,7 +406,7 @@ def run(
     group_errors : bool
     allow_errors : int
     fail_on_warning : bool
-    desired_worker_count : int | None
+    desired_worker_count : int
     no_cache : bool
     verbose : int
     quiet : int
@@ -480,7 +482,7 @@ def run(
     task_count = len(task_args)
 
     worker_count, chunk_size = guess_concurrency_params(
-        task_count=task_count, worker_count=desired_worker_count
+        task_count=task_count, desired_worker_count=desired_worker_count
     )
 
     logger.info("Using %i parallel jobs to write %i stubs", worker_count, task_count)

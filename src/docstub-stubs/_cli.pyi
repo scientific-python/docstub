@@ -60,7 +60,7 @@ def run(
     group_errors: bool,
     allow_errors: int,
     fail_on_warning: bool,
-    desired_worker_count: int | None,
+    desired_worker_count: int,
     no_cache: bool,
     verbose: int,
     quiet: int,
