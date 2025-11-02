@@ -17,9 +17,9 @@ from ._vendored.stdlib import ProcessPoolExecutor
 logger: logging.Logger
 
 class MockPoolExecutor(Executor):
-    def map[_T](
-        self, fn: Callable[..., _T], *iterables: Any, **__: Any
-    ) -> Iterator[_T]: ...
+    def map[T](
+        self, fn: Callable[..., T], *iterables: Any, **__: Any
+    ) -> Iterator[T]: ...
 
 @dataclass(kw_only=True)
 class LoggingProcessExecutor:
