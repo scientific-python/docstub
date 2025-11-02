@@ -8,7 +8,6 @@ import os
 from collections.abc import Callable, Iterator
 from concurrent.futures import Executor
 from dataclasses import dataclass
-from multiprocessing import Queue
 
 from ._vendored.stdlib import ProcessPoolExecutor
 
@@ -102,7 +101,7 @@ class LoggingProcessExecutor:
         # A queue, used to pass logging records from worker processes to the
         # current and main one. Naive testing suggests that
         # `multiprocessing.Queue` is faster than `multiprocessing.Manager.Queue`
-        self._queue = Queue()
+        self._queue = mp_context.Queue()
 
         # The actual pool manager that is wrapped here and returned by this
         # context manager
