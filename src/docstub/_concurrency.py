@@ -151,24 +151,35 @@ class LoggingProcessExecutor:
             return False
 
         if exc_type and issubclass(exc_type, KeyboardInterrupt):
-            # We want to exit immediately when user requests a KeyboardInterrupt
-            # even if we may lose logging records that way
+            # We want to exit immediately when user interrupts, even if we lose
+            # log records that way.
             logger.debug("Terminating workers")
             self._pool.terminate_workers()
-            # Calling `self._listener.stop()` here seems to block forever?!
+
+            # Ensure that the queue doesn't block (not sure if necessary)
+            logger.debug("Calling `cancel_join_thread` on queue")
+            self._queue.cancel_join_thread()
+
         else:
-            # Graceful shutdown
+            # We want to wait for any log record to reach the listener
             logger.debug("Shutting down pool")
-            self._pool.__exit__(exc_type, exc_val, exc_tb)
+            self._pool.shutdown(wait=True, cancel_futures=True)
+
             logger.debug("Stopping queue listener")
             self._listener.stop()
 
-        logger.debug("Closing queue and joining its thread")
-        self._queue.close()
-        self._queue.join_thread()
+            if not self._queue.empty():
+                logger.error("Expected logging queue to be empty, it is not!")
+
+            logger.debug("Closing queue and joining its thread")
+            self._queue.close()
+            self._queue.join_thread()
+
+        self._queue = None
+        self._pool = None
+        self._listener = None
 
         logger.debug("Exiting executor pool")
-
         return False
 
 
