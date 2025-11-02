@@ -26,4 +26,4 @@ if not hasattr(_ProcessPoolExecutor, "terminate_workers"):
         def kill_workers(self) -> None: ...
 
 else:
-    ProcessPoolExecutor: _ProcessPoolExecutor
+    ProcessPoolExecutor: _ProcessPoolExecutor  # type: ignore[no-redef]

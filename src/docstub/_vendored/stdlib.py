@@ -228,4 +228,4 @@ if not hasattr(_ProcessPoolExecutor, "terminate_workers"):
             return self._force_shutdown(operation=_KILL)
 
 else:
-    ProcessPoolExecutor: _ProcessPoolExecutor = _ProcessPoolExecutor
+    ProcessPoolExecutor: _ProcessPoolExecutor = _ProcessPoolExecutor  # type: ignore[no-redef]

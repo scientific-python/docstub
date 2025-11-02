@@ -5,7 +5,7 @@ import logging.handlers
 import math
 import multiprocessing
 import os
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterator
 from concurrent.futures import Executor
 from dataclasses import dataclass
 from multiprocessing import Queue
@@ -17,7 +17,9 @@ from ._vendored.stdlib import ProcessPoolExecutor
 logger: logging.Logger
 
 class MockPoolExecutor(Executor):
-    def map(self, fn: Callable, *iterables: Any, **__: Any) -> Iterable: ...
+    def map[_T](
+        self, fn: Callable[..., _T], *iterables: Any, **__: Any
+    ) -> Iterator[_T]: ...
 
 @dataclass(kw_only=True)
 class LoggingProcessExecutor:

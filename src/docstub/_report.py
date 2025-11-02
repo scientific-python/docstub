@@ -312,11 +312,16 @@ class ReportHandler(logging.StreamHandler):
         Parameters
         ----------
         record : logging.LogRecord
+
+        Returns
+        -------
+        out : bool
         """
         if self.group_errors and logging.WARNING <= record.levelno <= logging.ERROR:
             self._records.append(record)
         else:
             self.emit(record)
+        return True
 
     def emit_grouped(self):
         """Emit all saved log records in groups.
@@ -369,7 +374,11 @@ class LogCounter(logging.NullHandler):
 
         Parameters
         ----------
-        record : logging.Record
+        record : logging.LogRecord
+
+        Returns
+        -------
+        out : bool
         """
         if record.levelno >= logging.CRITICAL:
             self.critical_count += 1
@@ -377,6 +386,7 @@ class LogCounter(logging.NullHandler):
             self.error_count += 1
         elif record.levelno >= logging.WARNING:
             self.warning_count += 1
+        return True
 
 
 def setup_logging(*, verbosity, group_errors):

@@ -257,19 +257,22 @@ def _add_verbosity_options(func):
     return func
 
 
-def _transform_to_stub(source_path, stub_path, stub_transformer):
+def _transform_to_stub(task):
     """Transform a Python file into a stub file.
 
     Parameters
     ----------
-    source_path : Path
-    stub_path : Path
-    stub_transformer : Py2StubTransformer
+    task : tuple[Path, Path, Py2StubTransformer]
+        The `source_path` for which to create a stub file at `stub_path` with
+        the given transformer.
 
     Returns
     -------
     stats : dict of {str: int or list[str]}
+        Statistics about the transformation.
     """
+    source_path, stub_path, stub_transformer = task
+
     if source_path.suffix.lower() == ".pyi":
         logger.debug("Using existing stub file %s", source_path)
         with source_path.open() as fo:
@@ -294,6 +297,7 @@ def _transform_to_stub(source_path, stub_path, stub_transformer):
         fo.write(stub_content)
 
     stats = stub_transformer.collect_stats()
+
     return stats
 
 
@@ -463,32 +467,32 @@ def run(
 
     # Stub generation ---------------------------------------------------------
 
-    tasks = walk_source_and_targets(root_path, out_dir, ignore=config.ignore_files)
+    task_files = walk_source_and_targets(root_path, out_dir, ignore=config.ignore_files)
 
     # We must pass the `stub_transformer` to each worker, but we want to copy
     # only once per worker. Testing suggests, that using a large enough
-    # `chunksize` of `>= len(tasks) / jobs` for `ProcessPoolExecutor.map`,
+    # `chunksize` of `>= len(task_count) / jobs` for `ProcessPoolExecutor.map`,
     # ensures that.
     # Using an `initializer` that assigns the transformer as a global variable
     # per worker seems like the more robust solution, but naive timing suggests
     # it's actually slower (> 1s on skimage).
-    tasks = [(*task, stub_transformer) for task in tasks]
+    task_args = [(*files, stub_transformer) for files in task_files]
+    task_count = len(task_args)
 
     worker_count, chunk_size = guess_concurrency_params(
-        task_count=len(tasks), worker_count=desired_worker_count
+        task_count=task_count, worker_count=desired_worker_count
     )
-    logger.info("Using %i parallel jobs to write %i stubs", worker_count, len(tasks))
+
+    logger.info("Using %i parallel jobs to write %i stubs", worker_count, task_count)
     logger.debug("Using chunk size of %i", chunk_size)
     with LoggingProcessExecutor(
         max_workers=worker_count,
         logging_handlers=(output_handler, error_counter),
     ) as executor:
-        # Doesn't block
-        stats = executor.map(
-            _transform_to_stub, *zip(*tasks, strict=False), chunksize=chunk_size
+        stats_per_task = executor.map(
+            _transform_to_stub, task_args, chunksize=chunk_size
         )
-        # Iterate results (which blocks) until all tasks have been processed
-        stats = update_with_add_values(*stats)
+        stats = update_with_add_values(*stats_per_task)
 
     py_typed_out = out_dir / "py.typed"
     if not py_typed_out.exists():

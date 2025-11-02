@@ -48,7 +48,7 @@ click.Context.formatter_class = HelpFormatter
 def cli() -> None: ...
 def _add_verbosity_options(func: Callable) -> Callable: ...
 def _transform_to_stub(
-    source_path: Path, stub_path: Path, stub_transformer: Py2StubTransformer
+    task: tuple[Path, Path, Py2StubTransformer],
 ) -> dict[str, int | list[str]]: ...
 @cli.command()
 def run(
@@ -60,7 +60,7 @@ def run(
     group_errors: bool,
     allow_errors: int,
     fail_on_warning: bool,
-    jobs: int | None,
+    desired_worker_count: int | None,
     no_cache: bool,
     verbose: int,
     quiet: int,

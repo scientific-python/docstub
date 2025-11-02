@@ -5,7 +5,7 @@ import logging.handlers
 import math
 import multiprocessing
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import Executor
 from dataclasses import dataclass
 from multiprocessing import Queue
@@ -22,7 +22,7 @@ class MockPoolExecutor(Executor):
     :class:`concurrent.futures.Executor`.
     """
 
-    def map(self, fn, *iterables, **__):
+    def map[T](self, fn: Callable[..., T], *iterables, **__) -> Iterator[T]:
         """Returns an iterator equivalent to map(fn, iter).
 
         Same behavior as :ref:`concurrent.futures.Executor.map` though any
@@ -30,17 +30,10 @@ class MockPoolExecutor(Executor):
 
         Parameters
         ----------
-        fn : Callable
         *iterables : Any
         **__ : Any
-
-        Returns
-        -------
-        results : Iterable
         """
-        tasks = zip(*iterables, strict=False)
-        for task in tasks:
-            yield fn(*task)
+        return map(fn, *iterables)
 
 
 @dataclass(kw_only=True)
@@ -136,7 +129,6 @@ class LoggingProcessExecutor:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """
-
         Parameters
         ----------
         exc_type : type[BaseException] or None
