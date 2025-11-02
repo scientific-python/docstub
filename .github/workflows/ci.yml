@@ -89,15 +89,17 @@ jobs:
               examples/example_pkg
           .github/scripts/assert-unchanged.sh examples/
 
-      - name: Check docstub-stubs
+      - name: Check docstub-stubs (single process)
         # Check that stubs for docstub are up-to-date by regenerating them
-        # with docstub and looking for differences. Repeat test with
-        # multiprocessing enabled
+        # with docstub and looking for differences.
         run: |
           rm -rf src/docstub-stubs
           python -m docstub run -v src/docstub -o src/docstub-stubs
           .github/scripts/assert-unchanged.sh src/docstub-stubs/
 
+      - name: Check docstub-stubs (multiprocess)
+        # Repeat test with multiprocessing enabled
+        run: |
           rm -rf src/docstub-stubs
           python -m docstub run -v src/docstub -o src/docstub-stubs --workers 2
           .github/scripts/assert-unchanged.sh src/docstub-stubs/
