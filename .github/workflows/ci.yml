@@ -91,10 +91,15 @@ jobs:
 
       - name: Check docstub-stubs
         # Check that stubs for docstub are up-to-date by regenerating them
-        # with docstub and looking for differences.
+        # with docstub and looking for differences. Repeat test with
+        # multiprocessing enabled
         run: |
           rm -rf src/docstub-stubs
           python -m docstub run -v src/docstub -o src/docstub-stubs
+          .github/scripts/assert-unchanged.sh src/docstub-stubs/
+
+          rm -rf src/docstub-stubs
+          python -m docstub run -v src/docstub -o src/docstub-stubs --workers 2
           .github/scripts/assert-unchanged.sh src/docstub-stubs/
 
       - name: Check with mypy.stubtest
