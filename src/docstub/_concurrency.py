@@ -65,7 +65,7 @@ class LoggingProcessExecutor:
 
         Parameters
         ----------
-        queue : Queue
+        queue : multiprocessing.Queue
         worker_log_level : int
         initializer : Callable
         initargs : tuple of Any

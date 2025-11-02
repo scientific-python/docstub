@@ -485,7 +485,7 @@ def run(
         task_count=task_count, desired_worker_count=desired_worker_count
     )
 
-    logger.info("Using %i parallel jobs to write %i stubs", worker_count, task_count)
+    logger.info("Using %i worker(s) to write %i stubs", worker_count, task_count)
     logger.debug("Using chunk size of %i", chunk_size)
     with LoggingProcessExecutor(
         max_workers=worker_count,

@@ -8,7 +8,6 @@ import os
 from collections.abc import Callable, Iterator
 from concurrent.futures import Executor
 from dataclasses import dataclass
-from multiprocessing import Queue
 from types import TracebackType
 from typing import Any
 
@@ -31,7 +30,10 @@ class LoggingProcessExecutor:
 
     @staticmethod
     def _initialize_worker(
-        queue: Queue, worker_log_level: int, initializer: Callable, initargs: tuple[Any]
+        queue: multiprocessing.Queue,
+        worker_log_level: int,
+        initializer: Callable,
+        initargs: tuple[Any],
     ) -> None: ...
     def __enter__(self) -> ProcessPoolExecutor | MockPoolExecutor: ...
     def __exit__(
