@@ -1,6 +1,7 @@
 """Test command line interface."""
 
 import logging
+import multiprocessing
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,24 @@ from docstub import _cli
 from docstub._cache import create_cache
 
 PROJECT_ROOT = Path(__file__).parent.parent
+
+
+# Trying to run docstub via subprocess fails on Linux pre 3.14 with the
+# following:
+#
+#   RuntimeError: A SemLock created in a fork context is being shared with a
+#   process in a spawn context. This is not supported. Please use the same
+#   context to create multiprocessing objects and Process.
+#
+# I think this is because docstub defaults to the more robust method "spawn"
+# to create processes. This seems incompatible with the default "fork" method
+# on Linux on Python 3.12 & 3.13. Python 3.14 switched to "forkserver" which
+# seems fine. I didn't manage to figure out a good way around this other than
+# to skip.
+skip_if_process_start_defaults_fork = pytest.mark.skipif(
+    multiprocessing.get_start_method() == "fork",
+    reason="incompatible default OS process start method",
+)
 
 
 class Test_run:
@@ -57,6 +76,7 @@ class Test_run:
         # Check that at least one collected file was logged as "(cached)"
         assert "cached" not in "\n".join(caplog.messages)
 
+    @skip_if_process_start_defaults_fork
     @pytest.mark.slow
     @pytest.mark.parametrize("workers", [1, 2])
     def test_fail_on_warning(self, workers, tmp_path_cwd):
@@ -95,6 +115,7 @@ class Test_run:
         )
         assert result.returncode == 1
 
+    @skip_if_process_start_defaults_fork
     @pytest.mark.slow
     @pytest.mark.parametrize("workers", [1, 2])
     def test_no_output_exit_code(self, workers, tmp_path_cwd):
