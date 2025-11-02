@@ -198,7 +198,7 @@ def guess_concurrency_params(*, task_count, desired_worker_count=None):
     >>> worker_count, chunk_size = guess_concurrency_params(
     ...     task_count=9, desired_worker_count=None
     ... )
-    >>> (desired_worker_count, chunk_size)
+    >>> (worker_count, chunk_size)
     (1, 9)
     """
     worker_count = desired_worker_count
