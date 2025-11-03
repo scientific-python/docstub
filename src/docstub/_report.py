@@ -174,6 +174,23 @@ class ContextReporter:
             short, *args, log_level=logging.ERROR, details=details, **log_kw
         )
 
+    def critical(self, short, *args, details=None, **log_kw):
+        """Log a critical error with context of the relevant source.
+
+        Parameters
+        ----------
+        short : str
+            A short summarizing report that shouldn't wrap over multiple lines.
+        *args : Any
+            Optional formatting arguments for `short`.
+        details : str, optional
+            An optional multiline report with more details.
+        **log_kw : Any
+        """
+        return self.report(
+            short, *args, log_level=logging.CRITICAL, details=details, **log_kw
+        )
+
     def __post_init__(self):
         if self.path is not None and not isinstance(self.path, Path):
             msg = f"expected `path` to be of type `Path`, got {type(self.path)!r}"
@@ -228,9 +245,6 @@ class ReportHandler(logging.StreamHandler):
         super().__init__(stream=stream)
         self.group_errors = group_errors
         self._records = []
-
-        self.error_count = 0
-        self.warning_count = 0
 
         self.strip_ansi = should_strip_ansi(self.stream)
 
@@ -292,22 +306,22 @@ class ReportHandler(logging.StreamHandler):
 
         return msg
 
-    def emit(self, record):
+    def handle(self, record):
         """Handle a log record.
 
         Parameters
         ----------
         record : logging.LogRecord
-        """
-        if record.levelno >= logging.ERROR:
-            self.error_count += 1
-        elif record.levelno == logging.WARNING:
-            self.warning_count += 1
 
+        Returns
+        -------
+        out : bool
+        """
         if self.group_errors and logging.WARNING <= record.levelno <= logging.ERROR:
             self._records.append(record)
         else:
-            super().emit(record)
+            self.emit(record)
+        return True
 
     def emit_grouped(self):
         """Emit all saved log records in groups.
@@ -339,6 +353,42 @@ class ReportHandler(logging.StreamHandler):
         self._records = []
 
 
+class LogCounter(logging.NullHandler):
+    """Logging handler that counts warnings, errors and critical records.
+
+    Attributes
+    ----------
+    critical_count : int
+    error_count : int
+    warning_count : int
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.critical_count = 0
+        self.error_count = 0
+        self.warning_count = 0
+
+    def handle(self, record):
+        """Count the log record if is a warning or more severe.
+
+        Parameters
+        ----------
+        record : logging.LogRecord
+
+        Returns
+        -------
+        out : bool
+        """
+        if record.levelno >= logging.CRITICAL:
+            self.critical_count += 1
+        elif record.levelno >= logging.ERROR:
+            self.error_count += 1
+        elif record.levelno >= logging.WARNING:
+            self.warning_count += 1
+        return True
+
+
 def setup_logging(*, verbosity, group_errors):
     """Setup logging to stderr for docstub's main process.
 
@@ -349,16 +399,20 @@ def setup_logging(*, verbosity, group_errors):
 
     Returns
     -------
-    handler : ReportHandler
+    output_handler : ReportHandler
+    log_counter : LogCounter
     """
     _VERBOSITY_LEVEL = {
-        -2: logging.CRITICAL + 1,  # never print anything
+        -2: logging.CRITICAL,
         -1: logging.ERROR,
         0: logging.WARNING,
         1: logging.INFO,
         2: logging.DEBUG,
         3: logging.DEBUG,
     }
+
+    output_level = _VERBOSITY_LEVEL[verbosity]
+    report_level = min(logging.WARNING, output_level)
 
     format_ = "%(message)s"
     if verbosity >= 3:
@@ -373,18 +427,21 @@ def setup_logging(*, verbosity, group_errors):
         debug_info = indent(",\n".join(debug_info), prefix="    ")
         format_ = f"{format_}\n  [\n{debug_info}\n  ]"
 
-    formatter = logging.Formatter(format_)
-    handler = ReportHandler(group_errors=group_errors)
-    handler.setLevel(_VERBOSITY_LEVEL[verbosity])
-    handler.setFormatter(formatter)
+    reporter = ReportHandler(group_errors=group_errors)
+    reporter.setLevel(_VERBOSITY_LEVEL[verbosity])
+
+    log_counter = LogCounter()
+    log_counter.setLevel(report_level)
 
     # Only allow logging by docstub itself
-    handler.addFilter(logging.Filter("docstub"))
+    reporter.addFilter(logging.Filter("docstub"))
+    log_counter.addFilter(logging.Filter("docstub"))
 
     logging.basicConfig(
-        level=_VERBOSITY_LEVEL[verbosity],
-        handlers=[handler],
+        format=format_,
+        level=report_level,
+        handlers=[reporter, log_counter],
     )
     logging.captureWarnings(True)
 
-    return handler
+    return reporter, log_counter

@@ -16,6 +16,7 @@ from ._analysis import (
 )
 from ._cache import CACHE_DIR_NAME, FileCache, validate_cache
 from ._cli_help import HelpFormatter
+from ._concurrency import LoggingProcessExecutor, guess_concurrency_params
 from ._config import Config
 from ._path_utils import (
     STUB_HEADER_COMMENT,
@@ -25,6 +26,7 @@ from ._path_utils import (
 )
 from ._report import setup_logging
 from ._stubs import Py2StubTransformer, try_format_stub
+from ._utils import update_with_add_values
 from ._version import __version__
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -197,7 +199,7 @@ def log_execution_time():
     try:
         yield
     except KeyboardInterrupt:
-        logger.critical("Interrupt!")
+        logger.critical("Interrupted!")
     finally:
         stop = time.time()
         total_seconds = stop - start
@@ -255,6 +257,50 @@ def _add_verbosity_options(func):
     return func
 
 
+def _transform_to_stub(task):
+    """Transform a Python file into a stub file.
+
+    Parameters
+    ----------
+    task : tuple[Path, Path, Py2StubTransformer]
+        The `source_path` for which to create a stub file at `stub_path` with
+        the given transformer.
+
+    Returns
+    -------
+    stats : dict of {str: int or list[str]}
+        Statistics about the transformation.
+    """
+    source_path, stub_path, stub_transformer = task
+
+    if source_path.suffix.lower() == ".pyi":
+        logger.debug("Using existing stub file %s", source_path)
+        with source_path.open() as fo:
+            stub_content = fo.read()
+    else:
+        with source_path.open() as fo:
+            py_content = fo.read()
+        logger.debug("Transforming %s", source_path)
+        try:
+            stub_content = stub_transformer.python_to_stub(
+                py_content, module_path=source_path
+            )
+            stub_content = f"{STUB_HEADER_COMMENT}\n\n{stub_content}"
+            stub_content = try_format_stub(stub_content)
+        except Exception:
+            logger.exception("Failed creating stub for %s", source_path)
+            return None
+
+    stub_path.parent.mkdir(parents=True, exist_ok=True)
+    with stub_path.open("w") as fo:
+        logger.info("Wrote %s", stub_path)
+        fo.write(stub_content)
+
+    stats = stub_transformer.collect_stats()
+
+    return stats
+
+
 # Preserve click.command below to keep type checker happy
 # docstub: off
 @cli.command()
@@ -269,16 +315,6 @@ def _add_verbosity_options(func):
     "Stubs will be directly written into that directory while preserving the directory "
     "structure under PACKAGE_PATH. "
     "Otherwise, stubs are generated inplace.",
-)
-@click.option(
-    "--config",
-    "config_paths",
-    type=click.Path(exists=True, dir_okay=False),
-    metavar="PATH",
-    multiple=True,
-    help="Set one or more configuration file(s) explicitly. "
-    "Otherwise, it will look for a `pyproject.toml` or `docstub.toml` in the "
-    "current directory.",
 )
 @click.option(
     "--ignore",
@@ -313,9 +349,29 @@ def _add_verbosity_options(func):
     "Will add to --allow-errors.",
 )
 @click.option(
+    "--workers",
+    "desired_worker_count",
+    type=int,
+    default=1,
+    metavar="INT",
+    help="Experimental: Process files in parallel with the desired number of workers. "
+    "By default, no multiprocessing is used.",
+    show_default=True,
+)
+@click.option(
     "--no-cache",
     is_flag=True,
     help="Ignore pre-existing cache and don't create a new one.",
+)
+@click.option(
+    "--config",
+    "config_paths",
+    type=click.Path(exists=True, dir_okay=False),
+    metavar="PATH",
+    multiple=True,
+    help="Set one or more configuration file(s) explicitly. "
+    "Otherwise, it will look for a `pyproject.toml` or `docstub.toml` in the "
+    "current directory.",
 )
 @_add_verbosity_options
 @click.help_option("-h", "--help")
@@ -329,6 +385,7 @@ def run(
     group_errors,
     allow_errors,
     fail_on_warning,
+    desired_worker_count,
     no_cache,
     verbose,
     quiet,
@@ -349,6 +406,7 @@ def run(
     group_errors : bool
     allow_errors : int
     fail_on_warning : bool
+    desired_worker_count : int
     no_cache : bool
     verbose : int
     quiet : int
@@ -357,7 +415,9 @@ def run(
     # Setup -------------------------------------------------------------------
 
     verbosity = _calc_verbosity(verbose=verbose, quiet=quiet)
-    error_handler = setup_logging(verbosity=verbosity, group_errors=group_errors)
+    output_handler, error_counter = setup_logging(
+        verbosity=verbosity, group_errors=group_errors
+    )
 
     root_path = Path(root_path)
     if root_path.is_file():
@@ -409,30 +469,32 @@ def run(
 
     # Stub generation ---------------------------------------------------------
 
-    for source_path, stub_path in walk_source_and_targets(
-        root_path, out_dir, ignore=config.ignore_files
-    ):
-        if source_path.suffix.lower() == ".pyi":
-            logger.debug("Using existing stub file %s", source_path)
-            with source_path.open() as fo:
-                stub_content = fo.read()
-        else:
-            with source_path.open() as fo:
-                py_content = fo.read()
-            logger.debug("Transforming %s", source_path)
-            try:
-                stub_content = stub_transformer.python_to_stub(
-                    py_content, module_path=source_path
-                )
-                stub_content = f"{STUB_HEADER_COMMENT}\n\n{stub_content}"
-                stub_content = try_format_stub(stub_content)
-            except Exception:
-                logger.exception("Failed creating stub for %s", source_path)
-                continue
-        stub_path.parent.mkdir(parents=True, exist_ok=True)
-        with stub_path.open("w") as fo:
-            logger.info("Wrote %s", stub_path)
-            fo.write(stub_content)
+    task_files = walk_source_and_targets(root_path, out_dir, ignore=config.ignore_files)
+
+    # We must pass the `stub_transformer` to each worker, but we want to copy
+    # only once per worker. Testing suggests, that using a large enough
+    # `chunksize` of `>= len(task_count) / jobs` for `ProcessPoolExecutor.map`,
+    # ensures that.
+    # Using an `initializer` that assigns the transformer as a global variable
+    # per worker seems like the more robust solution, but naive timing suggests
+    # it's actually slower (> 1s on skimage).
+    task_args = [(*files, stub_transformer) for files in task_files]
+    task_count = len(task_args)
+
+    worker_count, chunk_size = guess_concurrency_params(
+        task_count=task_count, desired_worker_count=desired_worker_count
+    )
+
+    logger.info("Using %i worker(s) to write %i stubs", worker_count, task_count)
+    logger.debug("Using chunk size of %i", chunk_size)
+    with LoggingProcessExecutor(
+        max_workers=worker_count,
+        logging_handlers=(output_handler, error_counter),
+    ) as executor:
+        stats_per_task = executor.map(
+            _transform_to_stub, task_args, chunksize=chunk_size
+        )
+        stats = update_with_add_values(*stats_per_task)
 
     py_typed_out = out_dir / "py.typed"
     if not py_typed_out.exists():
@@ -442,30 +504,28 @@ def run(
     # Reporting --------------------------------------------------------------
 
     if group_errors:
-        error_handler.emit_grouped()
-        assert error_handler.group_errors is True
-        error_handler.group_errors = False
+        output_handler.emit_grouped()
+        assert output_handler.group_errors is True
+        output_handler.group_errors = False
 
     # Report basic statistics
-    successful_queries = matcher.successful_queries
-    transformed_doctypes = stub_transformer.transformer.stats["transformed"]
-    syntax_error_count = stub_transformer.transformer.stats["syntax_errors"]
-    unknown_type_names = matcher.unknown_qualnames
-    total_warnings = error_handler.warning_count
-    total_errors = error_handler.error_count
+    total_warnings = error_counter.warning_count
+    total_errors = error_counter.error_count
 
-    logger.info("Recognized type names: %i", successful_queries)
-    logger.info("Transformed doctypes: %i", transformed_doctypes)
+    logger.info("Recognized type names: %i", stats["matched_type_names"])
+    logger.info("Transformed doctypes: %i", stats["transformed_doctypes"])
     if total_warnings:
         logger.warning("Warnings: %i", total_warnings)
-    if syntax_error_count:
-        logger.warning("Syntax errors: %i", syntax_error_count)
-    if unknown_type_names:
+    if stats["doctype_syntax_errors"]:
+        assert total_errors
+        logger.warning("Syntax errors: %i", stats["doctype_syntax_errors"])
+    if stats["unknown_type_names"]:
+        assert total_errors
         logger.warning(
             "Unknown type names: %i (locations: %i)",
-            len(set(unknown_type_names)),
-            len(unknown_type_names),
-            extra={"details": _format_unknown_names(unknown_type_names)},
+            len(set(stats["unknown_type_names"])),
+            len(stats["unknown_type_names"]),
+            extra={"details": _format_unknown_names(stats["unknown_type_names"])},
         )
     if total_errors:
         logger.error("Total errors: %i", total_errors)

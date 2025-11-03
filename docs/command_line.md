@@ -49,10 +49,6 @@ Options:
           Set output directory explicitly. Stubs will be directly written into
           that directory while preserving the directory structure under
           PACKAGE_PATH. Otherwise, stubs are generated inplace.
-      --config PATH
-          Set one or more configuration file(s) explicitly. Otherwise, it will
-          look for a `pyproject.toml` or `docstub.toml` in the current
-          directory.
       --ignore GLOB
           Ignore files matching this glob-style pattern. Can be used multiple
           times.
@@ -67,8 +63,15 @@ Options:
   -W, --fail-on-warning
           Return non-zero exit code when a warning is raised. Will add to
           --allow-errors.
+      --workers INT
+          Experimental: Process files in parallel with the desired number of
+          workers. By default, no multiprocessing is used.  [default: 1]
       --no-cache
           Ignore pre-existing cache and don't create a new one.
+      --config PATH
+          Set one or more configuration file(s) explicitly. Otherwise, it will
+          look for a `pyproject.toml` or `docstub.toml` in the current
+          directory.
   -v, --verbose
           Print more details. Use once to show information messages. Use -vv to
           print debug messages.

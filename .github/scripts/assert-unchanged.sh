@@ -15,8 +15,10 @@ UNTRACKED=$(git ls-files --others --exclude-standard "$CHECK_DIR")
 echo "$UNTRACKED" | xargs -I _ git --no-pager diff /dev/null _ || true
 
 # Display changes in tracked files and capture non-zero exit code if so
-git diff --exit-code HEAD "$CHECK_DIR" || true
+set +e
+git diff --exit-code HEAD "$CHECK_DIR"
 GIT_DIFF_HEAD_EXIT_CODE=$?
+set -e
 
 # Display changes in tracked files and capture exit status
 if [ $GIT_DIFF_HEAD_EXIT_CODE -ne 0 ] ||  [ -n "$UNTRACKED" ]; then
