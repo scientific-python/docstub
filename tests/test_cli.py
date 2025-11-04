@@ -10,6 +10,7 @@ import pytest
 from click.testing import CliRunner
 
 from docstub import _cli
+from docstub._app_generate_stubs import cache_dir_in_cwd
 from docstub._cache import create_cache
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -27,7 +28,7 @@ class Test_run:
         run_result = runner.invoke(_cli.run, args=["--no-cache", str(source_file)])
         assert run_result.exception is None
         assert run_result.exit_code == 0
-        assert not _cli._cache_dir_in_cwd().exists()
+        assert not cache_dir_in_cwd().exists()
 
         # Second run without '--no-cache' should create a cache directory
         caplog.clear()
@@ -35,7 +36,7 @@ class Test_run:
         run_result = runner.invoke(_cli.run, args=[str(source_file)])
         assert run_result.exception is None
         assert run_result.exit_code == 0
-        assert _cli._cache_dir_in_cwd().exists()
+        assert cache_dir_in_cwd().exists()
         # Check that no collected file was logged as "(cached)"
         assert "cached" not in "\n".join(caplog.messages)
 
@@ -144,7 +145,7 @@ class Test_clean:
         assert run_result.exception is None
         assert run_result.exit_code == 0
 
-        cache_dir = _cli._cache_dir_in_cwd()
+        cache_dir = cache_dir_in_cwd()
         create_cache(cache_dir)
         assert cache_dir.is_dir()
 
