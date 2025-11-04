@@ -816,19 +816,20 @@ class DocstringAnnotations:
         for param in params:
             param = self._handle_missing_whitespace(param)  # noqa: PLW2901
 
+            if param.type.strip() == "":
+                # Missing doctype in docstring, might have an inlined annotation
+                # so skip
+                continue
+
             if param.name in annotated_params:
-                # TODO make error
                 self.reporter.warn(
                     "Duplicate parameter / attribute name in docstring",
                     details=self.reporter.underline(param.name),
                 )
                 continue
 
-            if param.type:
-                ds_line = self._find_docstring_line(param.name, param.type)
-                annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
-            else:
-                annotation = FallbackAnnotation
+            ds_line = self._find_docstring_line(param.name, param.type)
+            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
             annotated_params[param.name.strip()] = annotation
 
         return annotated_params

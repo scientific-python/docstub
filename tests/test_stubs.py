@@ -481,14 +481,16 @@ class Test_Py2StubTransformer:
         assert "ignoring docstring: Sized" in caplog.records[0].details
         assert caplog.records[0].levelno == logging.WARNING
 
-    def test_missing_param(self, caplog):
+    @pytest.mark.parametrize("missing", ["", "b", "b :"])
+    def test_missing_param(self, missing, caplog):
         source = dedent(
-            '''
+            f'''
             def foo(a, b) -> None:
                 """
                 Parameters
                 ----------
                 a : int
+                {missing}
                 """
             '''
         )
@@ -523,14 +525,16 @@ class Test_Py2StubTransformer:
         assert caplog.messages == ["Missing annotation for parameter 'b'"]
         assert caplog.records[0].levelno == logging.WARNING
 
-    def test_missing_attr(self, caplog):
+    @pytest.mark.parametrize("missing", ["", "b", "b :"])
+    def test_missing_attr(self, missing, caplog):
         source = dedent(
-            '''
+            f'''
             class Foo:
                 """
                 Attributes
                 ----------
                 a : ClassVar[int]
+                {missing}
                 """
                 a = 3
                 b = True
