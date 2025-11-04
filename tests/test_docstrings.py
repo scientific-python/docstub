@@ -348,10 +348,9 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
-        assert len(annotations.parameters) == 2
+        assert len(annotations.parameters) == 1
         assert annotations.parameters["a"].value == expected
-        assert annotations.parameters["b"].value == "Incomplete"
-        assert annotations.parameters["b"].imports == {PyImport.typeshed_Incomplete()}
+        assert "b" not in annotations.parameters
 
     @pytest.mark.parametrize(
         ("doctypes", "expected"),
@@ -539,12 +538,10 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
-        assert len(annotations.parameters) == 5
+        assert len(annotations.parameters) == 3
         assert annotations.parameters["a"].value == "bool"
         assert annotations.parameters["b"].value == "bool"
         assert annotations.parameters["c"].value == "bool"
 
-        assert annotations.parameters["d"].value == "Incomplete"
-        assert annotations.parameters["e"].value == "Incomplete"
-        assert annotations.parameters["d"].imports == {PyImport.typeshed_Incomplete()}
-        assert annotations.parameters["e"].imports == {PyImport.typeshed_Incomplete()}
+        assert "d" not in annotations.parameters
+        assert "e" not in annotations.parameters
