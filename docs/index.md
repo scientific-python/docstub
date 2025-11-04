@@ -22,6 +22,7 @@ It does so by supporting widely used readable conventions such as `array of dtyp
 
 installation
 introduction
+development/index
 :::
 
 :::{toctree}

@@ -42,7 +42,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/lagru/docstub"
+Source = "https://github.com/lagru/docstub"
+Documentation = "https://docstub.readthedocs.io"
 
 [project.scripts]
 docstub = "docstub.__main__:cli"
