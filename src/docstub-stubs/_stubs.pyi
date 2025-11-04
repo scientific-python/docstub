@@ -2,6 +2,7 @@
 
 import enum
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
@@ -51,7 +52,7 @@ class _Scope:
 
 def _get_docstring_node(
     node: cst.FunctionDef | cst.ClassDef | cst.Module,
-) -> cst.SimpleString | cst.ConcatenatedString | None: ...
+) -> tuple[cst.SimpleString | cst.ConcatenatedString | None, str | None]: ...
 def _log_error_with_line_context(cls: Py2StubTransformer) -> Py2StubTransformer: ...
 def _docstub_comment_directives(cls: Py2StubTransformer) -> Py2StubTransformer: ...
 def _inline_node_as_code(node: cst.CSTNode) -> str: ...

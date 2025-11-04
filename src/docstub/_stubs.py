@@ -7,6 +7,7 @@ STUB_HEADER_COMMENT : Final[str]
 
 import enum
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import wraps
 from typing import ClassVar
@@ -83,6 +84,7 @@ class _Scope:
     def is_dataclass(self) -> bool:
         if cstm.matches(self.node, cstm.ClassDef()):
             # Determine if dataclass
+            # TODO profiling suggests cstm.findall is slow! Rewrite
             decorators = cstm.findall(self.node, cstm.Decorator())
             is_dataclass = any(
                 cstm.findall(d, cstm.Name("dataclass")) for d in decorators
@@ -106,23 +108,35 @@ def _get_docstring_node(node):
     -------
     docstring_node : cst.SimpleString | cst.ConcatenatedString | None
         The node of the docstring if found.
+    docstring_value : str | None
+        The value of the docstring if found.
     """
-    docstring_node = None
 
-    docstring = node.get_docstring(clean=False)
-    if docstring:
-        # Workaround to find the exact postion of a docstring
-        # by using its node
-        string_nodes = cstm.findall(
-            node, cstm.SimpleString() | cstm.ConcatenatedString()
-        )
-        matching_nodes = [
-            node for node in string_nodes if node.evaluated_value == docstring
-        ]
-        assert len(matching_nodes) == 1
-        docstring_node = matching_nodes[0]
+    # Copied from https://github.com/Instagram/LibCST/blob/9275a8bf7875d08659ce7b266860138bba633410/libcst/_nodes/statement.py#L1669
+    body = node.body
+    if isinstance(body, Sequence):
+        if body:
+            expr = body[0]
+        else:
+            return (None, None)
+    else:
+        expr = body
+    while isinstance(expr, (cst.BaseSuite, cst.SimpleStatementLine)):
+        if len(expr.body) == 0:
+            return (None, None)
+        expr = expr.body[0]
+    if not isinstance(expr, cst.Expr):
+        return (None, None)
 
-    return docstring_node
+    docstring_node = expr.value
+    if isinstance(docstring_node, (cst.SimpleString, cst.ConcatenatedString)):
+        docstring_value = docstring_node.evaluated_value
+    else:
+        return (None, None)
+    if isinstance(docstring_value, bytes):
+        return (None, None)
+
+    return docstring_node, docstring_value
 
 
 def _log_error_with_line_context(cls):
@@ -897,7 +911,7 @@ class Py2StubTransformer(cst.CSTTransformer):
         """
         annotations = None
 
-        docstring_node = _get_docstring_node(node)
+        docstring_node, docstring_value = _get_docstring_node(node)
         if docstring_node:
             position = self.get_metadata(
                 cst.metadata.PositionProvider, docstring_node
@@ -907,7 +921,7 @@ class Py2StubTransformer(cst.CSTTransformer):
             )
             try:
                 annotations = DocstringAnnotations(
-                    docstring_node.evaluated_value,
+                    docstring_value,
                     transformer=self.transformer,
                     reporter=reporter,
                 )
