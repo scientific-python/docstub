@@ -55,7 +55,7 @@ class ScopeType(enum.StrEnum):
     # docstub: on
 
 
-# To be used with `libcst.matches` to guess if a node is a dataclass
+# To be used with `libcst.matchers.matches()` to guess if a node is a dataclass
 # See `test_dataclass_matcher` for supported cases
 _dataclass_name: cstm.Name = cstm.Name("dataclass")
 _dataclass_matcher: cstm.ClassDef = cstm.ClassDef(
