@@ -55,6 +55,22 @@ class ScopeType(enum.StrEnum):
     # docstub: on
 
 
+# To be used with `libcst.matches` to guess if a node is a dataclass
+# See `test_dataclass_matcher` for supported cases
+_dataclass_name: cstm.Name = cstm.Name("dataclass")
+_dataclass_matcher: cstm.ClassDef = cstm.ClassDef(
+    decorators=[
+        cstm.Decorator(
+            decorator=(
+                _dataclass_name
+                | cstm.Call(func=_dataclass_name | cstm.Attribute(attr=_dataclass_name))
+                | cstm.Attribute(attr=_dataclass_name)
+            )
+        ),
+    ]
+)
+
+
 # TODO use `libcst.metadata.ScopeProvider` instead
 @dataclass(slots=True, frozen=True)
 class _Scope:
@@ -82,15 +98,8 @@ class _Scope:
 
     @property
     def is_dataclass(self) -> bool:
-        if cstm.matches(self.node, cstm.ClassDef()):
-            # Determine if dataclass
-            # TODO profiling suggests cstm.findall is slow! Rewrite
-            decorators = cstm.findall(self.node, cstm.Decorator())
-            is_dataclass = any(
-                cstm.findall(d, cstm.Name("dataclass")) for d in decorators
-            )
-            return is_dataclass
-        return False
+        is_dataclass = cstm.matches(self.node, _dataclass_matcher)
+        return is_dataclass
 
 
 def _get_docstring_node(node):

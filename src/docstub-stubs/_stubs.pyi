@@ -35,6 +35,9 @@ class ScopeType(enum.StrEnum):
     CLASSMETHOD = "classmethod"
     STATICMETHOD = "staticmethod"
 
+_dataclass_name: cstm.Name
+_dataclass_matcher: cstm.ClassDef
+
 @dataclass(slots=True, frozen=True)
 class _Scope:
 
