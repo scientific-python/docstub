@@ -1,12 +1,5 @@
 # Contributing
 
-## Design goals
-
-- Docsub is not a type checker.
-- Type annotation patterns that are too complex to express reasonably in docstrings, won't be supported.
-  For these cases, docstub encourages fallback mechanisms (like inline annotations, or creating a stub file manually).
-
-
 ## Bug reports, feature requests and feedback
 
 Head over to [docstub's issue tracker](https://github.com/scientific-python/docstub/issues) and feel very welcome to open an issue!
@@ -65,3 +58,13 @@ pre-commit run --all
 ```shell
 python -m sphinx --fresh-env --nitpicky --fail-on-warning "docs/" "docs/build/"
 ```
+
+
+## Design goals
+
+- Docstub is not a type checker.
+- Docstub is not a linter.
+- Docstub aims for readable type descriptions in docstrings.
+  It should not introduce more complexity in docstrings than if [Python-native annotations](https://typing.python.org/en/latest/spec/glossary.html#term-annotation-expression) were used.
+- Docstub encourages fallback mechanisms like inline annotations, or creating a stub file manually.
+  This helps with cases that would have a poor readability in docstrings, would be very complex, or are not supported.
