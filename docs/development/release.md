@@ -11,8 +11,8 @@ Generate a [read-only GitHub token](https://github.com/settings/personal-access-
 ```shell
 pip install changelist
 
-RELEASE_TAG=
-PREV_TAG=
+RELEASE_TAG=...
+PREV_TAG=...
 export GH_TOKEN=...
 
 changelist scientific-python/docstub \
@@ -21,8 +21,10 @@ changelist scientific-python/docstub \
     "${PREV_TAG}" main
 ```
 
-`RELEASE_TAG` is the tag of the current release (for example `v1.1.0`), `PREV_TAG` is the tag of the previous release (for example `v1.0.0`).
-So changelist will generate notes based on the changes between `PREV_TAG..main`.
+- `RELEASE_TAG` is the tag of the current release (for example `v1.1.0`)
+- `PREV_TAG` is the tag of the previous release (for example `v1.0.0`).
+
+So changelist will generate notes based on the changes between `${PREV_TAG}..main`.
 
 Review and update `doc/release_notes/v${RELEASE_TAG}.md`.
 Don't forget to add the new document to `doc/release_notes/index.md`.
@@ -51,6 +53,10 @@ git push origin "v${RELEASE_TAG}"
 
 ## Create a new "version" on Read the Docs
 
+Login to https://app.readthedocs.org/projects/docstub.
+
+Create a [new version](https://app.readthedocs.org/dashboard/docstub/version/create/) for the tag corresponding to the new release.
+
 
 ## Trigger release workflow on GitHub
 
@@ -61,3 +67,7 @@ If successful, the workflow will build the package and push it to PyPI.
 
 ## Format and publish GitHub release
 
+[Create a new release draft](https://github.com/scientific-python/docstub/releases/new) and copy the content of `doc/release_notes/v${RELEASE_TAG}.md` into it.
+(Remove the duplicate level 1 headline in the first line.)
+
+Review and publish.
