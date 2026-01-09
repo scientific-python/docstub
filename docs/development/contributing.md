@@ -1,8 +1,16 @@
 # Contributing
 
-## Bug reports, feature requests and feedback
+Thanks for trying out docstub and being interested in contributing!
+We'd greatly appreciate feedback and bug reports, as well as pointers to where the documentation is confusing and unclear.
 
-Head over to [docstub's issue tracker](https://github.com/scientific-python/docstub/issues) and feel very welcome to open an issue!
+Our project follows [Scientific Python's Code of Conduct](https://scientific-python.org/code_of_conduct/).
+
+
+## Reaching out
+
+For bug reports, feature requests and feedback, head over to [docstub's issue tracker](https://github.com/scientific-python/docstub/issues) and feel very welcome to open an issue! 🚀
+
+Before creating a feature request it might be useful to reference our [design guide](design.md), specifically our [goals](design.md#goals).
 
 
 ## Development workflow
@@ -58,13 +66,3 @@ pre-commit run --all
 ```shell
 python -m sphinx --fresh-env --nitpicky --fail-on-warning "docs/" "docs/build/"
 ```
-
-
-## Design goals
-
-- Docstub is not a type checker.
-- Docstub is not a linter.
-- Docstub aims for readable type descriptions in docstrings.
-  It should not introduce more complexity in docstrings than if [Python-native annotations](https://typing.python.org/en/latest/spec/glossary.html#term-annotation-expression) were used.
-- Docstub encourages fallback mechanisms like inline annotations, or creating a stub file manually.
-  This helps with cases that would have a poor readability in docstrings, would be very complex, or are not supported.
