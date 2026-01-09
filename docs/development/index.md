@@ -6,5 +6,6 @@ Resources for and about the development of docstub.
 :maxdepth: 1
 
 contributing
+design
 release
 :::
