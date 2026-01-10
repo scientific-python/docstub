@@ -198,3 +198,41 @@ def update_with_add_values(*mappings, out=None):
 
 class DocstubError(Exception):
     """An error raised by docstub."""
+
+
+_regex_digit = re.compile(r"(\d+)")
+
+
+def naive_natsort_key(item):
+    """Transforms strings into tuples that can be sorted in natural order [1]_.
+
+    This can be passed to the "key" argument of Python's `sorted` function.
+    This is a simple implementation that will likely miss many edge cases.
+
+    Parameters
+    ----------
+    item : Any
+        Item to generate the key from. `str` is called on this item before
+        generating the key.
+
+    Returns
+    -------
+    key : tuple[str or int]
+        Key to sort by.
+
+    Examples
+    --------
+    >>> naive_natsort_key("exposure.py:0:10")
+    ('exposure.py:', 0, ':', 10, '')
+    >>> paths = ["exposure.py:180", "exposure.py:47"]
+    >>> sorted(paths, key=naive_natsort_key)
+    ['exposure.py:47', 'exposure.py:180']
+
+    References
+    ----------
+    .. [1] https://en.wikipedia.org/wiki/Natural_sort_order
+    """
+    parts = _regex_digit.split(str(item))
+    # IDEA: Every second element should always be a digit, use that?
+    key = tuple(int(part) if part.isdigit() else part for part in parts)
+    return key
