@@ -6,7 +6,7 @@ import libcst as cst
 import libcst.matchers as cstm
 import pytest
 
-from docstub._stubs import Py2StubTransformer, _get_docstring_node
+from docstub._stubs import Py2StubTransformer, _dataclass_matcher, _get_docstring_node
 
 
 class Test_get_docstring_node:
@@ -761,3 +761,27 @@ class Test_Py2StubTransformer:
         transformer = Py2StubTransformer()
         result = transformer.python_to_stub(source)
         assert expected == result
+
+
+@pytest.mark.parametrize(
+    ("decorators", "expected"),
+    [
+        ("@dataclass", True),
+        ("@dataclass(frozen=True)", True),
+        ("@dataclasses.dataclass(frozen=True)", True),
+        ("@dc.dataclass", True),
+        ("", False),
+        ("@other", False),
+        ("@other(dataclass=True)", False),
+    ],
+)
+def test_dataclass_matcher(decorators, expected):
+    source = dedent(
+        """
+        {decorators}
+        class Foo:
+            pass
+        """
+    ).format(decorators=decorators)
+    class_def = cst.parse_statement(source)
+    assert cstm.matches(class_def, _dataclass_matcher) is expected
