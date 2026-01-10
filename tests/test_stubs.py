@@ -1,3 +1,4 @@
+import logging
 import re
 from textwrap import dedent
 
@@ -278,6 +279,7 @@ class Test_Py2StubTransformer:
         )
         expected = dedent(
             """
+            from _typeshed import Incomplete
             from typing import ClassVar
             class Foo:
                 a: int
@@ -286,7 +288,7 @@ class Test_Py2StubTransformer:
                 c: list
                 d: ClassVar[bool]
 
-                def __init__(self, a) -> None: ...
+                def __init__(self, a: Incomplete) -> None: ...
             """
         )
         transformer = Py2StubTransformer()
@@ -313,7 +315,7 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-    def test_module_assign_conflict(self, capsys):
+    def test_module_assign_conflict(self, caplog):
         source = dedent(
             '''
             """
@@ -333,13 +335,9 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-        captured = capsys.readouterr()
-        assert captured.out == (
-            "Keeping existing inline annotation for assignment\n"
-            "    str\n"
-            "    ^^^ ignoring docstring: int\n"
-            "\n"
-        )
+        assert caplog.messages == ["Keeping existing inline annotation for assignment"]
+        assert "ignoring docstring: int" in caplog.records[0].details
+        assert caplog.records[0].levelno == logging.WARNING
 
     def test_module_assign_no_conflict(self, capsys):
         source = dedent(
@@ -387,7 +385,7 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-    def test_class_assign_conflict(self, capsys):
+    def test_class_assign_conflict(self, caplog):
         source = dedent(
             '''
             class Foo:
@@ -409,15 +407,10 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-        captured = capsys.readouterr()
-        assert captured.out == (
-            "Keeping existing inline annotation for assignment\n"
-            "    str\n"
-            "    ^^^ ignoring docstring: Sized\n"
-            "\n"
-        )
+        assert caplog.messages == ["Keeping existing inline annotation for assignment"]
+        assert caplog.records[0].levelno == logging.WARNING
 
-    def test_class_assign_no_conflict(self, capsys):
+    def test_class_assign_no_conflict(self, caplog):
         source = dedent(
             '''
             class Foo:
@@ -445,8 +438,7 @@ class Test_Py2StubTransformer:
 
         # No warning should have been raised, since there is no conflict
         # between docstring and inline annotation
-        output = capsys.readouterr()
-        assert output.out == ""
+        assert caplog.messages == []
 
     def test_param_keep_inline_annotation(self):
         source = dedent(
@@ -464,7 +456,7 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-    def test_param_conflict(self, capsys):
+    def test_param_conflict(self, caplog):
         source = dedent(
             '''
             def foo(a: int) -> None:
@@ -485,13 +477,107 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-        captured = capsys.readouterr()
-        assert captured.out == (
-            "Keeping existing inline parameter annotation\n"
-            "    int\n"
-            "    ^^^ ignoring docstring: Sized\n"
-            "\n"
+        assert caplog.messages == ["Keeping existing inline parameter annotation"]
+        assert "ignoring docstring: Sized" in caplog.records[0].details
+        assert caplog.records[0].levelno == logging.WARNING
+
+    @pytest.mark.parametrize("missing", ["", "b", "b :"])
+    def test_missing_param(self, missing, caplog):
+        source = dedent(
+            f'''
+            def foo(a, b) -> None:
+                """
+                Parameters
+                ----------
+                a : int
+                {missing}
+                """
+            '''
         )
+        expected = dedent(
+            """
+            from _typeshed import Incomplete
+            def foo(a: int, b: Incomplete) -> None: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+        assert caplog.messages == ["Missing annotation for parameter 'b'"]
+        assert caplog.records[0].levelno == logging.WARNING
+
+    def test_missing_param_inline(self, caplog):
+        source = dedent(
+            """
+            def foo(a: int, b) -> None:
+                pass
+            """
+        )
+        expected = dedent(
+            """
+            from _typeshed import Incomplete
+            def foo(a: int, b: Incomplete) -> None: ...
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+        assert caplog.messages == ["Missing annotation for parameter 'b'"]
+        assert caplog.records[0].levelno == logging.WARNING
+
+    @pytest.mark.parametrize("missing", ["", "b", "b :"])
+    def test_missing_attr(self, missing, caplog):
+        source = dedent(
+            f'''
+            class Foo:
+                """
+                Attributes
+                ----------
+                a : ClassVar[int]
+                {missing}
+                """
+                a = 3
+                b = True
+            '''
+        )
+        expected = dedent(
+            """
+            from _typeshed import Incomplete
+            from typing import ClassVar
+            class Foo:
+                a: ClassVar[int]
+                b: Incomplete
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+        assert caplog.messages == ["Missing annotation for assignment 'b'"]
+        assert caplog.records[0].levelno == logging.WARNING
+
+    def test_missing_attr_inline(self, caplog):
+        source = dedent(
+            """
+            from typing import ClassVar
+            class Foo:
+                a: ClassVar[int] = 3
+                b = True
+            """
+        )
+        expected = dedent(
+            """
+            from _typeshed import Incomplete
+            from typing import ClassVar
+            class Foo:
+                a: ClassVar[int]
+                b: Incomplete
+            """
+        )
+        transformer = Py2StubTransformer()
+        result = transformer.python_to_stub(source)
+        assert expected == result
+        assert caplog.messages == ["Missing annotation for assignment 'b'"]
+        assert caplog.records[0].levelno == logging.WARNING
 
     def test_return_keep_inline_annotation(self):
         source = dedent(
@@ -509,7 +595,7 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-    def test_return_conflict(self, capsys):
+    def test_return_conflict(self, caplog):
         source = dedent(
             '''
             def foo() -> int:
@@ -530,13 +616,9 @@ class Test_Py2StubTransformer:
         result = transformer.python_to_stub(source)
         assert expected == result
 
-        captured = capsys.readouterr()
-        assert captured.out == (
-            "Keeping existing inline return annotation\n"
-            "    int\n"
-            "    ^^^ ignoring docstring: Sized\n"
-            "\n"
-        )
+        assert caplog.messages == ["Keeping existing inline return annotation"]
+        assert "ignoring docstring: Sized" in caplog.records[0].details
+        assert caplog.records[0].levelno == logging.WARNING
 
     def test_preserved_type_comment(self):
         source = dedent(

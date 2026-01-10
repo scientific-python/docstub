@@ -11,10 +11,10 @@ else:
     from ._vendored.stdlib import glob_translate
 
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
-STUB_HEADER_COMMENT = "# File generated with docstub"
+STUB_HEADER_COMMENT: str = "# File generated with docstub"
 
 
 def is_docstub_generated(stub_path):
@@ -107,7 +107,7 @@ def is_python_package_dir(path):
 
 
 def find_package_root(path):
-    """Determine the root a Python package from any path pointing inside it.
+    """Determine the root of a Python package from any path pointing inside it.
 
     Parameters
     ----------
@@ -121,18 +121,21 @@ def find_package_root(path):
     --------
     >>> from pathlib import Path
     >>> package_root = find_package_root(Path(__file__))
-    >>> (package_root / "docstub").is_dir()
+    >>> package_root.name
+    'docstub'
+
+    >>> find_package_root(package_root) == package_root
     True
     """
-    root = path
-    if root.is_file():
-        root = root.parent
+    root = path.resolve()  # `Path.parent` can't move past relative "." part
 
     for _ in range(2**16):
-        if not is_python_package_dir(root):
-            logger.debug("detected %s as the package root of %s", root, path)
+        parent = root.parent
+        assert parent
+        if not is_python_package_dir(parent):
+            logger.debug("Detected %s as the package root of %s", root, path)
             return root
-        root = root.parent
+        root = parent
 
     msg = f"exceeded iteration length while trying to find package root for {path}"
     raise RuntimeError(msg)
@@ -214,7 +217,7 @@ def _walk_source_package(path, *, ignore_regex):
     """
     # Make sure
     if ignore_regex and ignore_regex.match(str(path.resolve())):
-        logger.info("ignoring %s", path)
+        logger.info("Ignoring '%s'", path)
         return
 
     if is_python_package_dir(path):
@@ -235,10 +238,10 @@ def _walk_source_package(path, *, ignore_regex):
             yield path
 
     elif path.is_dir():
-        logger.debug("skipping directory %s which isn't a Python package", path)
+        logger.debug("Skipping directory '%s', not a Python package", path)
 
     elif path.is_file():
-        logger.debug("skipping non-Python file %s", path)
+        logger.debug("Skipping non-Python file '%s'", path)
 
 
 def walk_source_package(path, *, ignore=()):

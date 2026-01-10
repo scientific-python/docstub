@@ -164,12 +164,12 @@ class Test_TypeCollector:
 
 
 class Test_TypeMatcher:
-    type_prefixes = {  # noqa: RUF012
+    type_prefixes = {
         "np": PyImport(import_="numpy", as_="np"),
         "foo.bar.Baz": PyImport(from_="foo.bar", import_="Baz"),
     }
 
-    types = {  # noqa: RUF012
+    types = {
         "dict": PyImport(implicit="dict"),
         "foo.bar": PyImport(from_="foo", import_="bar"),
         "foo.bar.Baz": PyImport(from_="foo.bar", import_="Baz"),
@@ -256,6 +256,8 @@ class Test_TypeMatcher:
             ("collections.abc.Iterable", "collections.abc"),
             ("Literal", "typing"),
             ("typing.Literal", "typing"),
+            ("NoneType", "types"),
+            ("SimpleNamespace", "types"),
         ],
     )
     def test_common_known_types(self, search_name, import_path):
@@ -320,6 +322,19 @@ class Test_TypeMatcher:
         assert type_name == "cal.January"
         assert py_import == PyImport(implicit="sub.module:cal")
 
+    def test_nicknames(self, caplog):
+        types = {
+            "Buffer": PyImport(from_="collections.abc", import_="Buffer"),
+        }
+        type_nicknames = {
+            "buffer": "collections.abc.Buffer",
+        }
+        matcher = TypeMatcher(types=types, type_nicknames=type_nicknames)
+
+        type_name, py_import = matcher.match("buffer")
+        assert type_name == "Buffer"
+        assert py_import == PyImport(from_="collections.abc", import_="Buffer")
+
     def test_nested_nicknames(self, caplog):
         types = {
             "Foo": PyImport(implicit="Foo"),
@@ -349,7 +364,7 @@ class Test_TypeMatcher:
 
         type_name, py_import = matcher.match("Foo")
         assert len(caplog.records) == 1
-        assert "reached limit while resolving nicknames" in caplog.text
+        assert "Reached limit while resolving nicknames" in caplog.text
 
         assert type_name == "Foo"
         assert py_import == PyImport(implicit="Foo")

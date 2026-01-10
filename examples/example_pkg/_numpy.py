@@ -20,12 +20,12 @@ def func_ndarray(a1, a2, a3, a4=None):
     ----------
     a1 : ndarray
     a2 : np.NDArray
-    a3 : (N, 3) ndarray of float
+    a3 : ndarray of dtype float and shape (N, 3)
     a4 : ndarray of shape (1,) and dtype uint8
 
     Returns
     -------
-    r1 : uint8 array
+    r1 : array of dtype uint8
     r2 : array of dtype complex and shape (1, ..., 3)
     """
 
@@ -37,11 +37,11 @@ def func_array_like(a1, a2, a3, a4):
     ----------
     a1 : array-like
     a2 : array_like
-    a3 : (N, 3) array-like of float
+    a3 : array-like of dtype float and shape (N, 3)
     a4 : array-like of shape (1,) and dtype uint8
 
     Returns
     -------
-    r1 : uint8 array-like
+    r1 : array-like of dtype uint8
     r2 : array_like of dtype complex and shape (1, ..., 3)
     """

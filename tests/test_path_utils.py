@@ -46,7 +46,7 @@ class Test_walk_source_package:
         top_script = tmp_path / "script.py"
         top_script.touch()
 
-        with pytest.raises(TypeError, match=".* must be a Python file or package"):
+        with pytest.raises(TypeError, match=r".* must be a Python file or package"):
             next(walk_source_package(tmp_path))
 
     def test_single_with_docstub_generated_stub(self, tmp_path):

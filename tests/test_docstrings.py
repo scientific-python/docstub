@@ -1,10 +1,15 @@
+import logging
 from textwrap import dedent
 
 import lark
 import pytest
 
 from docstub._analysis import PyImport
-from docstub._docstrings import Annotation, DocstringAnnotations, DoctypeTransformer
+from docstub._docstrings import (
+    Annotation,
+    DocstringAnnotations,
+    DoctypeTransformer,
+)
 
 
 class Test_Annotation:
@@ -29,7 +34,7 @@ class Test_Annotation:
         assert return_annotation.imports == path_anno.imports | sequence_anno.imports
 
     def test_unexpected_value(self):
-        with pytest.raises(ValueError, match="unexpected '~' in annotation value"):
+        with pytest.raises(ValueError, match=r"unexpected '~' in annotation value"):
             Annotation(value="~.foo")
 
 
@@ -180,6 +185,17 @@ class Test_DoctypeTransformer:
         annotation, _ = transformer.doctype_to_annotation(doctype)
         assert annotation.value == expected
 
+    def test_single_natlang_literal_warning(self, caplog):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation("{True}")
+        assert annotation.value == "Literal[True]"
+        assert caplog.messages == ["Natural language literal with one item: `{True}`"]
+        assert caplog.records[0].levelno == logging.WARNING
+        assert (
+            caplog.records[0].details
+            == "Consider using `Literal[True]` to improve readability"
+        )
+
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
@@ -228,12 +244,9 @@ class Test_DoctypeTransformer:
     @pytest.mark.parametrize(
         ("fmt", "expected_fmt"),
         [
-            ("{shape} {name}",                            "{name}"),
-            ("{shape} {name} of {dtype}",                 "{name}[{dtype}]"),
-            ("{shape} {dtype} {name}",                    "{name}[{dtype}]"),
-            ("{dtype} {name}",                            "{name}[{dtype}]"),
             ("{name} of shape {shape} and dtype {dtype}", "{name}[{dtype}]"),
             ("{name} of dtype {dtype} and shape {shape}", "{name}[{dtype}]"),
+            ("{name} of {dtype}", "{name}[{dtype}]"),
         ],
     )
     @pytest.mark.parametrize("name", ["array", "ndarray", "array-like", "array_like"])
@@ -261,7 +274,6 @@ class Test_DoctypeTransformer:
         ("doctype", "expected"),
         [
             ("ndarray of dtype (int or float)", "ndarray[int | float]"),
-            ("([P,] M, N) (int or float) array", "array[int | float]"),
         ],
     )
     def test_natlang_array_specific(self, doctype, expected):
@@ -336,10 +348,9 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
-        assert len(annotations.parameters) == 2
+        assert len(annotations.parameters) == 1
         assert annotations.parameters["a"].value == expected
-        assert annotations.parameters["b"].value == "Incomplete"
-        assert annotations.parameters["b"].imports == {PyImport.typeshed_Incomplete()}
+        assert "b" not in annotations.parameters
 
     @pytest.mark.parametrize(
         ("doctypes", "expected"),
@@ -498,7 +509,7 @@ class Test_DocstringAnnotations:
         assert "kwargs" in annotations.parameters
         assert "**kargs" not in annotations.parameters
 
-    def test_missing_whitespace(self, capsys):
+    def test_missing_whitespace(self, caplog):
         """Check for warning if a whitespace is missing between parameter and colon.
 
         In this case, NumPyDoc parses the entire thing as the parameter name.
@@ -513,8 +524,8 @@ class Test_DocstringAnnotations:
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
         assert annotations.parameters["a"].value == "int"
-        captured = capsys.readouterr()
-        assert "Possibly missing whitespace" in captured.out
+        assert len(caplog.records) == 1
+        assert "Possibly missing whitespace" in caplog.text
 
     def test_combined_numpydoc_params(self):
         docstring = dedent(
@@ -527,12 +538,10 @@ class Test_DocstringAnnotations:
         )
         transformer = DoctypeTransformer()
         annotations = DocstringAnnotations(docstring, transformer=transformer)
-        assert len(annotations.parameters) == 5
+        assert len(annotations.parameters) == 3
         assert annotations.parameters["a"].value == "bool"
         assert annotations.parameters["b"].value == "bool"
         assert annotations.parameters["c"].value == "bool"
 
-        assert annotations.parameters["d"].value == "Incomplete"
-        assert annotations.parameters["e"].value == "Incomplete"
-        assert annotations.parameters["d"].imports == {PyImport.typeshed_Incomplete()}
-        assert annotations.parameters["e"].imports == {PyImport.typeshed_Incomplete()}
+        assert "d" not in annotations.parameters
+        assert "e" not in annotations.parameters

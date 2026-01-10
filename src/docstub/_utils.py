@@ -1,12 +1,7 @@
-import dataclasses
 import itertools
 import re
-from functools import lru_cache
-from pathlib import Path
-from textwrap import indent
+from functools import lru_cache, wraps
 from zlib import crc32
-
-import click
 
 
 def accumulate_qualname(qualname, *, start_right=False):
@@ -65,6 +60,33 @@ def escape_qualname(name):
     return qualname
 
 
+def _resolve_path_before_caching(func):
+    """Resolve relative paths passed to :func:`module_name_from_path`.
+
+    :func:`module_name_from_path` makes use of Python's :func:`lru_cache`
+    decorator. Caching results based on relative paths may return wrong results
+    if the current working directory changes.
+
+    Access the :func:`lru_cache` specific attributes with ``func.__wrapped__``.
+
+    Parameters
+    ----------
+    func : Callable
+
+    Returns
+    -------
+    wrapped : Callable
+    """
+
+    @wraps(func)
+    def wrapped(file_path):
+        file_path = file_path.resolve()
+        return func(file_path)
+
+    return wrapped
+
+
+@_resolve_path_before_caching
 @lru_cache(maxsize=100)
 def module_name_from_path(path):
     """Find the full name of a module within its package from its file path.
@@ -91,16 +113,25 @@ def module_name_from_path(path):
 
     name_parts = []
     if path.name != "__init__.py":
+        assert path.stem
         name_parts.insert(0, path.stem)
 
+    iter_limit = 10_000
     directory = path.parent
-    while True:
+    for _ in range(iter_limit):
         is_in_package = (directory / "__init__.py").is_file()
         if is_in_package:
+            assert directory.name
             name_parts.insert(0, directory.name)
             directory = directory.parent
         else:
             break
+    else:
+        msg = (
+            f"Reached iteration limit ({iter_limit}) "
+            f"while trying to find module name for {path!r}"
+        )
+        raise RuntimeError(msg)
 
     name = ".".join(name_parts)
     return name
@@ -128,232 +159,41 @@ def pyfile_checksum(path):
     return key
 
 
-@dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class ErrorReporter:
-    """Format error messages in context of a location in a file.
+def update_with_add_values(*mappings, out=None):
+    """Merge mappings while adding together their values.
 
-    Attributes
+    Parameters
     ----------
-    path :
-        Path to a file for the current context.
-    line :
-        The line in the given file.
-    column :
-        The column in the given line.
+    mappings : Mapping[Hashable, int or Sequence]
+    out : dict, optional
+
+    Returns
+    -------
+    out : dict, optional
 
     Examples
     --------
-    >>> from pathlib import Path
-    >>> rep = ErrorReporter()
-    >>> rep.message("Message")
-    Message
-    <BLANKLINE>
-    >>> rep = rep.copy_with(path=Path("file/with/problems.py"))
-    >>> rep.copy_with(line=3).message("Message with line info")
-    file...problems.py:3: Message with line info
-    <BLANKLINE>
-    >>> rep.copy_with(line=4, column=2).message("With line & column info")
-    file...problems.py:4:2: With line & column info
-    <BLANKLINE>
-    >>> rep.message("Summary", details="More details")
-    file...problems.py: Summary
-        More details
-    <BLANKLINE>
+    >>> stats_1 = {"errors": 2, "warnings": 0, "unknown": ["string", "integer"]}
+    >>> stats_2 = {"unknown": ["func"], "errors": 1}
+    >>> update_with_add_values(stats_1, stats_2)
+    {'errors': 3, 'warnings': 0, 'unknown': ['string', 'integer', 'func']}
+
+    >>> _ = update_with_add_values(stats_1, out=stats_2)
+    >>> stats_2
+    {'unknown': ['func', 'string', 'integer'], 'errors': 3, 'warnings': 0}
+
+    >>> update_with_add_values({"lines": (1, 33)}, {"lines": (42,)})
+    {'lines': (1, 33, 42)}
     """
-
-    path: Path | None = None
-    line: int | None = None
-    column: int | None = None
-
-    def copy_with(self, *, path=None, line=None, column=None, line_offset=None):
-        """Return a new copy with the modified attributes.
-
-        Parameters
-        ----------
-        path : Path, optional
-        line : int, optional
-        column : int, optional
-        line_offset : int, optional
-
-        Returns
-        -------
-        new : Self
-        """
-        kwargs = dataclasses.asdict(self)
-        if path:
-            kwargs["path"] = path
-        if line:
-            kwargs["line"] = line
-        if line_offset:
-            kwargs["line"] += line_offset
-        if column:
-            kwargs["column"] = column
-        new = type(self)(**kwargs)
-        return new
-
-    def message(self, short, *, details=None):
-        """Print a message in context of the saved location.
-
-        Parameters
-        ----------
-        short : str
-            A short summarizing message that shouldn't wrap over multiple lines.
-        details : str, optional
-            An optional multiline message with more details.
-        """
-        message = click.style(short, bold=True)
-        location = self.format_location(
-            path=self.path, line=self.line, column=self.column
-        )
-        if location:
-            message = f"{location}: {message}"
-
-        if details:
-            indented = indent(details, prefix="    ")
-            message = f"{message}\n{indented}"
-
-        message = f"{message.strip()}\n"
-        click.echo(message)
-
-    def __post_init__(self):
-        if self.path is not None and not isinstance(self.path, Path):
-            msg = f"expected `path` to be of type `Path`, got {type(self.path)!r}"
-            raise TypeError(msg)
-
-    @staticmethod
-    def format_location(*, path, line, column):
-        location = ""
-        if path:
-            location = path
-            if line:
-                location = f"{location}:{line}"
-                if column:
-                    location = f"{location}:{column}"
-        if location:
-            location = click.style(location, fg="magenta")
-        return location
-
-    @staticmethod
-    def underline(line):
-        underlined = f"{line}\n{click.style('^' * len(line), fg='red', bold=True)}"
-        return underlined
-
-
-@dataclasses.dataclass(kw_only=True, frozen=True)
-class GroupedErrorReporter(ErrorReporter):
-    """Format & group error messages in context of a location in a file.
-
-    Examples
-    --------
-    >>> from pathlib import Path
-    >>> rep = GroupedErrorReporter()
-    >>> rep.message("Syntax error")
-    >>> rep = rep.copy_with(path=Path("file/with/problems.py"))
-    >>> rep.copy_with(line=3).message("Syntax error")
-    >>> rep.copy_with(line=4, column=2).message("Unknown doctype")
-    >>> rep.message("Unknown doctype")
-    >>> rep.print_grouped()
-    Syntax error (x2)
-        <unknown location>
-        ...problems.py:3
-    <BLANKLINE>
-    Unknown doctype (x2)
-        ...problems.py
-        ...problems.py:4:2
-    <BLANKLINE>
-    """
-
-    _messages: list = dataclasses.field(default_factory=list)
-
-    def copy_with(self, *, path=None, line=None, column=None, line_offset=None):
-        """Return a new copy with the modified attributes.
-
-        Parameters
-        ----------
-        path : Path, optional
-        line : int, optional
-        column : int, optional
-        line_offset : int, optional
-
-        Returns
-        -------
-        new : Self
-        """
-        new = super().copy_with(
-            path=path, line=line, column=column, line_offset=line_offset
-        )
-        # Explicitly override `_message` since super method relies on
-        # `dataclasses.asdict` which performs deep copies on lists, while
-        #  we want to collect all messages in one list
-        object.__setattr__(new, "_messages", self._messages)
-        return new
-
-    def message(self, short, *, details=None):
-        """Print a message in context of the saved location.
-
-        Parameters
-        ----------
-        short : str
-            A short summarizing message that shouldn't wrap over multiple lines.
-        details : str, optional
-            An optional multiline message with more details.
-        """
-        self._messages.append(
-            {
-                "short": short.strip(),
-                "details": details.strip() if details else details,
-                "path": self.path,
-                "line": self.line,
-                "column": self.column,
-            }
-        )
-
-    def print_grouped(self):
-        """Print all collected messages in groups."""
-
-        def key(message):
-            return (
-                message["short"] or "",
-                message["details"] or "",
-                message["path"] or Path(),
-                message["line"] or -1,
-                message["column"] or -1,
-            )
-
-        groups = {}
-        for message in sorted(self._messages, key=key):
-            group_name = (message["short"], message["details"])
-            if group_name not in groups:
-                groups[group_name] = []
-            groups[group_name].append(message)
-
-        # Show largest groups last
-        groups_by_size = sorted(groups.items(), key=lambda x: len(x[1]))
-
-        for (short, details), group in groups_by_size:
-            formatted = click.style(short, bold=True)
-            if len(group) > 1:
-                formatted = f"{formatted} (x{len(group)})"
-            if details:
-                indented = indent(details, prefix="    ")
-                formatted = f"{formatted}\n{indented}"
-
-            occurrences = []
-            for message in group:
-                location = (
-                    self.format_location(
-                        path=message["path"],
-                        line=message["line"],
-                        column=message["column"],
-                    )
-                    or "<unknown location>"
-                )
-                occurrences.append(location)
-            occurrences = "\n".join(occurrences)
-            occurrences = indent(occurrences, prefix="    ")
-            formatted = f"{formatted}\n{occurrences}\n"
-
-            click.echo(formatted)
+    if out is None:
+        out = {}
+    for m in mappings:
+        for key, value in m.items():
+            if hasattr(value, "__add__"):
+                out[key] = out.setdefault(key, type(value)()) + value
+            else:
+                raise TypeError(f"Don't know how to 'add' {value!r}")
+    return out
 
 
 class DocstubError(Exception):

@@ -1,2 +1,3 @@
 docstub\._version\..*
 docstub._cache.FuncSerializer.__type_params__
+(docstub\..*__conditional_annotations__)?

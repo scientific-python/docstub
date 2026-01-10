@@ -7,6 +7,8 @@ on:
     branches:
       - main
 
+permissions: {}
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -15,7 +17,7 @@ env:
   # Many color libraries just need this to be set to any value, but at least
   # one distinguishes color depth, where "3" -> "256-bit color".
   FORCE_COLOR: 3
-  MYPYPATH: ${{ github.workspace }}/stubs
+  PIP_PROGRESS_BAR: "off"
 
 defaults:
   run:
@@ -30,10 +32,11 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
-      - uses: pre-commit/action@v3.0.1
+      - uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd  # v3.0.1
         with:
           extra_args: --hook-stage manual --all-files
 
@@ -46,22 +49,26 @@ jobs:
         runs-on:
           - { short: linux, name: ubuntu-latest }
           - { short: win, name: windows-latest }
-          - { short: macos, name: macos-14 }
-        python-version: ["3.12", "3.13"]
+          - { short: macos, name: macos-latest }
+        python-version: ["3.12", "3.14"]
+        include:
+          - runs-on: { short: linux, name: ubuntu-latest }
+            python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
 
       - name: Install package
         run: |
-          python -m pip install .[test]
+          python -m pip install --group "test" .
           python -m docstub --version
           docstub --help
 
@@ -71,17 +78,31 @@ jobs:
 
       # TODO upload coverage statistics, and fail on decrease?
 
-      - name: Compare example stubs
+      - name: Check example_pkg-stubs
+        # Check that stubs for example_pkg are up-to-date by regenerating them
+        # with docstub and looking for differences.
         run: |
+          rm -rf examples/example_pkg-stubs
           python -m docstub run -v \
               --config=examples/docstub.toml \
               --out-dir=examples/example_pkg-stubs \
               examples/example_pkg
-          git diff --exit-code examples/ && echo "Stubs for example_pkg did not change"
+          .github/scripts/assert-unchanged.sh examples/
 
-      - name: Generate stubs for docstub
+      - name: Check docstub-stubs (single process)
+        # Check that stubs for docstub are up-to-date by regenerating them
+        # with docstub and looking for differences.
         run: |
-          python -m docstub run -v src/docstub -o ${MYPYPATH}/docstub
+          rm -rf src/docstub-stubs
+          python -m docstub run -v src/docstub -o src/docstub-stubs
+          .github/scripts/assert-unchanged.sh src/docstub-stubs/
+
+      - name: Check docstub-stubs (multiprocess)
+        # Repeat test with multiprocessing enabled
+        run: |
+          rm -rf src/docstub-stubs
+          python -m docstub run -v src/docstub -o src/docstub-stubs --workers 2
+          .github/scripts/assert-unchanged.sh src/docstub-stubs/
 
       - name: Check with mypy.stubtest
         run: |

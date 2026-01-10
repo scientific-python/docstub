@@ -1,0 +1,36 @@
+html {
+    scroll-behavior: auto;
+}
+
+/* Left-align tables instead of centering them */
+article .align-default {
+    margin-left: unset;
+    margin-right: unset;
+}
+
+/* Apply the same padding to the ad as other items in the sidebar */
+.ethical-ad-padding {
+    padding: var(--sidebar-item-spacing-vertical) var(--sidebar-item-spacing-horizontal);
+}
+
+/* Account for margin-bottom of a preceeding sidebar-tree's to keep spacing
+   between items consistent. */
+.sidebar-tree + .sidebar-tree {
+    margin-top: calc(var(--sidebar-tree-space-above) - var(--sidebar-item-spacing-vertical));
+}
+
+/* Style and align inserted version in sidebar. */
+.sidebar-version {
+    font-family: var(--font-stack--monospace);
+    font-size: var(--font-size--small);
+    color: var(--color-foreground-secondary);
+    padding-inline: var(--sidebar-item-spacing-horizontal);
+    padding-bottom: var(--sidebar-item-spacing-vertical) ;
+    margin-bottom: var(--sidebar-item-spacing-vertical);
+    overflow-wrap: break-word;
+}
+/* Remove bottom margin of brand so that version info is closer and better aligned. */
+.sidebar-brand-text {
+    margin-bottom: 0;
+
+}

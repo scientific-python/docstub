@@ -1,30 +1,27 @@
 # Typing syntax in docstrings
 
-> [!NOTE]
-> **In early development!**
-> Expect bugs, missing features, and incomplete documentation.
-> Docstub is still evaluating which features it needs to support as the community gives feedback.
-> Several features are experimental and included to make adoption of docstub easier.
-> Long-term, some of these might be discouraged or removed as docstub matures.
-
-Docstub defines its own [grammar](../src/docstub/doctype.lark) to parse and transform type information in docstrings (doctypes) into valid Python type expressions.
+Docstub defines its own [grammar](../src/docstub/doctype.lark) to parse and transform type information in docstrings into valid Python type expressions.
 This grammar fully supports [Python's conventional typing syntax](https://typing.python.org/en/latest/index.html).
-So any type expression that is valid in Python, can be used in a docstrings as is.
+So any {term}`annotation expression` that is valid in Python, can be used in a docstrings as is.
 In addition, docstub extends this syntax with several "natural language" expressions that are commonly used in the scientific Python ecosystem.
 
-Docstrings should follow a form that is inspired by the NumPyDoc style:
-```
-Section name
+Docstrings should follow a form that is inspired by the [NumPyDoc style](https://numpydoc.readthedocs.io/en/latest/format.html):
+```none
+Section namew
 ------------
 name : doctype, optional_info
   Description.
 ```
 
 - `name` might be the name of a parameter, attribute or similar.
-- `doctype` the actual type information that will be transformed into a Python type.
-- `optional_info` is optional and captures anything after the first comma (that is not inside a type expression).
+- `doctype` contains the actual type information that will be transformed into an {term}`annotation expression`.
+  Here you can use the "natural language" expressions that are documented below.
+- `optional_info` is optional and captures anything after the first (top-level) comma.
   It is useful to provide additional information for readers.
-  Its presence and content doesn't currently affect the resulting type annotation.
+  Its presence and content doesn't affect the generated {term}`annotation expression`.
+
+Combining multiple names that share a doctype and description is supported.
+  For example `a, b : int` is equivalent to defining both separately.
 
 
 ## Unions
@@ -48,7 +45,7 @@ This extends the basic subscription syntax for [generics](https://typing.python.
 | `CONTAINER of (X or Y)` | `CONTAINER[X \| Y]`    |
 
 For the simple case `CONTAINER of X`, where `X` is a name, you can append `(s)` to indicate the plural form.
-E.g., `list of float(s)`.
+For example, `list of float(s)`.
 
 Variants of for [**tuples**](https://typing.python.org/en/latest/spec/tuples.html)
 
@@ -65,36 +62,40 @@ and **mappings** exist.
 | `dict of {str: int}` | `dict[str, int]`       |
 
 
-> [!TIP]
-> While it is possible to nest these variants repeatedly, it is discouraged to do so to keep type descriptions readable.
-> For complex annotations with nested containers, consider using Python's conventional syntax.
-> In the future, docstub may warn against or disallow nesting these natural language variants.
+:::{tip}
+While it is possible to nest these variants repeatedly, it decreases the readability.
+For complex nested annotations with nested containers, consider using Python's conventional syntax.
+In the future, docstub may warn against or disallow nesting these natural language variants.
+:::
 
 
 ## Shape and dtype syntax for arrays
 
 This expression allows adding shape and datatype information for data structures like [NumPy arrays](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html).
 
-`array` and `ndarray`, and `array-like` and `array_like` can be used interchange-ably.
+`array` and `ndarray`, and `array-like` and `array_like` can be used interchange-ably for the variable `ARRAY` below.
 
-| Docstring type              | Python type annotation |
-|-----------------------------|------------------------|
-| `array of DTYPE`            | `ndarray[DTYPE]`       |
-| `ndarray of dtype DTYPE`    | `ndarray[DTYPE]`       |
-| `array-like of DTYPE`       | `ArrayLike[DTYPE]`     |
-| `array_like of dtype DTYPE` | `ArrayLike[DTYPE]`     |
+| Docstring type                         | Python type annotation |
+|----------------------------------------|------------------------|
+| `ARRAY of dtype DTYPE`                 | `ARRAY[DTYPE]`         |
+| `ARRAY of dtype DTYPE and shape SHAPE` | `ARRAY[DTYPE]`         |
+| `ARRAY of shape SHAPE`                 | `ARRAY[DTYPE]`         |
+| `ARRAY of shape SHAPE and dtype DTYPE` | `ARRAY[DTYPE]`         |
 
-> [!NOTE]
-> Noting the **shape** of an array in the docstring is supported.
-> However, Python's typing system is not yet able to express this information.
-> It is therefore not included in the resulting type annotation.
+For example
 
-| Docstring type           | Python type annotation |
-|--------------------------|------------------------|
-| `(3,) array of DTYPE`    | `ndarray[DTYPE]`       |
-| `(X, Y) array of DTYPE`  | `ndarray[DTYPE]`       |
-| `([P,] M, N) array-like` | `ArrayLike`            |
-| `(M, ...) ndarray`       | `ArrayLike`            |
+| Docstring type                           | Python type annotation |
+|------------------------------------------|------------------------|
+| `array of dtype int`                     | `ndarray[int]`         |
+| `ndarray of dtype bool and shape (4, 4)` | `ndarray[bool]`        |
+| `array-like of dtype float`              | `ArrayLike[float]`     |
+| `array_like of shape (M, 2)`             | `ArrayLike`            |
+
+
+:::{note}
+Noting the **shape** of an array in the docstring is supported.
+However, [support for including shapes in generated stubs](https://github.com/scientific-python/docstub/issues/76) is not yet included in docstub.
+:::
 
 
 ## Literals
@@ -107,25 +108,27 @@ Instead of using [`typing.Literal`](https://docs.python.org/3/library/typing.htm
 | `{-1, 0, 3, True, False}` | `Literal[-1, 0, 3, True, False]` |
 | `{"red", "blue", None}`   | `Literal["red", "blue", None]`   |
 
-> [!TIP]
-> Enclosing a single value `{X}` is currently allowed but discouraged.
-> Instead consider the more explicit `Literal[X]`.
+:::{tip}
+Enclosing a single value `{X}` is allowed.
+However, `Literal[X]` is more explicit.
+:::
 
-> [!WARNING]
-> Python's `typing.Literal` only supports a restricted set of parameters.
-> E.g., `float` literals are not yet supported by the type system but are allowed by docstub.
-> Addressing this use case is on the roadmap.
-> See [issue 47](https://github.com/scientific-python/docstub/issues/47) for more details.
-
+:::{warning}
+Python's `typing.Literal` only supports a restricted set of parameters.
+For example, `float` literals are not yet supported by the type system but are allowed by docstub.
+Addressing this use case is on the roadmap.
+See [issue 47](https://github.com/scientific-python/docstub/issues/47) for more details.
+:::
 
 ## reStructuredText role
 
-Since docstrings are also used to generate documentation with Sphinx, you may want to use [restructuredText roles](https://docutils.sourceforge.io/docs/ref/rst/roles.html) in your type annotations.
-Docstub allows for this anywhere where a qualified name can be used.
+Since docstrings are also used to generate documentation with Sphinx, you may want to use [restructuredText roles](https://docutils.sourceforge.io/docs/ref/rst/roles.html).
+This is supported anywhere in where a {term}`type name` is used in a {term}`doctype`.
 
-| Docstring type       | Python type annotation |
-|----------------------|------------------------|
-| `` `X` ``            | `X`                    |
-| ``:ref:`X` ``        | `X`                    |
-| ``:class:`Y.X` ``    | `Y.X`                  |
-| ``:py:class:`Y.X` `` | `Y.X`                  |
+| Docstring type          | Python type annotation |
+|-------------------------|------------------------|
+| `` `X` ``               | `X`                    |
+| ``:ref:`X` ``           | `X`                    |
+| ``:class:`X`[Y, ...] `` | `X[Y, ...]`            |
+| ``:class:`Y.X` ``       | `Y.X`                  |
+| ``:py:class:`Y.X` ``    | `Y.X`                  |

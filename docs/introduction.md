@@ -1,40 +1,17 @@
-# User guide
+# Introduction
 
-> [!NOTE]
-> **In early development!**
-> Expect bugs, missing features, and incomplete documentation.
-> Docstub is still evaluating which features it needs to support as the community gives feedback.
-> Several features are experimental and included to make adoption of docstub easier.
-> Long-term, some of these might be discouraged or removed as docstub matures.
+This section will introduce you to using docstub and cover important concepts.
+It assumes familiarity with Python and some familiarity with [static Typing](https://typing.python.org).
 
 
-## Installation
+## First example
 
-Docstub is available as a [package on PyPI](https://pypi.org/project/docstub/) and can be installed from there with your favorite package manager. E.g.:
-
-```shell
-pip install docstub
-```
-
-In case you want to check out an unreleased version you can install directly from the repository with:
-
-```shell
-pip install docstub @ git+https://github.com/scientific-python/docstub'
-```
-
-To pin to a specific commit you can append `@COMMIT_SHA` to the repository URL above.
-
-
-## Getting started
-
-Consider a simple example with the following documented function
+Consider a simple file `example.py` with the following documented function
 
 <!--- The following block is checked by the test suite --->
 <!--- begin example.py --->
 
-```python
-# example.py
-
+```{code-block} python
 def example_metric(image, *, mask=None, sigma=1.0, method='standard'):
     """Pretend to calculate a local metric between two images.
 
@@ -65,12 +42,12 @@ Feeding this input to docstub with
 docstub run example.py
 ```
 
-will create `example.pyi` in the same directory
+will create the [stub file](https://typing.python.org/en/latest/spec/distributing.html#stub-files) `example.pyi` in the same directory
 
 <!--- The following block is checked by the test suite --->
 <!--- begin example.pyi --->
 
-```python
+```{code-block} python
 # File generated with docstub
 
 from collections.abc import Iterable
@@ -93,21 +70,21 @@ def example_metric(
 There are several interesting things to note here:
 
 - Many existing conventions that the scientific Python ecosystem uses, will work out of the box.
-  In this case, docstub knew how to translate `array-like`, `array of dtype uint8` into a valid Python type for the stub file.
-  In a similar manner, `or` can be used as a "natural language" alternative to `|` to form unions.
-  You can find more details in [Typing syntax in docstrings](typing_syntax.md).
+  In this case, docstub knew how to translate `array-like`, `array of dtype uint8` into a valid {term}`annotation expression` for the stub file.
+  In a similar manner, `or` was used as a "natural language" alternative to `|` to form unions.
+  This alternative extended syntax is described in [](typing_syntax.md).
 
 - Optional arguments that default to `None` are recognized and a `| None` is appended automatically.
   The `optional` or `default = ...` part don't influence the annotation.
 
-- Referencing the `float` and `Iterable` types worked out of the box.
-  All builtin types as well as types from the standard libraries `typing` and `collections.abc` module can be used like this.
+- Referencing the `float` and `Iterable` worked out of the box.
+  All [built-in types](https://docs.python.org/3/library/stdtypes.html#built-in-types) as well as types from the standard library's `typing`, `types` and `collections.abc` module can be used like this.
   Necessary imports will be added automatically to the stub file.
 
 
 ## Referencing types & nicknames
 
-To translate a type from a docstring into a valid type annotation, docstub needs to know where names in that type are defined from where to import them.
+To translate a type from a docstring into a valid type annotation, docstub needs to know how to import these types.
 Out of the box, docstub will know about builtin types such as `int` or `bool` that don't need an import, and types in `typing`, `collections.abc` from Python's standard library.
 It will source these from the Python environment it is installed in.
 In addition to that, docstub will collect all types in the package directory you are running it on.
@@ -133,18 +110,19 @@ ski = "skimage"
 "sklearn.tree" = "sklearn.tree"
 ```
 
-which will enable any type that is prefixed with `ski.` or `sklearn.tree.`, e.g. `ski.transform.AffineTransform` or `sklearn.tree.DecisionTreeClassifier`.
+which will enable any type that is prefixed with `ski.` or `sklearn.tree.`, for example `ski.transform.AffineTransform` or `sklearn.tree.DecisionTreeClassifier`.
 
-> [!IMPORTANT]
-> Docstub doesn't check that types actually exist or if a symbol is a valid type.
-> We always recommend validating the generated stubs with a full type checker!
+:::{important}
+Docstub doesn't check that types actually exist or if a symbol is a valid type.
+We always recommend validating the generated stubs with a full type checker!
+:::
 
-> [!TIP]
-> Docstub currently collects types statically.
-> So it won't see compiled modules and won't be able to generate stubs for them.
-> For now, you can add stubs for compiled modules yourself and docstub will include these in the generated output.
-> Support for dynamic type collection is on the roadmap.
-
+:::{tip}
+Docstub currently collects types statically.
+So it won't see compiled modules and won't be able to generate stubs for them.
+For now, you can add stubs for compiled modules yourself and docstub will include these in the generated output.
+Support for dynamic type collection is on the roadmap.
+:::
 
 The codebase docstub is running on may already use existing conventions to refer to common types (or you may want to do so).
 Docstub refers to these alternatives as "type nicknames".
@@ -167,9 +145,10 @@ Two command line options can help addressing these errors gradually:
   This way you can adjust the upper bound of allowed errors as they are addressed.
   Useful, if you are running in docstub in continuous integration.
 
-> [!TIP]
-> If you are trying out docstub and have feedback or problems, we'd love to hear from you!
-> Feel welcome to [open an issue](https://github.com/scientific-python/docstub/issues/new/choose). 🚀
+:::{tip}
+If you are trying out docstub and have feedback or problems, we'd love to hear from you!
+Feel welcome to [open an issue](https://github.com/scientific-python/docstub/issues/new/choose). 🚀
+:::
 
 
 ## Dealing with typing problems
@@ -183,7 +162,7 @@ In those cases, you docstub provides a few approaches to dealing with this.
 Docstub will always preserve inline type annotations, regardless of what the docstring contains.
 This is useful for example, if you want to express something that isn't yet supported by Python's type system.
 
-E.g., consider the docstring type of `ord` parameter in [`numpy.linalg.matrix_norm`](https://numpy.org/doc/stable/reference/generated/numpy.linalg.matrix_norm.html)
+For example, consider the docstring type of `ord` parameter in [`numpy.linalg.matrix_norm`](https://numpy.org/doc/stable/reference/generated/numpy.linalg.matrix_norm.html)
 ```rst
 ord : {1, -1, 2, -2, inf, -inf, ‘fro’, ‘nuc’}, optional
 ```
@@ -202,7 +181,7 @@ At its heart, docstub transforms Python source files into stub files.
 You can tell docstub to temporarily stop that transformation for a specific area with a comment directive.
 Wrapping lines of code with `docstub: off` and `docstub: on` comments will preserve these lines completely.
 
-E.g., consider the following example:
+For example, consider the following example:
 ```python
 class Foo:
     # docstub: off
@@ -225,3 +204,13 @@ class Foo:
 
 If all of the above does not solve your issue, you can fall back to writing a correct stub file by hand.
 Docstub will preserve this file and integrated it with other automatically generated stubs.
+
+
+## Distributing stub files
+
+The simplest option is to include generated stubs in the [distribution package](https://packaging.python.org/en/latest/glossary/#term-Distribution-Package) alongside your source files.
+For more complex setups please consult the official guide on [Packaging Type Information](https://typing.python.org/en/latest/spec/distributing.html#packaging-type-information).
+
+As required, Docstub will automatically place an empty `py.typed` file in the root directory of generated stubs to support type checking.
+If you need to [mark your stubs as partial](https://typing.python.org/en/latest/spec/distributing.html#partial-stub-packages), create the `py.typed` file beforehand.
+Docstub will not overwrite it.

@@ -17,19 +17,20 @@ import numpydoc.docscrape as npds
 #   types and imports. I think that could very well be done at a higher level,
 #   e.g. in the stubs module.
 from ._analysis import PyImport, TypeMatcher
-from ._utils import DocstubError, ErrorReporter, escape_qualname
+from ._report import ContextReporter
+from ._utils import DocstubError, escape_qualname
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
-here = Path(__file__).parent
-grammar_path = here / "doctype.lark"
+here: Path = Path(__file__).parent
+grammar_path: Path = here / "doctype.lark"
 
 
 with grammar_path.open() as file:
-    _grammar = file.read()
+    _grammar: str = file.read()
 
-_lark = lark.Lark(_grammar, propagate_positions=True, strict=True)
+_lark: lark.Lark = lark.Lark(_grammar, propagate_positions=True, strict=True)
 
 
 def _find_one_token(tree, *, name):
@@ -179,7 +180,7 @@ class Annotation:
         return values, imports
 
 
-FallbackAnnotation = Annotation(
+FallbackAnnotation: Annotation = Annotation(
     value="Incomplete", imports=frozenset([PyImport.typeshed_Incomplete()])
 )
 
@@ -266,20 +267,25 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         self.matcher = matcher
 
+        self._reporter = None
         self._collected_imports = None
         self._unknown_qualnames = None
 
         super().__init__(**kwargs)
 
-        self.stats = {"syntax_errors": 0}
+        self.stats = {
+            "doctype_syntax_errors": 0,
+            "transformed_doctypes": 0,
+        }
 
-    def doctype_to_annotation(self, doctype):
+    def doctype_to_annotation(self, doctype, *, reporter=None):
         """Turn a type description in a docstring into a type annotation.
 
         Parameters
         ----------
         doctype : str
             The doctype to parse.
+        reporter : ~.ContextReporter
 
         Returns
         -------
@@ -289,13 +295,28 @@ class DoctypeTransformer(lark.visitors.Transformer):
             A set containing tuples. Each tuple contains a qualname, its start and its
             end index relative to the given `doctype`.
         """
-        with self._prepare_transformation():
+        try:
+            self._reporter = reporter or ContextReporter(logger=logger)
+            self._collected_imports = set()
+            self._unknown_qualnames = []
             tree = _lark.parse(doctype)
             value = super().transform(tree=tree)
             annotation = Annotation(
                 value=value, imports=frozenset(self._collected_imports)
             )
+            self.stats["transformed_doctypes"] += 1
             return annotation, self._unknown_qualnames
+        except (
+            lark.exceptions.LexError,
+            lark.exceptions.ParseError,
+            QualnameIsKeyword,
+        ):
+            self.stats["doctype_syntax_errors"] += 1
+            raise
+        finally:
+            self._reporter = None
+            self._collected_imports = None
+            self._unknown_qualnames = None
 
     def qualname(self, tree):
         """
@@ -378,11 +399,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = f"Literal[{out}]"
 
         if len(tree.children) == 1:
-            logger.warning(
-                "natural language literal with one item `%s`, "
-                "consider using `%s` to improve readability",
+            self._reporter.warn(
+                "Natural language literal with one item: `{%s}`",
                 tree.children[0],
-                out,
+                details=f"Consider using `{out}` to improve readability",
             )
 
         if self.matcher is not None:
@@ -447,20 +467,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : lark.visitors._DiscardType
         """
-        logger.debug("dropping shape information")
-        return lark.Discard
-
-    def optional(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : lark.visitors._DiscardType
-        """
-        logger.debug("dropping optional / default info")
+        # self._reporter.debug("Dropping shape information %r", tree)
         return lark.Discard
 
     def optional_info(self, tree):
@@ -473,7 +480,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : lark.visitors._DiscardType
         """
-        logger.debug("dropping optional info")
+        # self._reporter.debug("Dropping optional info %r", tree)
         return lark.Discard
 
     def __default__(self, data, children, meta):
@@ -595,7 +602,7 @@ class DocstringAnnotations:
     ----------
     docstring : str
     transformer : DoctypeTransformer
-    reporter : ~.ErrorReporter
+    reporter : ~.ContextReporter
 
     Examples
     --------
@@ -609,14 +616,6 @@ class DocstringAnnotations:
     >>> transformer = DoctypeTransformer()
     >>> annotations = DocstringAnnotations(docstring, transformer=transformer)
     >>> annotations.parameters.keys()
-    Invalid syntax in docstring type annotation
-        some invalid syntax
-             ^
-    <BLANKLINE>
-    Unknown name in doctype: 'unknown.symbol'
-        unknown.symbol
-        ^^^^^^^^^^^^^^
-    <BLANKLINE>
     dict_keys(['a', 'b', 'c'])
     """
 
@@ -626,15 +625,15 @@ class DocstringAnnotations:
         ----------
         docstring : str
         transformer : DoctypeTransformer
-        reporter : ~.ErrorReporter, optional
+        reporter : ~.ContextReporter, optional
         """
         self.docstring = docstring
         self.np_docstring = npds.NumpyDocString(docstring)
         self.transformer = transformer
 
         if reporter is None:
-            reporter = ErrorReporter(line=0)
-        self.reporter: ErrorReporter = reporter
+            reporter = ContextReporter(logger=logger, line=0)
+        self.reporter = reporter.copy_with(logger=logger)
 
     def _doctype_to_annotation(self, doctype, ds_line=0):
         """Convert a type description to a Python-ready type.
@@ -657,7 +656,10 @@ class DocstringAnnotations:
 
         try:
             annotation, unknown_qualnames = self.transformer.doctype_to_annotation(
-                doctype
+                doctype, reporter=reporter
+            )
+            reporter.debug(
+                "Transformed doctype", details=("   %s\n-> %s", doctype, annotation)
             )
 
         except (lark.exceptions.LexError, lark.exceptions.ParseError) as error:
@@ -665,7 +667,7 @@ class DocstringAnnotations:
             if hasattr(error, "get_context"):
                 details = error.get_context(doctype)
                 details = details.replace("^", click.style("^", fg="red", bold=True))
-            reporter.message(
+            reporter.error(
                 "Invalid syntax in docstring type annotation", details=details
             )
             return FallbackAnnotation
@@ -673,7 +675,7 @@ class DocstringAnnotations:
         except lark.visitors.VisitError as e:
             tb = "\n".join(traceback.format_exception(e.orig_exc))
             details = f"doctype: {doctype!r}\n\n{tb}"
-            reporter.message("unexpected error while parsing doctype", details=details)
+            reporter.error("Unexpected error while parsing doctype", details=details)
             return FallbackAnnotation
 
         else:
@@ -681,7 +683,7 @@ class DocstringAnnotations:
                 width = stop_col - start_col
                 error_underline = click.style("^" * width, fg="red", bold=True)
                 details = f"{doctype}\n{' ' * start_col}{error_underline}\n"
-                reporter.message(f"Unknown name in doctype: {name!r}", details=details)
+                reporter.error(f"Unknown name in doctype: {name!r}", details=details)
             return annotation
 
     @cached_property
@@ -716,8 +718,8 @@ class DocstringAnnotations:
 
         duplicates = param_section.keys() & other_section.keys()
         for duplicate in duplicates:
-            self.reporter.message(
-                "duplicate attribute name in docstring",
+            self.reporter.warn(
+                "Duplicate attribute name in docstring",
                 details=self.reporter.underline(duplicate),
             )
 
@@ -810,7 +812,7 @@ class DocstringAnnotations:
                     ds_line = i
                     break
             reporter = self.reporter.copy_with(line_offset=ds_line)
-            reporter.message(msg, details=hint)
+            reporter.warn(msg, details=hint)
 
             new_name, new_type = param.name.split(":", maxsplit=1)
             param = npds.Parameter(name=new_name, type=new_type, desc=param.desc)
@@ -838,19 +840,20 @@ class DocstringAnnotations:
         for param in params:
             param = self._handle_missing_whitespace(param)  # noqa: PLW2901
 
+            if param.type.strip() == "":
+                # Missing doctype in docstring, might have an inlined annotation
+                # so skip
+                continue
+
             if param.name in annotated_params:
-                # TODO make error
-                self.reporter.message(
-                    "duplicate parameter / attribute name in docstring",
+                self.reporter.warn(
+                    "Duplicate parameter / attribute name in docstring",
                     details=self.reporter.underline(param.name),
                 )
                 continue
 
-            if param.type:
-                ds_line = self._find_docstring_line(param.name, param.type)
-                annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
-            else:
-                annotation = FallbackAnnotation
+            ds_line = self._find_docstring_line(param.name, param.type)
+            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
             annotated_params[param.name.strip()] = annotation
 
         return annotated_params
