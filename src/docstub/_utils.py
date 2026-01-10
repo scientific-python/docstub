@@ -217,7 +217,7 @@ def naive_natsort_key(item):
 
     Returns
     -------
-    key : tuple[str or int]
+    key : tuple[str | int, ...]
         Key to sort by.
 
     Examples
