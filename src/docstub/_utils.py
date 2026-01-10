@@ -200,7 +200,7 @@ class DocstubError(Exception):
     """An error raised by docstub."""
 
 
-_regex_digit = re.compile(r"(\d+)")
+_regex_digit: re.Pattern = re.compile(r"(\d+)")
 
 
 def naive_natsort_key(item):
