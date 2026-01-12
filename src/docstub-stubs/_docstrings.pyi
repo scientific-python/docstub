@@ -12,16 +12,15 @@ import lark.visitors
 import numpydoc.docscrape as npds
 
 from ._analysis import PyImport, TypeMatcher
-from ._doctype import BlacklistedQualname, Expression, Token, TokenKind, parse_doctype
+from ._doctype import BlacklistedQualname, Expr, Term, TermKind, parse_doctype
 from ._report import ContextReporter, Stats
 from ._utils import escape_qualname
 
 logger: logging.Logger
 
-def update_qualnames(
-    expr: Expression, *, _parents: tuple[Expression, ...] = ...
-) -> Generator[tuple[tuple[Expression, ...], Token], str]: ...
-def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token: ...
+def _update_qualnames(
+    expr: Expr, *, _parents: tuple[Expr, ...] = ...
+) -> Generator[tuple[tuple[Expr, ...], Term], str]: ...
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Annotation:
 
@@ -52,6 +51,13 @@ def _uncombine_numpydoc_params(
     params: list[npds.Parameter],
 ) -> Generator[npds.Parameter]: ...
 def _red_partial_underline(doctype: str, *, start: int, stop: int) -> str: ...
+def doctype_to_annotation(
+    doctype: str,
+    *,
+    matcher: TypeMatcher | None = ...,
+    reporter: ContextReporter | None = ...,
+    stats: Stats | None = ...,
+) -> Annotation: ...
 
 class DocstringAnnotations:
     docstring: str
@@ -62,13 +68,10 @@ class DocstringAnnotations:
         self,
         docstring: str,
         *,
-        matcher: TypeMatcher,
+        matcher: TypeMatcher | None = ...,
         reporter: ContextReporter | None = ...,
         stats: Stats | None = ...,
     ) -> None: ...
-    def _doctype_to_annotation(
-        self, doctype: str, ds_line: int = ...
-    ) -> Annotation: ...
     @cached_property
     def attributes(self) -> dict[str, Annotation]: ...
     @cached_property

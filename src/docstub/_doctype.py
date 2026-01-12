@@ -23,7 +23,9 @@ grammar_path: Final = Path(__file__).parent / "doctype.lark"
 with grammar_path.open() as file:
     _grammar: Final = file.read()
 
-_lark: Final = lark.Lark(_grammar, propagate_positions=True, strict=True)
+# TODO try passing `transformer=DoctypeTransformer()`, may be faster [1]
+# [1] https://lark-parser.readthedocs.io/en/latest/classes.html#:~:text=after%20the%20parse%2C-,but%20faster,-)
+_lark: Final = lark.Lark(_grammar, propagate_positions=True, parser="lalr")
 
 
 def flatten_recursive(iterable):
@@ -65,7 +67,7 @@ def insert_between(iterable, *, sep):
     return out[:-1]
 
 
-class TokenKind(enum.StrEnum):
+class TermKind(enum.StrEnum):
     # docstub: off
     NAME = enum.auto()
     LITERAL = enum.auto()
@@ -73,8 +75,8 @@ class TokenKind(enum.StrEnum):
     # docstub: on
 
 
-class Token(str):
-    """A token representing an atomic part of a doctype.
+class Term(str):
+    """A terminal / symbol representing an atomic part of a doctype.
 
     Attributes
     ----------
@@ -88,44 +90,79 @@ class Token(str):
         Parameters
         ----------
         value : str
-        kind : TokenKind or str
+        kind : TermKind or str
         pos : tuple of (int, int), optional
         """
         self = super().__new__(cls, value)
-        self.kind = TokenKind(kind)
+        self.kind = TermKind(kind)
         self.pos = pos
         return self
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{type(self).__name__}('{self}', kind='{self.kind}')"
 
     def __getnewargs_ex__(self):
-        """"""
+        """
+        Returns
+        -------
+        args : tuple of (Any, ...)
+        kwargs : dict of {str: Any}
+        """
         kwargs = {"value": str(self), "kind": self.kind, "pos": self.pos}
         return tuple(), kwargs
 
 
 @dataclass(slots=True)
-class Expression:
-    """A named expression made up of sub expressions and tokens."""
+class Expr:
+    """An expression that forms or is part of a doctype.
+
+    Parameters
+    ----------
+    rule :
+        The name of the (grammar) rule corresponding to this expression.
+    children : list of (Expr or Term)
+        Sub-expressions or terms that make up this expression.
+    """
 
     rule: str
-    children: list[Expression | Token]
+    children: list[Expr | Term]
 
     @property
-    def tokens(self):
-        """All tokens in the expression."""
+    def terms(self):
+        """All terms in the expression.
+
+        Returns
+        -------
+        terms : list of Term
+        """
         return list(flatten_recursive(self))
 
     @property
     def names(self):
-        """Name tokens in the expression."""
-        return [token for token in self.tokens if token.kind == TokenKind.NAME]
+        """Name terms in the expression.
+
+        Returns
+        -------
+        names : list of Term
+        """
+        return [term for term in self.terms if term.kind == TermKind.NAME]
 
     def __iter__(self):
+        """Iterate over children of this expression.
+
+        Yields
+        ------
+        child : Expr or Term
+        """
         yield from self.children
 
     def format_tree(self):
+        """Format full hierarchy as a tree.
+
+        Returns
+        -------
+        formatted : str
+        """
         formatted_children = (
             c.format_tree() if hasattr(c, "format_tree") else repr(c)
             for c in self.children
@@ -136,13 +173,13 @@ class Expression:
             f"{type(self).__name__}({self.rule!r}, children=[\n{formatted_children}])"
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{type(self).__name__}: '{self.as_code()}' rule='{self.rule}'>"
 
-    def __str__(self):
-        return "".join(self.tokens)
+    def __str__(self) -> str:
+        return "".join(self.terms)
 
-    def as_code(self):
+    def as_code(self) -> str:
         return str(self)
 
 
@@ -155,7 +192,6 @@ class BlacklistedQualname(DocstubError):
 
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
-
     def start(self, tree):
         """
         Parameters
@@ -164,9 +200,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Expression
+        out : Expr
         """
-        return Expression(rule="start", children=tree.children)
+        return Expr(rule="start", children=tree.children)
 
     def qualname(self, tree):
         """
@@ -176,7 +212,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Token
+        out : Term
         """
         children = tree.children
         _qualname = ".".join(children)
@@ -184,9 +220,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
         if _qualname in BLACKLISTED_QUALNAMES:
             raise BlacklistedQualname(_qualname)
 
-        _qualname = Token(
+        _qualname = Term(
             _qualname,
-            kind=TokenKind.NAME,
+            kind=TermKind.NAME,
             pos=(tree.meta.start_pos, tree.meta.end_pos),
         )
         return _qualname
@@ -199,9 +235,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Token
+        out : Term
         """
-        return Token(token, kind=TokenKind.LITERAL)
+        return Term(token, kind=TermKind.LITERAL)
 
     def union(self, tree):
         """
@@ -211,10 +247,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Expression
+        out : Expr
         """
-        sep = Token(" | ", kind=TokenKind.SYNTAX)
-        expr = Expression(rule="union", children=insert_between(tree.children, sep=sep))
+        sep = Term(" | ", kind=TermKind.SYNTAX)
+        expr = Expr(rule="union", children=insert_between(tree.children, sep=sep))
         return expr
 
     def subscription(self, tree):
@@ -225,7 +261,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Expression
+        out : Expr
         """
         return self._format_subscription(tree.children)
 
@@ -237,10 +273,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Expression
+        out : Expr
         """
         items = [
-            Token("Literal", kind=TokenKind.SYNTAX),
+            Term("Literal", kind=TermKind.SYNTAX),
             *tree.children,
         ]
         out = self._format_subscription(items, rule="natlang_literal")
@@ -262,14 +298,14 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Token
+        out : Term
         """
         item, *other = tree.children
         assert not other
-        kind = TokenKind.LITERAL
-        if isinstance(item, Token):
+        kind = TermKind.LITERAL
+        if isinstance(item, Term):
             kind = item.kind
-        return Token(item, kind=kind, pos=(tree.meta.start_pos, tree.meta.end_pos))
+        return Term(item, kind=kind, pos=(tree.meta.start_pos, tree.meta.end_pos))
 
     def natlang_container(self, tree):
         """
@@ -279,7 +315,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Expression
+        out : Expr
         """
         return self._format_subscription(tree.children, rule="natlang_container")
 
@@ -291,7 +327,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Expression
+        out : Expr
         """
         return self._format_subscription(tree.children, rule="natlang_array")
 
@@ -303,7 +339,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Token
+        out : Term
         """
         # This currently relies on a hack that only allows specific names
         # in `array_expression` (see `ARRAY_NAME` terminal in gramar)
@@ -318,9 +354,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Expression
+        out : Expr
         """
-        return Expression(rule="dtype", children=tree.children)
+        return Expr(rule="dtype", children=tree.children)
 
     def shape(self, tree):
         """
@@ -370,22 +406,25 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : Expression
+        out : Expr
         """
-        sep = Token(", ", kind=TokenKind.SYNTAX)
+        sep = Term(", ", kind=TermKind.SYNTAX)
         container, *content = sequence
         content = insert_between(content, sep=sep)
         assert content
-        expr = Expression(
+        expr = Expr(
             rule=rule,
             children=[
                 container,
-                Token("[", kind=TokenKind.SYNTAX),
+                Term("[", kind=TermKind.SYNTAX),
                 *content,
-                Token("]", kind=TokenKind.SYNTAX),
+                Term("]", kind=TermKind.SYNTAX),
             ],
         )
         return expr
+
+
+_transformer: Final = DoctypeTransformer()
 
 
 def parse_doctype(doctype):
@@ -398,7 +437,7 @@ def parse_doctype(doctype):
 
     Returns
     -------
-    parsed : Expression
+    parsed : Expr
 
     Raises
     ------
@@ -414,5 +453,5 @@ def parse_doctype(doctype):
     <Expression: 'ndarray[float | int]' rule='start'>
     """
     tree = _lark.parse(doctype)
-    expression = DoctypeTransformer().transform(tree=tree)
+    expression = _transformer.transform(tree=tree)
     return expression
