@@ -1,36 +1,63 @@
-"""Parsing of doctypes"""
+"""Parsing of doctypes."""
 
 import enum
-import itertools
 import logging
+import keyword
 from collections.abc import Iterable
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
+from textwrap import indent
+from typing import Final
 
 import lark
 import lark.visitors
 
-logger = logging.getLogger(__name__)
+from ._utils import DocstubError
 
 
-grammar_path = Path(__file__).parent / "doctype.lark"
+logger: Final = logging.getLogger(__name__)
+
+
+grammar_path: Final = Path(__file__).parent / "doctype.lark"
 
 with grammar_path.open() as file:
-    _grammar = file.read()
+    _grammar: Final = file.read()
 
-_lark = lark.Lark(_grammar, propagate_positions=True, strict=True)
+_lark: Final = lark.Lark(_grammar, propagate_positions=True, strict=True)
 
 
 def flatten_recursive(iterable):
+    """Flatten nested iterables yield the contained strings.
+
+    Parameters
+    ----------
+    iterable : Iterable[Iterable or str]
+
+    Yields
+    ------
+    item : str
+    """
     for item in iterable:
-        if not isinstance(item, str) and isinstance(item, Iterable):
+        if isinstance(item, str):
+            yield item
+        elif isinstance(item, Iterable):
             yield from flatten_recursive(item)
         else:
-            yield item
+            raise ValueError(f"unexpected type: {item!r}")
 
 
 def insert_between(iterable, *, sep):
+    """Insert `sep` inbetween elements of `iterable`.
+
+    Parameters
+    ----------
+    iterable : Iterable
+    sep : Any
+
+    Returns
+    -------
+    out : list[Any]
+    """
     out = []
     for item in iterable:
         out.append(item)
@@ -38,68 +65,109 @@ def insert_between(iterable, *, sep):
     return out[:-1]
 
 
-class TokenFlag(enum.Flag):
+class TokenKind(enum.StrEnum):
     # docstub: off
     NAME = enum.auto()
-    NATLANG = enum.auto()
-    SUBSCRIPT = enum.auto()
     LITERAL = enum.auto()
-    GENERATOR = enum.auto()
-    ARRAY = enum.auto()
-    UNION = enum.auto()
-    START = enum.auto()
-    STOP = enum.auto()
-    SEP = enum.auto()
+    SYNTAX = enum.auto()
     # docstub: on
-
-    @classmethod
-    def _missing_(cls, value):
-        forbidden = {
-            *itertools.combinations([cls.START, cls.STOP, cls.SEP, cls.NAME], 2)
-        }
-        for pair in forbidden:
-            if value is (pair[0].value | pair[1].value):
-                raise ValueError(f"{pair[0].name}|{pair[1].name} not allowed")
-        return super()._missing_(value)
 
 
 class Token(str):
-    """A token representing an atomic part of a doctype."""
+    """A token representing an atomic part of a doctype.
 
-    flag = TokenFlag
+    Attributes
+    ----------
+    __slots__ : Final
+    """
 
-    __slots__ = ("kind", "pos", "value")
+    __slots__ = ("value", "kind", "pos")
 
     def __new__(cls, value, *, kind, pos=None):
+        """
+        Parameters
+        ----------
+        value : str
+        kind : TokenKind or str
+        pos : tuple of (int, int), optional
+        """
         self = super().__new__(cls, value)
-        self.kind = TokenFlag(kind)
+        self.kind = TokenKind(kind)
         self.pos = pos
         return self
 
     def __repr__(self):
-        return f"{type(self).__name__}('{self}', kind={self.kind!r})"
+        return f"{type(self).__name__}('{self}', kind='{self.kind}')"
 
-    @classmethod
-    def find_iter(cls, iterable, *, kind):
-        kind = TokenFlag(kind)
-        for item in flatten_recursive(iterable):
-            if isinstance(item, cls) and all(k & item.kind for k in kind):
-                yield item
+    def __getnewargs_ex__(self):
+        """"""
+        kwargs = {"value": str(self), "kind": self.kind, "pos": self.pos}
+        return tuple(), kwargs
 
-    @classmethod
-    def find_one(cls, iterable, *, kind):
-        matching = list(cls.find_iter(iterable, kind=kind))
-        if len(matching) != 1:
-            msg = (
-                f"expected exactly one {cls.__name__} with {kind=}, "
-                f"got {len(matching)}: {matching}"
-            )
-            raise ValueError(msg)
-        return matching[0]
+
+@dataclass(slots=True)
+class Expression:
+    """A named expression made up of sub expressions and tokens."""
+
+    rule: str
+    children: list[Expression | Token]
+
+    @property
+    def tokens(self):
+        """All tokens in the expression."""
+        return list(flatten_recursive(self))
+
+    @property
+    def names(self):
+        """Name tokens in the expression."""
+        return [token for token in self.tokens if token.kind == TokenKind.NAME]
+
+    def __iter__(self):
+        yield from self.children
+
+    def format_tree(self):
+        formatted_children = (
+            c.format_tree() if hasattr(c, "format_tree") else repr(c)
+            for c in self.children
+        )
+        formatted_children = ",\n".join(formatted_children)
+        formatted_children = indent(formatted_children, prefix="  ")
+        return (
+            f"{type(self).__name__}({self.rule!r}, children=[\n{formatted_children}])"
+        )
+
+    def __repr__(self):
+        return f"<{type(self).__name__}: '{self.as_code()}' rule='{self.rule}'>"
+
+    def __str__(self):
+        return "".join(self.tokens)
+
+    def as_code(self):
+        return str(self)
+
+
+BLACKLISTED_QUALNAMES: Final = set(keyword.kwlist) - {"None", "True", "False"}
+
+
+class BlacklistedQualname(DocstubError):
+    """Raised when a qualname is a forbidden keyword."""
 
 
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
+
+    def start(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : Expression
+        """
+        return Expression(rule="start", children=tree.children)
+
     def qualname(self, tree):
         """
         Parameters
@@ -108,29 +176,32 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : lark.Token
+        out : Token
         """
         children = tree.children
         _qualname = ".".join(children)
+
+        if _qualname in BLACKLISTED_QUALNAMES:
+            raise BlacklistedQualname(_qualname)
+
         _qualname = Token(
             _qualname,
-            kind=Token.flag.NAME,
+            kind=TokenKind.NAME,
             pos=(tree.meta.start_pos, tree.meta.end_pos),
         )
         return _qualname
 
-    def rst_role(self, tree):
+    def ELLIPSES(self, token):
         """
         Parameters
         ----------
-        tree : lark.Tree
+        token : lark.Token
 
         Returns
         -------
-        out : lark.Token
+        out : Token
         """
-        qualname = Token.find_one(tree.children, kind=Token.flag.NAME)
-        return qualname
+        return Token(token, kind=TokenKind.LITERAL)
 
     def union(self, tree):
         """
@@ -140,11 +211,11 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : list[str]
+        out : Expression
         """
-        sep = Token(" | ", kind=Token.flag.UNION | Token.flag.SEP)
-        out = insert_between(tree.children, sep=sep)
-        return out
+        sep = Token(" | ", kind=TokenKind.SYNTAX)
+        expr = Expression(rule="union", children=insert_between(tree.children, sep=sep))
+        return expr
 
     def subscription(self, tree):
         """
@@ -154,7 +225,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : str
+        out : Expression
         """
         return self._format_subscription(tree.children)
 
@@ -166,15 +237,13 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : str
+        out : Expression
         """
         items = [
-            Token("Literal", kind=Token.flag.LITERAL | Token.flag.NAME),
+            Token("Literal", kind=TokenKind.SYNTAX),
             *tree.children,
         ]
-        out = self._format_subscription(
-            items, kind=Token.flag.LITERAL | Token.flag.NATLANG
-        )
+        out = self._format_subscription(items, rule="natlang_literal")
 
         if len(tree.children) == 1:
             logger.warning(
@@ -186,11 +255,20 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return out
 
     def literal_item(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : Token
+        """
         item, *other = tree.children
         assert not other
-        kind = Token.flag.LITERAL
+        kind = TokenKind.LITERAL
         if isinstance(item, Token):
-            kind |= item.kind
+            kind = item.kind
         return Token(item, kind=kind, pos=(tree.meta.start_pos, tree.meta.end_pos))
 
     def natlang_container(self, tree):
@@ -201,9 +279,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : str
+        out : Expression
         """
-        return self._format_subscription(tree.children, kind=Token.flag.NATLANG)
+        return self._format_subscription(tree.children, rule="natlang_container")
 
     def natlang_array(self, tree):
         """
@@ -213,17 +291,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : str
+        out : Expression
         """
-        array_name = Token.find_one(
-            tree.children, kind=Token.flag.ARRAY | Token.flag.NAME
-        )
-        items = tree.children.copy()
-        items.remove(array_name)
-        items.insert(0, array_name)
-        return self._format_subscription(
-            items, kind=Token.flag.ARRAY | Token.flag.NATLANG
-        )
+        return self._format_subscription(tree.children, rule="natlang_array")
 
     def array_name(self, tree):
         """
@@ -233,15 +303,24 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : lark.Token
+        out : Token
         """
-        # Treat `array_name` as `qualname`, but mark it as an array name,
-        # so we know which one to treat as the container in `array_expression`
         # This currently relies on a hack that only allows specific names
         # in `array_expression` (see `ARRAY_NAME` terminal in gramar)
         qualname = self.qualname(tree)
-        qualname = Token(qualname, kind=Token.flag.NAME | Token.flag.ARRAY)
         return qualname
+
+    def dtype(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : Expression
+        """
+        return Expression(rule="dtype", children=tree.children)
 
     def shape(self, tree):
         """
@@ -256,7 +335,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping shape information")
         return lark.Discard
 
-    def optional(self, tree):
+    def optional_info(self, tree):
         """
         Parameters
         ----------
@@ -282,92 +361,58 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping extra info")
         return lark.Discard
 
-    def _format_subscription(self, sequence, kind=None):
-        if kind is None:
-            kind = Token.flag.SUBSCRIPT
-        else:
-            kind |= Token.flag.SUBSCRIPT
-
-        sep = Token(", ", kind=kind | Token.flag.SEP)
-        container, *content = sequence
-        content = insert_between(content, sep=sep)
-        assert content
-        out = [
-            container,
-            Token("[", kind=kind | Token.flag.START),
-            *content,
-            Token("]", kind=kind | Token.flag.STOP),
-        ]
-        return out
-
-
-@dataclass(frozen=True, slots=True)
-class ParsedDoctype:
-    """Parsed representation of a doctype, a type description in a docstring."""
-
-    tokens: tuple[Token, ...]
-    raw_doctype: str
-
-    @classmethod
-    @lru_cache(maxsize=100)
-    def parse(cls, doctype):
-        """Turn a type description in a docstring into a type annotation.
-
+    def _format_subscription(self, sequence, rule="subscription"):
+        """
         Parameters
         ----------
-        doctype : str
-            The doctype to parse.
+        sequence : Sequence[str]
+        rule : str, optional
 
         Returns
         -------
-        parsed : Self
-
-        Examples
-        --------
-        >>> parsed = ParsedDoctype.parse(
-        ...     "tuple of int or ndarray of dtype (float or int)"
-        ... )
-        >>> parsed
-        <ParsedDoctype 'tuple[int] | ndarray[float | int]'>
-        >>> str(parsed)
-        'tuple[int] | ndarray[float | int]'
-        >>> parsed.format({"ndarray": "np.ndarray"})
-        'tuple[int] | np.ndarray[float | int]'
-        >>> parsed.qualnames  # doctest: +NORMALIZE_WHITESPACE
-        (Token('tuple', kind=<TokenFlag.NAME: 1>),
-         Token('int', kind=<TokenFlag.NAME: 1>),
-         Token('ndarray', kind=<TokenFlag.NAME|ARRAY: 33>),
-         Token('float', kind=<TokenFlag.NAME: 1>),
-         Token('int', kind=<TokenFlag.NAME: 1>))
+        out : Expression
         """
-        tree = _lark.parse(doctype)
-        tokens = DoctypeTransformer().transform(tree=tree)
-        tokens = tuple(flatten_recursive(tokens))
-        return cls(tokens, raw_doctype=doctype)
+        sep = Token(", ", kind=TokenKind.SYNTAX)
+        container, *content = sequence
+        content = insert_between(content, sep=sep)
+        assert content
+        expr = Expression(
+            rule=rule,
+            children=[
+                container,
+                Token("[", kind=TokenKind.SYNTAX),
+                *content,
+                Token("]", kind=TokenKind.SYNTAX),
+            ],
+        )
+        return expr
 
-    def format(self, replace_names=None):
-        replace_names = replace_names or {}
-        tokens = [
-            replace_names.get(token, token) if token.kind == TokenFlag.NAME else token
-            for token in self.tokens
-        ]
-        return "".join(tokens)
 
-    def __str__(self):
-        return "".join(self.tokens)
+def parse_doctype(doctype):
+    """Turn a type description in a docstring into a type annotation.
 
-    def __repr__(self):
-        return f"<{type(self).__name__} '{self}'>"
+    Parameters
+    ----------
+    doctype : str
+        The doctype to parse.
 
-    @property
-    def qualnames(self):
-        return tuple(Token.find_iter(self.tokens, kind=Token.flag.NAME))
+    Returns
+    -------
+    parsed : Expression
 
-    def print_map_tokens_to_raw(self):
-        for token in self.tokens:
-            if token.pos is not None:
-                start, stop = token.pos
-                print(self.raw_doctype)  # noqa: T201
-                print(" " * start + "^" * (stop - start))  # noqa: T201
-                print(" " * start + token)  # noqa: T201
-                print()  # noqa: T201
+    Raises
+    ------
+    lark.exceptions.VisitError
+        Raised when the transformation is interrupted by an exception.
+        See :cls:`lark.exceptions.VisitError`.
+
+    Examples
+    --------
+    >>> parse_doctype("tuple of (int, ...)")
+    <Expression: 'tuple[int, ...]' rule='start'>
+    >>> parse_doctype("ndarray of dtype (float or int)")
+    <Expression: 'ndarray[float | int]' rule='start'>
+    """
+    tree = _lark.parse(doctype)
+    expression = DoctypeTransformer().transform(tree=tree)
+    return expression

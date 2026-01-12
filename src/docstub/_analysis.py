@@ -13,6 +13,7 @@ import libcst as cst
 import libcst.matchers as cstm
 
 from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
+from ._report import Stats
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -492,6 +493,7 @@ class TypeMatcher:
         types=None,
         type_prefixes=None,
         type_nicknames=None,
+        stats=None,
     ):
         """
         Parameters
@@ -499,15 +501,13 @@ class TypeMatcher:
         types : dict[str, PyImport]
         type_prefixes : dict[str, PyImport]
         type_nicknames : dict[str, str]
+        stats : ~.Stats, optional
         """
         self.types = common_known_types() | (types or {})
         self.type_prefixes = type_prefixes or {}
         self.type_nicknames = type_nicknames or {}
 
-        self.stats = {
-            "matched_type_names": 0,
-            "unknown_type_names": [],
-        }
+        self.stats = stats or Stats()
 
         self.current_file = None
 
@@ -623,8 +623,8 @@ class TypeMatcher:
             type_name = type_name[type_name.find(py_import.target) :]
 
         if type_name is not None:
-            self.stats["matched_type_names"] += 1
+            self.stats.inc_counter("matched_type_names")
         else:
-            self.stats["unknown_type_names"].append(search)
+            self.stats.append_to_list("unknown_type_names", search)
 
         return type_name, py_import

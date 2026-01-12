@@ -12,14 +12,10 @@ import libcst.matchers as cstm
 from _typeshed import Incomplete
 
 from ._analysis import PyImport, TypeMatcher
-from ._docstrings import (
-    Annotation,
-    DocstringAnnotations,
-    DoctypeTransformer,
-    FallbackAnnotation,
-)
-from ._report import ContextReporter
-from ._utils import module_name_from_path, update_with_add_values
+from ._docstrings import Annotation, DocstringAnnotations, FallbackAnnotation
+from ._doctype import DoctypeTransformer
+from ._report import ContextReporter, Stats
+from ._utils import module_name_from_path
 
 logger: logging.Logger
 
@@ -73,9 +69,6 @@ class Py2StubTransformer(cst.CSTTransformer):
     @property
     def is_inside_function_def(self) -> bool: ...
     def python_to_stub(self, source: str, *, module_path: Path | None = ...) -> str: ...
-    def collect_stats(
-        self, *, reset_after: bool = ...
-    ) -> dict[str, int | list[str]]: ...
     def visit_ClassDef(self, node: cst.ClassDef) -> Literal[True]: ...
     def leave_ClassDef(
         self, original_node: cst.ClassDef, updated_node: cst.ClassDef

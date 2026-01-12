@@ -15,9 +15,9 @@ import libcst as cst
 import libcst.matchers as cstm
 
 from ._analysis import PyImport
-from ._docstrings import DocstringAnnotations, DoctypeTransformer, FallbackAnnotation
-from ._report import ContextReporter
-from ._utils import module_name_from_path, update_with_add_values
+from ._docstrings import DocstringAnnotations, FallbackAnnotation
+from ._report import ContextReporter, Stats
+from ._utils import module_name_from_path
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -305,8 +305,9 @@ class Py2StubTransformer(cst.CSTTransformer):
         ----------
         matcher : ~.TypeMatcher
         """
-        self.transformer = DoctypeTransformer(matcher=matcher)
+        self.matcher = matcher
         self.reporter = ContextReporter(logger=logger)
+        self.stats = Stats()
         # Relevant docstring for the current context
         self._scope_stack = None  # Entered module, class or function scopes
         self._pytypes_stack = None  # Collected pytypes for each stack
@@ -332,10 +333,10 @@ class Py2StubTransformer(cst.CSTTransformer):
         value : Path
         """
         self._current_source = value
-        # TODO pass current_source directly when using the transformer / matcher
+        # TODO pass current_source directly when using the matcher
         #   instead of assigning it here!
-        if self.transformer is not None and self.transformer.matcher is not None:
-            self.transformer.matcher.current_file = value
+        if self.matcher is not None:
+            self.matcher.current_file = value
 
     @property
     def is_inside_function_def(self):
@@ -384,26 +385,6 @@ class Py2StubTransformer(cst.CSTTransformer):
             self._pytypes_stack = None
             self._required_imports = None
             self.current_source = None
-
-    def collect_stats(self, *, reset_after=True):
-        """Return statistics from processing files.
-
-        Parameters
-        ----------
-        reset_after : bool, optional
-            Whether to reset counters and statistics after returning.
-
-        Returns
-        -------
-        stats : dict of {str: int or list[str]}
-        """
-        collected = [self.transformer.stats, self.transformer.matcher.stats]
-        merged = update_with_add_values(*collected)
-        if reset_after is True:
-            for stats in collected:
-                for key in stats:
-                    stats[key] = type(stats[key])()
-        return merged
 
     def visit_ClassDef(self, node):
         """Collect pytypes from class docstring and add scope to stack.
@@ -908,13 +889,15 @@ class Py2StubTransformer(cst.CSTTransformer):
             try:
                 annotations = DocstringAnnotations(
                     docstring_node.evaluated_value,
-                    transformer=self.transformer,
+                    matcher=self.matcher,
                     reporter=reporter,
+                    stats=self.stats,
                 )
             except (SystemExit, KeyboardInterrupt):
                 raise
             except Exception:
                 reporter.error("could not parse docstring", exc_info=True)
+
         return annotations
 
     def _create_annotated_assign(

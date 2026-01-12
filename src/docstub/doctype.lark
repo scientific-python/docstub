@@ -6,13 +6,13 @@
 // https://lark-parser.readthedocs.io/en/latest/grammar.html
 
 
-?start: annotation_with_meta
+start: _annotation_with_meta
 
 
 // The basic structure of a full docstring annotation as it comes after the
 // `name : `. It includes additional meta information that is optional and
 // currently ignored.
-?annotation_with_meta: type ("," optional_info)?
+_annotation_with_meta: type ("," optional_info)?
 
 
 // A type annotation. Can range from a simple qualified name to a complex
@@ -32,7 +32,7 @@
 // [1] https://docutils.sourceforge.io/docs/ref/rst/roles.html
 //
 qualname: (/~/ ".")? (NAME ".")* NAME
-    | (":" (NAME ":")? NAME ":")? "`" qualname "`" -> rst_role
+    | (":" (NAME ":")? NAME ":")? "`" qualname "`"
 
 
 // An union of different types, joined either by "or" or "|".
@@ -102,7 +102,7 @@ ARRAY_NAME: "array" | "ndarray" | "array-like" | "array_like"
 
 
 // The dtype used in an array expression.
-?dtype: qualname | "(" union ")"
+dtype: qualname | "(" union ")"
 
 
 // The shape used in an array expression. Possibly to liberal right now in

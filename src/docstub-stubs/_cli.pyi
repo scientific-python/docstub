@@ -4,7 +4,6 @@ import logging
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Literal
 
 import click
 from _typeshed import Incomplete
