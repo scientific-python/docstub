@@ -1,10 +1,10 @@
 import logging
 
-import pytest
 import lark
 import lark.exceptions
+import pytest
 
-from docstub._doctype import parse_doctype, Term, TermKind, BLACKLISTED_QUALNAMES
+from docstub._doctype import BLACKLISTED_QUALNAMES, parse_doctype
 
 
 class Test_parse_doctype:
@@ -212,14 +212,8 @@ class Test_parse_doctype:
         ["(2, 3)", "(N, m)", "3D", "2-D", "(N, ...)", "([P,] M, N)"]
      )
     def test_natlang_array(self, fmt, expected_fmt, name, dtype, shape):
-
-        def escape(name: str) -> str:
-            return name.replace("-", "_").replace(".", "_")
-
         doctype = fmt.format(name=name, dtype=dtype, shape=shape)
-        expected = expected_fmt.format(
-            name=escape(name), dtype=escape(dtype), shape=shape
-        )
+        expected = expected_fmt.format(name=name, dtype=dtype, shape=shape)
         expr = parse_doctype(doctype)
         assert expr.as_code() == expected
     # fmt: on
@@ -267,4 +261,3 @@ class Test_parse_doctype:
             PyImport(import_="Incomplete", from_="_typeshed", as_="c"),
         }
         assert unknown_names == [("a.b", 0, 3), ("c", 7, 8)]
-

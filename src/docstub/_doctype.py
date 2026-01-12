@@ -1,8 +1,8 @@
 """Parsing of doctypes."""
 
 import enum
-import logging
 import keyword
+import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,7 +14,6 @@ import lark.visitors
 
 from ._utils import DocstubError
 
-
 logger: Final = logging.getLogger(__name__)
 
 
@@ -25,7 +24,7 @@ with grammar_path.open() as file:
 
 # TODO try passing `transformer=DoctypeTransformer()`, may be faster [1]
 # [1] https://lark-parser.readthedocs.io/en/latest/classes.html#:~:text=after%20the%20parse%2C-,but%20faster,-)
-_lark: Final = lark.Lark(_grammar, propagate_positions=True, parser="lalr")
+_lark: Final = lark.Lark(_grammar, propagate_positions=True)
 
 
 def flatten_recursive(iterable):
@@ -83,7 +82,7 @@ class Term(str):
     __slots__ : Final
     """
 
-    __slots__ = ("value", "kind", "pos")
+    __slots__ = ("kind", "pos", "value")
 
     def __new__(cls, value, *, kind, pos=None):
         """
