@@ -155,6 +155,38 @@ class Test_DoctypeTransformer:
             transformer.doctype_to_annotation(doctype)
 
     @pytest.mark.parametrize(
+        "doctype",
+        [
+            "Callable[[int], str]",
+            "some_func[[int], str]",
+            "Callable[[int, float, byte], list[str]]",
+            "Callable[..., str]",
+            "Callable[[], str]",
+            "Callback[...]",
+            "Callable[Concatenate[int, float], str]",
+            "Callable[Concatenate[int, ...], str]",
+            "Callable[P, str]",
+        ],
+    )
+    def test_callable(self, doctype):
+        transformer = DoctypeTransformer()
+        annotation, _ = transformer.doctype_to_annotation(doctype)
+        assert annotation.value == doctype
+
+    @pytest.mark.parametrize(
+        "doctype",
+        [
+            "Callable[[...], int]",
+            "Callable[[..., str], int]",
+            "Callable[[float, str], int, byte]",
+        ],
+    )
+    def test_callable_error(self, doctype):
+        transformer = DoctypeTransformer()
+        with pytest.raises(lark.exceptions.UnexpectedInput):
+            transformer.doctype_to_annotation(doctype)
+
+    @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
             ("{0}", "Literal[0]"),

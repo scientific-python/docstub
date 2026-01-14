@@ -7,7 +7,7 @@ In addition, docstub extends this syntax with several "natural language" express
 
 Docstrings should follow a form that is inspired by the [NumPyDoc style](https://numpydoc.readthedocs.io/en/latest/format.html):
 ```none
-Section namew
+Section name
 ------------
 name : doctype, optional_info
   Description.

@@ -71,11 +71,11 @@ def _resolve_path_before_caching(func):
 
     Parameters
     ----------
-    func : Callable
+    func : Callable[[Path], str]
 
     Returns
     -------
-    wrapped : Callable
+    wrapped : Callable[[Path], str]
     """
 
     @wraps(func)
