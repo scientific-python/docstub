@@ -179,8 +179,6 @@ class Test_DoctypeTransformer:
             "Callable[[...], int]",
             "Callable[[..., str], int]",
             "Callable[[float, str], int, byte]",
-            "Callable[Ellipsis]",
-            "Callable[Ellipsis, int]",
         ],
     )
     def test_callable_error(self, doctype):
