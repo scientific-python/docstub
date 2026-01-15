@@ -5,6 +5,7 @@ import re
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from functools import lru_cache, wraps
 from pathlib import Path
+from typing import Any
 from zlib import crc32
 
 def accumulate_qualname(qualname: str, *, start_right: bool = ...) -> None: ...
@@ -20,3 +21,7 @@ def update_with_add_values(
 
 class DocstubError(Exception):
     pass
+
+_regex_digit: re.Pattern
+
+def naive_natsort_key(item: Any) -> tuple[str | int, ...]: ...
