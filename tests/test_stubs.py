@@ -715,7 +715,7 @@ class Test_Py2StubTransformer:
                 c: str = None
                 _: KW_ONLY
                 d: dict[str, Any] = field(default_factory=dict)
-                e: InitVar[tuple] = tuple()
+                e: InitVar[tuple] = ()
                 f: ClassVar
                 g: ClassVar[float]
                 h: Final[ClassVar[int]] = 1

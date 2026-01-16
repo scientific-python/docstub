@@ -102,7 +102,7 @@ class Test_ReportHandler:
 
     def test_format_multiple_locations(self, log_record):
         log_record.details = "Some details"
-        log_record.src_location = ["foo.py:42", "bar.py", "a/path.py:100"]
+        log_record.src_location = ["foo.py:42", "foo.py:9", "bar.py", "a/path.py:100"]
         log_record.log_id = "E321"
 
         handler = ReportHandler()
@@ -110,10 +110,11 @@ class Test_ReportHandler:
 
         expected = dedent(
             """
-            E321 The actual log message (3x)
+            E321 The actual log message (4x)
                 Some details
                 a/path.py:100
                 bar.py
+                foo.py:9
                 foo.py:42
             """
         ).strip()

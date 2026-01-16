@@ -12,8 +12,8 @@ from pathlib import Path
 import libcst as cst
 import libcst.matchers as cstm
 
-from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
 from ._report import Stats
+from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
 
 logger: logging.Logger = logging.getLogger(__name__)
 

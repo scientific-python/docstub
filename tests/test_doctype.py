@@ -183,6 +183,36 @@ class Test_parse_doctype:
         assert expr.as_code() == expected
 
     @pytest.mark.parametrize(
+        "doctype",
+        [
+            "Callable[[int], str]",
+            "some_func[[int], str]",
+            "Callable[[int, float, byte], list[str]]",
+            "Callable[..., str]",
+            "Callable[[], str]",
+            "Callback[...]",
+            "Callable[Concatenate[int, float], str]",
+            "Callable[Concatenate[int, ...], str]",
+            "Callable[P, str]",
+        ],
+    )
+    def test_callable(self, doctype):
+        expr = parse_doctype(doctype)
+        assert expr.as_code() == doctype
+
+    @pytest.mark.parametrize(
+        "doctype",
+        [
+            "Callable[[...], int]",
+            "Callable[[..., str], int]",
+            "Callable[[float, str], int, byte]",
+        ],
+    )
+    def test_callable_error(self, doctype):
+        with pytest.raises(lark.exceptions.UnexpectedInput):
+            parse_doctype(doctype)
+
+    @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
             ("`Generator`", "Generator"),

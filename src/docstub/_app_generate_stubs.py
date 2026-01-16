@@ -24,7 +24,7 @@ from ._path_utils import (
     walk_source_and_targets,
     walk_source_package,
 )
-from ._report import setup_logging, Stats
+from ._report import Stats, setup_logging
 from ._stubs import Py2StubTransformer, try_format_stub
 from ._version import __version__
 
@@ -370,7 +370,9 @@ def generate_stubs(
     total_errors = error_counter.error_count
 
     logger.info("Recognized type names: %i", stats.pop("matched_type_names", default=0))
-    logger.info("Transformed doctypes: %i", stats.pop("transformed_doctypes", default=0))
+    logger.info(
+        "Transformed doctypes: %i", stats.pop("transformed_doctypes", default=0)
+    )
     if total_warnings:
         logger.warning("Warnings: %i", total_warnings)
     if "doctype_syntax_errors" in stats:

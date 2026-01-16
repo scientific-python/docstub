@@ -108,7 +108,7 @@ class Term(str):
         kwargs : dict of {str: Any}
         """
         kwargs = {"value": str(self), "kind": self.kind, "pos": self.pos}
-        return tuple(), kwargs
+        return (), kwargs
 
 
 @dataclass(slots=True)
@@ -263,6 +263,37 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out : Expr
         """
         return self._format_subscription(tree.children)
+
+    def param_spec(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : Expr
+        """
+        sep = Term(", ", kind=TermKind.SYNTAX)
+        children = [
+            Term("[", kind=TermKind.SYNTAX),
+            *insert_between(tree.children, sep=sep),
+            Term("]", kind=TermKind.SYNTAX),
+        ]
+        expr = Expr(rule="param_spec", children=children)
+        return expr
+
+    def callable(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : Expr
+        """
+        return self._format_subscription(tree.children, rule="callable")
 
     def natlang_literal(self, tree):
         """
@@ -447,9 +478,9 @@ def parse_doctype(doctype):
     Examples
     --------
     >>> parse_doctype("tuple of (int, ...)")
-    <Expression: 'tuple[int, ...]' rule='start'>
+    <Expr: 'tuple[int, ...]' rule='start'>
     >>> parse_doctype("ndarray of dtype (float or int)")
-    <Expression: 'ndarray[float | int]' rule='start'>
+    <Expr: 'ndarray[float | int]' rule='start'>
     """
     tree = _lark.parse(doctype)
     expression = _transformer.transform(tree=tree)

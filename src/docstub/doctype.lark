@@ -20,6 +20,7 @@ _annotation_with_meta: _type ("," optional_info)?
 _type: qualname
     | union
     | subscription
+    | callable
     | natlang_literal
     | natlang_container
     | natlang_array
@@ -45,6 +46,17 @@ _OR: "or" | "|"
 
 // An expression where an object is subscribed with "A[v, ...]".
 subscription: qualname "[" _type ("," _type)* ("," ELLIPSES)? "]"
+
+
+// An expression describing a callable like "Callable[[int], str]"
+// [1] https://typing.python.org/en/latest/spec/callables.html#callable
+//
+callable: qualname "[" ELLIPSES ("," _type)? "]"
+    | qualname "[" param_spec "," _type "]"
+
+
+// The parameter specification inside a callable expression.
+param_spec: "[" _type? ("," _type)* ("," ELLIPSES)? "]"
 
 
 // Allow Python's ellipses object

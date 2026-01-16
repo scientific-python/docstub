@@ -15,15 +15,14 @@ import numpydoc.docscrape as npds
 #   types and imports. I think that could very well be done at a higher level,
 #   e.g. in the stubs module.
 from ._analysis import PyImport, TypeMatcher
+from ._doctype import BlacklistedQualname, Term, TermKind, parse_doctype
 from ._report import ContextReporter, Stats
 from ._utils import escape_qualname
-from ._doctype import parse_doctype, Expr, Term, TermKind, BlacklistedQualname
-
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-def _update_qualnames(expr, *, _parents=tuple()):
+def _update_qualnames(expr, *, _parents=()):
     """Yield and receive names in `expr`.
 
     This generator works as a coroutine.
@@ -352,8 +351,7 @@ class DocstringAnnotations:
     ... b : some invalid syntax
     ... c : unknown.symbol
     ... '''
-    >>> transformer = DoctypeTransformer()
-    >>> annotations = DocstringAnnotations(docstring, transformer=transformer)
+    >>> annotations = DocstringAnnotations(docstring)
     >>> annotations.parameters.keys()
     dict_keys(['a', 'b', 'c'])
     """

@@ -2,14 +2,15 @@
 
 import dataclasses
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 from textwrap import indent
-from collections.abc import Mapping
 
 import click
 from pre_commit.envcontext import UNSET
 
 from ._cli_help import should_strip_ansi
+from ._utils import naive_natsort_key
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -299,7 +300,7 @@ class ReportHandler(logging.StreamHandler):
             msg = f"{msg}\n{indented}"
 
         # Append locations
-        for location in sorted(src_locations):
+        for location in sorted(src_locations, key=naive_natsort_key):
             location_styled = click.style(location, fg="magenta")
             msg = f"{msg}\n    {location_styled}"
 
