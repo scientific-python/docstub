@@ -172,6 +172,10 @@ class Expr:
             f"{type(self).__name__}({self.rule!r}, children=[\n{formatted_children}])"
         )
 
+    def print_tree(self):
+        """Print full hierarchy as a tree."""
+        print(self.format_tree())
+
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: '{self.as_code()}' rule='{self.rule}'>"
 
