@@ -19,6 +19,7 @@ _annotation_with_meta: _type ("," optional_info)?
 // nested construct of types.
 _type: qualname
     | union
+    | literal
     | subscription
     | callable
     | natlang_literal
@@ -66,6 +67,13 @@ ELLIPSES: "..."
 // A natural language expression that combines one or multiple literals inside
 // curly braces `{l1, l2, ...}`
 natlang_literal: "{" literal_item ("," literal_item)* "}"
+
+
+// A literal expression as supported by Python proper. The rule "subscription"
+// isn't allowed to contain "literal_items", so we need to define this.
+// Assign a higher priority so that things like `Literal[Some.ENUM]` is marked
+// as a literal expression.
+literal.1: "Literal[" literal_item ("," literal_item)* "]"
 
 
 // An single item in a literal expression (or `optional`). We must also allow

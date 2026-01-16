@@ -116,6 +116,27 @@ class Test_parse_doctype:
             parse_doctype(doctype)
 
     @pytest.mark.parametrize(
+        ("doctype"),
+        [
+            "Literal[0]",
+            "Literal[-1, 1]",
+            "Literal[None]",
+            "Literal[True, False]",
+            """Literal['a', "bar"]""",
+            # Enum
+            "Literal[SomeEnum.FIRST]",
+            "Literal[SomeEnum.FIRST, 1]",
+            "Literal[SomeEnum.FIRST, 2]",
+            "Literal[SomeEnum.FIRST, 3]",
+            # Nesting
+            "dict[Literal['a', 'b'], int]",
+        ],
+    )
+    def test_literals(self, doctype):
+        expr = parse_doctype(doctype)
+        assert expr.as_code() == doctype
+
+    @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
             ("{0}", "Literal[0]"),
@@ -124,10 +145,10 @@ class Test_parse_doctype:
             ("{True, False}", "Literal[True, False]"),
             ("""{'a', "bar"}""", """Literal['a', "bar"]"""),
             # Enum
-            ("{SomeEnum.FIRST}", "Literal[SomeEnum_FIRST]"),
-            ("{`SomeEnum.FIRST`, 1}", "Literal[SomeEnum_FIRST, 1]"),
-            ("{:ref:`SomeEnum.FIRST`, 2}", "Literal[SomeEnum_FIRST, 2]"),
-            ("{:py:ref:`SomeEnum.FIRST`, 3}", "Literal[SomeEnum_FIRST, 3]"),
+            ("{SomeEnum.FIRST}", "Literal[SomeEnum.FIRST]"),
+            ("{`SomeEnum.FIRST`, 1}", "Literal[SomeEnum.FIRST, 1]"),
+            ("{:ref:`SomeEnum.FIRST`, 2}", "Literal[SomeEnum.FIRST, 2]"),
+            ("{:py:ref:`SomeEnum.FIRST`, 3}", "Literal[SomeEnum.FIRST, 3]"),
             # Nesting
             ("dict[{'a', 'b'}, int]", "dict[Literal['a', 'b'], int]"),
             # These aren't officially valid as an argument to `Literal` (yet)
@@ -141,7 +162,7 @@ class Test_parse_doctype:
             ),
         ],
     )
-    def test_literals(self, doctype, expected):
+    def test_natlang_literals(self, doctype, expected):
         expr = parse_doctype(doctype)
         assert expr.as_code() == expected
 

@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import indent
-from typing import Final
+from typing import Final, Self
 
 import lark
 import lark.visitors
@@ -124,7 +124,7 @@ class Expr:
     """
 
     rule: str
-    children: list[Expr | Term]
+    children: list[Self | Term]
 
     @property
     def terms(self):
@@ -226,6 +226,29 @@ class DoctypeTransformer(lark.visitors.Transformer):
         )
         return _qualname
 
+    def qualname(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : Term
+        """
+        children = tree.children
+        _qualname = ".".join(children)
+
+        if _qualname in BLACKLISTED_QUALNAMES:
+            raise BlacklistedQualname(_qualname)
+
+        _qualname = Term(
+            _qualname,
+            kind=TermKind.NAME,
+            pos=(tree.meta.start_pos, tree.meta.end_pos),
+        )
+        return _qualname
+
     def ELLIPSES(self, token):
         """
         Parameters
@@ -262,7 +285,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
-        return self._format_subscription(tree.children)
+        return self._format_subscription(tree.children, rule="subscription")
 
     def param_spec(self, tree):
         """
@@ -295,6 +318,23 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         return self._format_subscription(tree.children, rule="callable")
 
+    def literal(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : Expr
+        """
+        items = [
+            Term("Literal", kind=TermKind.NAME),
+            *tree.children,
+        ]
+        out = self._format_subscription(items, rule="literal")
+        return out
+
     def natlang_literal(self, tree):
         """
         Parameters
@@ -306,7 +346,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out : Expr
         """
         items = [
-            Term("Literal", kind=TermKind.SYNTAX),
+            Term("Literal", kind=TermKind.NAME),
             *tree.children,
         ]
         out = self._format_subscription(items, rule="natlang_literal")
@@ -335,7 +375,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         kind = TermKind.LITERAL
         if isinstance(item, Term):
             kind = item.kind
-        return Term(item, kind=kind, pos=(tree.meta.start_pos, tree.meta.end_pos))
+        out = Term(item, kind=kind, pos=(tree.meta.start_pos, tree.meta.end_pos))
+        return out
 
     def natlang_container(self, tree):
         """
@@ -427,7 +468,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping extra info")
         return lark.Discard
 
-    def _format_subscription(self, sequence, rule="subscription"):
+    def _format_subscription(self, sequence, *, rule):
         """
         Parameters
         ----------
