@@ -130,11 +130,15 @@ class Test_parse_doctype:
             "Literal[SomeEnum.FIRST, 3]",
             # Nesting
             "dict[Literal['a', 'b'], int]",
+            # Custom qualname for literal
+            "MyLiteral[0]",
+            "MyLiteral[SomeEnum.FIRST]",
         ],
     )
     def test_literals(self, doctype):
         expr = parse_doctype(doctype)
         assert expr.as_code() == doctype
+        assert "literal" in [e.rule for e in expr.sub_expressions]
 
     @pytest.mark.parametrize(
         ("doctype", "expected"),
@@ -165,6 +169,7 @@ class Test_parse_doctype:
     def test_natlang_literals(self, doctype, expected):
         expr = parse_doctype(doctype)
         assert expr.as_code() == expected
+        assert "natlang_literal" in [e.rule for e in expr.sub_expressions]
 
     def test_single_natlang_literal_warning(self, caplog):
         expr = parse_doctype("{True}")
@@ -220,6 +225,7 @@ class Test_parse_doctype:
     def test_callable(self, doctype):
         expr = parse_doctype(doctype)
         assert expr.as_code() == doctype
+        assert "callable" in [e.rule for e in expr.sub_expressions]
 
     @pytest.mark.parametrize(
         "doctype",
@@ -240,7 +246,7 @@ class Test_parse_doctype:
             (":class:`Generator`", "Generator"),
             (":py:class:`Generator`", "Generator"),
             (":py:class:`Generator`[int]", "Generator[int]"),
-            (":py:ref:`~.Foo`[int]", "_Foo[int]"),
+            (":py:ref:`~.Foo`[int]", "~.Foo[int]"),
             ("list[:py:class:`Generator`]", "list[Generator]"),
         ],
     )
@@ -284,31 +290,3 @@ class Test_parse_doctype:
         doctype = f"array of shape {shape}"
         with pytest.raises(lark.exceptions.UnexpectedInput):
             _ = parse_doctype(doctype)
-
-    def test_unknown_name(self):
-        # Simple unknown name is aliased to typing.Any
-        annotation, unknown_names = parse_doctype("a")
-        assert annotation.value == "a"
-        assert annotation.imports == {
-            PyImport(import_="Incomplete", from_="_typeshed", as_="a")
-        }
-        assert unknown_names == [("a", 0, 1)]
-
-    def test_unknown_qualname(self):
-        # Unknown qualified name is escaped and aliased to typing.Any as well
-        annotation, unknown_names = parse_doctype("a.b")
-        assert annotation.value == "a_b"
-        assert annotation.imports == {
-            PyImport(import_="Incomplete", from_="_typeshed", as_="a_b")
-        }
-        assert unknown_names == [("a.b", 0, 3)]
-
-    def test_multiple_unknown_names(self):
-        # Multiple names are aliased to typing.Any
-        annotation, unknown_names = parse_doctype("a.b of c")
-        assert annotation.value == "a_b[c]"
-        assert annotation.imports == {
-            PyImport(import_="Incomplete", from_="_typeshed", as_="a_b"),
-            PyImport(import_="Incomplete", from_="_typeshed", as_="c"),
-        }
-        assert unknown_names == [("a.b", 0, 3), ("c", 7, 8)]

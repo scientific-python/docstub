@@ -5,6 +5,7 @@ import pytest
 from docstub._analysis import PyImport
 from docstub._docstrings import (
     Annotation,
+    doctype_to_annotation,
     DocstringAnnotations,
 )
 
@@ -33,6 +34,37 @@ class Test_Annotation:
     def test_unexpected_value(self):
         with pytest.raises(ValueError, match=r"unexpected '~' in annotation value"):
             Annotation(value="~.foo")
+
+
+class Test_doctype_to_annotation:
+
+    def test_unknown_name(self):
+        # Simple unknown name is aliased to typing.Any
+        annotation = doctype_to_annotation("a")
+        assert annotation.value == "a"
+        assert annotation.imports == {
+            PyImport(import_="Incomplete", from_="_typeshed", as_="a")
+        }
+        assert unknown_names == [("a", 0, 1)]
+
+    def test_unknown_qualname(self):
+        # Unknown qualified name is escaped and aliased to typing.Any as well
+        annotation = doctype_to_annotation("a.b")
+        assert annotation.value == "a_b"
+        assert annotation.imports == {
+            PyImport(import_="Incomplete", from_="_typeshed", as_="a_b")
+        }
+        assert unknown_names == [("a.b", 0, 3)]
+
+    def test_multiple_unknown_names(self):
+        # Multiple names are aliased to typing.Any
+        annotation = doctype_to_annotation("a.b of c")
+        assert annotation.value == "a_b[c]"
+        assert annotation.imports == {
+            PyImport(import_="Incomplete", from_="_typeshed", as_="a_b"),
+            PyImport(import_="Incomplete", from_="_typeshed", as_="c"),
+        }
+        assert unknown_names == [("a.b", 0, 3), ("c", 7, 8)]
 
 
 class Test_DocstringAnnotations:

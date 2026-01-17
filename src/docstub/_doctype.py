@@ -146,6 +146,20 @@ class Expr:
         """
         return [term for term in self.terms if term.kind == TermKind.NAME]
 
+    @property
+    def sub_expressions(self):
+        """Iterate expressions inside the current one.
+
+        Returns
+        -------
+        names : list of Expr or {1}
+        """
+        cls = type(self)
+        for child in self.children:
+            if isinstance(child, cls):
+                yield child
+                yield from child.sub_expressions
+
     def __iter__(self):
         """Iterate over children of this expression.
 
@@ -253,6 +267,21 @@ class DoctypeTransformer(lark.visitors.Transformer):
         )
         return _qualname
 
+    def rst_role(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : Expr
+        """
+        # Drop rst_prefix
+        children = [c for c in tree.children if isinstance(c, Term)]
+        expr = Expr(rule="rst_role", children=children)
+        return expr
+
     def ELLIPSES(self, token):
         """
         Parameters
@@ -332,11 +361,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
-        items = [
-            Term("Literal", kind=TermKind.NAME),
-            *tree.children,
-        ]
-        out = self._format_subscription(items, rule="literal")
+        out = self._format_subscription(tree.children, rule="literal")
         return out
 
     def natlang_literal(self, tree):

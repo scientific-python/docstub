@@ -5,7 +5,7 @@ import logging
 from collections.abc import Hashable, Iterator, Mapping, Sequence
 from pathlib import Path
 from textwrap import indent
-from typing import Any, ClassVar, Self, TextIO
+from typing import Any, ClassVar, Literal, Self, TextIO
 
 import click
 from pre_commit.envcontext import UNSET

@@ -6,6 +6,7 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Literal
 
 from ._analysis import PyImport, TypeCollector, TypeMatcher, common_known_types
 from ._cache import CACHE_DIR_NAME, FileCache

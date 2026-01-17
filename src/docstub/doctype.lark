@@ -34,7 +34,7 @@ _type: qualname
 // [1] https://docutils.sourceforge.io/docs/ref/rst/roles.html
 //
 qualname: (/~/ ".")? (NAME ".")* NAME
-    | (":" (NAME ":")? NAME ":")? "`" qualname "`"
+    | (":" (NAME ":")? NAME ":")? "`" qualname "`" -> rst_role
 
 
 // An union of different types, joined either by "or" or "|".
@@ -73,7 +73,7 @@ natlang_literal: "{" literal_item ("," literal_item)* "}"
 // isn't allowed to contain "literal_items", so we need to define this.
 // Assign a higher priority so that things like `Literal[Some.ENUM]` is marked
 // as a literal expression.
-literal.1: "Literal[" literal_item ("," literal_item)* "]"
+literal.1: qualname "[" literal_item ("," literal_item)* "]"
 
 
 // An single item in a literal expression (or `optional`). We must also allow
