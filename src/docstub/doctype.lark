@@ -6,19 +6,20 @@
 // https://lark-parser.readthedocs.io/en/latest/grammar.html
 
 
-?start: annotation_with_meta
+start: _annotation_with_meta
 
 
 // The basic structure of a full docstring annotation as it comes after the
 // `name : `. It includes additional meta information that is optional and
 // currently ignored.
-?annotation_with_meta: type ("," optional_info)?
+_annotation_with_meta: _type ("," optional_info)?
 
 
 // A type annotation. Can range from a simple qualified name to a complex
 // nested construct of types.
-?type: qualname
+_type: qualname
     | union
+    | literal
     | subscription
     | callable
     | natlang_literal
@@ -37,7 +38,7 @@ qualname: (/~/ ".")? (NAME ".")* NAME
 
 
 // An union of different types, joined either by "or" or "|".
-union: type (_OR type)+
+union: _type (_OR _type)+
 
 
 // Operator used in unions.
@@ -45,18 +46,18 @@ _OR: "or" | "|"
 
 
 // An expression where an object is subscribed with "A[v, ...]".
-subscription: qualname "[" type ("," type)* ("," ELLIPSES)? "]"
+subscription: qualname "[" _type ("," _type)* ("," ELLIPSES)? "]"
 
 
 // An expression describing a callable like "Callable[[int], str]"
 // [1] https://typing.python.org/en/latest/spec/callables.html#callable
 //
-callable: qualname "[" ELLIPSES ("," type)? "]"
-    | qualname "[" param_spec "," type "]"
+callable: qualname "[" ELLIPSES ("," _type)? "]"
+    | qualname "[" param_spec "," _type "]"
 
 
 // The parameter specification inside a callable expression.
-param_spec: "[" type? ("," type)* ("," ELLIPSES)? "]"
+param_spec: "[" _type? ("," _type)* ("," ELLIPSES)? "]"
 
 
 // Allow Python's ellipses object
@@ -68,16 +69,23 @@ ELLIPSES: "..."
 natlang_literal: "{" literal_item ("," literal_item)* "}"
 
 
+// A literal expression as supported by Python proper. The rule "subscription"
+// isn't allowed to contain "literal_items", so we need to define this.
+// Assign a higher priority so that things like `Literal[Some.ENUM]` is marked
+// as a literal expression.
+literal.1: qualname "[" literal_item ("," literal_item)* "]"
+
+
 // An single item in a literal expression (or `optional`). We must also allow
 // for qualified names, since a "class" or enum can be used as a literal too.
-?literal_item: ELLIPSES | STRING | SIGNED_NUMBER | qualname
+literal_item: STRING | SIGNED_NUMBER | qualname
 
 
 // Natural language forms of the subscription expression for containers.
 // These forms allow nesting with other expressions. But it's discouraged to do
 // so extensively to maintain readability.
 natlang_container: qualname "of" qualname _PLURAL_S?
-    | qualname "of" "(" type ")"
+    | qualname "of" "(" _type ")"
     | _natlang_tuple
     | _natlang_mapping
 
@@ -90,12 +98,12 @@ _PLURAL_S: /(?<!\s)\(s\)/
 
 // Special behavior for tuples [1].
 // [1] https://typing.python.org/en/latest/spec/tuples.html#tuple-type-form
-_natlang_tuple: qualname "of" "(" type "," ELLIPSES ")"
-    | qualname "of" "(" type ("," type)+ ")"
+_natlang_tuple: qualname "of" "(" _type "," ELLIPSES ")"
+    | qualname "of" "(" _type ("," _type)+ ")"
 
 
 // Natural language container variant for mappings.
-_natlang_mapping: qualname "of" "{" type ":" type "}"
+_natlang_mapping: qualname "of" "{" _type ":" _type "}"
 
 
 // A natural language alternative to describe arrays with a dtype and shape.
@@ -114,7 +122,7 @@ ARRAY_NAME: "array" | "ndarray" | "array-like" | "array_like"
 
 
 // The dtype used in an array expression.
-?dtype: qualname | "(" union ")"
+dtype: qualname | "(" union ")"
 
 
 // The shape used in an array expression. Possibly to liberal right now in

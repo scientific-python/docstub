@@ -18,9 +18,8 @@ from ._path_utils import (
     walk_source_and_targets,
     walk_source_package,
 )
-from ._report import setup_logging
+from ._report import Stats, setup_logging
 from ._stubs import Py2StubTransformer, try_format_stub
-from ._utils import update_with_add_values
 from ._version import __version__
 
 logger: logging.Logger

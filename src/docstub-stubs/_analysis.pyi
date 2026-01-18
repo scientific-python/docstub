@@ -14,6 +14,7 @@ from typing import Any, ClassVar
 import libcst as cst
 import libcst.matchers as cstm
 
+from ._report import Stats
 from ._utils import accumulate_qualname, module_name_from_path, pyfile_checksum
 
 logger: logging.Logger
@@ -83,6 +84,7 @@ class TypeMatcher:
         types: dict[str, PyImport] | None = ...,
         type_prefixes: dict[str, PyImport] | None = ...,
         type_nicknames: dict[str, str] | None = ...,
+        stats: Stats | None = ...,
     ) -> None: ...
     def _resolve_nickname(self, name: str) -> str: ...
     def match(self, search: str) -> tuple[str | None, PyImport | None]: ...

@@ -2,6 +2,7 @@
 
 import dataclasses
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 from textwrap import indent
 
@@ -93,7 +94,7 @@ class ContextReporter:
             Optional formatting arguments for `short`.
         log_level : int
             The logging level.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -116,7 +117,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         *args : Any
             Optional formatting arguments for `short`.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -133,7 +134,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         *args : Any
             Optional formatting arguments for `short`.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -150,7 +151,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         *args : Any
             Optional formatting arguments for `short`.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -167,7 +168,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         *args : Any
             Optional formatting arguments for `short`.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -184,7 +185,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         *args : Any
             Optional formatting arguments for `short`.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -446,3 +447,171 @@ def setup_logging(*, verbosity, group_errors):
     logging.captureWarnings(True)
 
     return reporter, log_counter
+
+
+def update_with_add_values(*mappings, out=None):
+    """Merge mappings while adding together their values.
+
+    Parameters
+    ----------
+    mappings : Mapping[Hashable, int or Sequence]
+    out : dict, optional
+
+    Returns
+    -------
+    out : dict, optional
+
+    Examples
+    --------
+    >>> stats_1 = {"errors": 2, "warnings": 0, "unknown": ["string", "integer"]}
+    >>> stats_2 = {"unknown": ["func"], "errors": 1}
+    >>> update_with_add_values(stats_1, stats_2)
+    {'errors': 3, 'warnings': 0, 'unknown': ['string', 'integer', 'func']}
+
+    >>> _ = update_with_add_values(stats_1, out=stats_2)
+    >>> stats_2
+    {'unknown': ['func', 'string', 'integer'], 'errors': 3, 'warnings': 0}
+
+    >>> update_with_add_values({"lines": (1, 33)}, {"lines": (42,)})
+    {'lines': (1, 33, 42)}
+    """
+    if out is None:
+        out = {}
+    for m in mappings:
+        for key, value in m.items():
+            if hasattr(value, "__add__"):
+                out[key] = out.setdefault(key, type(value)()) + value
+            else:
+                raise TypeError(f"Don't know how to 'add' {value!r}")
+    return out
+
+
+class Stats(Mapping):
+    """Collect statistics
+
+    Examples
+    --------
+    >>> stats = Stats()
+    >>> stats.inc_counter("counter")
+    >>> stats.inc_counter("counter", inc=2)
+    >>> stats.append_to_list("names", "Foo")
+    >>> stats.append_to_list("names", "Bar")
+    >>> dict(stats)
+    {'counter': 3, 'names': ['Foo', 'Bar']}
+
+    >>> other_stats = Stats(
+    ...     {"counter": 3, "modules": ["pathlib"], "names": ["baz"]}
+    ... )
+    >>> merged = stats.merge(stats, other_stats)
+    >>> dict(merged)
+    {'counter': 6, 'names': ['Foo', 'Bar', 'baz'], 'modules': ['pathlib']}
+    """
+
+    class _UNSET:
+        """Sentinel signaling that an argument wasn't set."""
+
+    def __init__(self, stats=None):
+        """
+        Parameters
+        ----------
+        stats : dict[str, list[Any] or str]
+        """
+        self._stats = {} if stats is None else stats
+
+    def __getitem__(self, key):
+        """Retrieve a statistic.
+
+        Parameters
+        ----------
+        key : str
+
+        Returns
+        -------
+        value : list[Any] or int
+        """
+        return self._stats[key]
+
+    def __iter__(self):
+        """
+        Returns
+        -------
+        out : Iterator
+        """
+        yield from self._stats
+
+    def __len__(self) -> int:
+        return len(self._stats)
+
+    def inc_counter(self, key, *, inc=1):
+        """Increase counter of a statistic.
+
+        Parameters
+        ----------
+        key : str
+        inc : int, optional
+        """
+        if key not in self._stats:
+            self._stats[key] = 0
+        assert isinstance(inc, int)
+        self._stats[key] += inc
+
+    def append_to_list(self, key, value):
+        """Append `value` to statistic.
+
+        Parameters
+        ----------
+        key : str
+        value : Any
+        """
+        if key not in self._stats:
+            self._stats[key] = []
+        self._stats[key].append(value)
+
+    @classmethod
+    def merge(cls, *stats):
+        """
+
+        Parameters
+        ----------
+        *stats : Self
+
+        Returns
+        -------
+        merged : Self
+        """
+        out = update_with_add_values(*stats)
+        out = cls(out)
+        return out
+
+    def __repr__(self) -> str:
+        keys = ", ".join(self._stats.keys())
+        return f"<{type(self).__name__}: {keys}>"
+
+    def pop(self, key, *, default=_UNSET):
+        """Return and remove a statistic from this container.
+
+        Parameters
+        ----------
+        key : str
+        default : Any, optional
+            If given, falls back to the given default value if `key` is not
+            found.
+
+        Returns
+        -------
+        value : list[Any] or int
+        """
+        if key in self._stats or default is self._UNSET:
+            return self._stats.pop(key)
+        return default
+
+    def pop_all(self):
+        """Return and remove all statistics from this container.
+
+        Returns
+        -------
+        stats : dict[str, list[Any] or int]
+        """
+        out = self._stats
+        self._stats = {}
+        return out

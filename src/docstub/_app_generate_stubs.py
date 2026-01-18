@@ -24,9 +24,8 @@ from ._path_utils import (
     walk_source_and_targets,
     walk_source_package,
 )
-from ._report import setup_logging
+from ._report import Stats, setup_logging
 from ._stubs import Py2StubTransformer, try_format_stub
-from ._utils import update_with_add_values
 from ._version import __version__
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -234,7 +233,9 @@ def _generate_single_stub(task):
         logger.info("Wrote %s", stub_path)
         fo.write(stub_content)
 
-    stats = stub_transformer.collect_stats()
+    stats = Stats.merge(
+        stub_transformer.stats.pop_all(), stub_transformer.matcher.stats.pop_all()
+    )
 
     return stats
 
@@ -350,7 +351,7 @@ def generate_stubs(
         stats_per_task = executor.map(
             _generate_single_stub, task_args, chunksize=chunk_size
         )
-        stats = update_with_add_values(*stats_per_task)
+        stats = Stats.merge(*stats_per_task)
 
     py_typed_out = out_dir / "py.typed"
     if not py_typed_out.exists():
@@ -368,23 +369,27 @@ def generate_stubs(
     total_warnings = error_counter.warning_count
     total_errors = error_counter.error_count
 
-    logger.info("Recognized type names: %i", stats["matched_type_names"])
-    logger.info("Transformed doctypes: %i", stats["transformed_doctypes"])
+    logger.info("Recognized type names: %i", stats.pop("matched_type_names", default=0))
+    logger.info(
+        "Transformed doctypes: %i", stats.pop("transformed_doctypes", default=0)
+    )
     if total_warnings:
         logger.warning("Warnings: %i", total_warnings)
-    if stats["doctype_syntax_errors"]:
+    if "doctype_syntax_errors" in stats:
         assert total_errors
-        logger.warning("Syntax errors: %i", stats["doctype_syntax_errors"])
-    if stats["unknown_type_names"]:
+        logger.warning("Syntax errors: %i", stats.pop("doctype_syntax_errors"))
+    if "unknown_type_names" in stats:
         assert total_errors
         logger.warning(
             "Unknown type names: %i (locations: %i)",
             len(set(stats["unknown_type_names"])),
             len(stats["unknown_type_names"]),
-            extra={"details": _format_unknown_names(stats["unknown_type_names"])},
+            extra={"details": _format_unknown_names(stats.pop("unknown_type_names"))},
         )
     if total_errors:
         logger.error("Total errors: %i", total_errors)
+
+    assert len(stats) == 0
 
     total_fails = total_errors
     if fail_on_warning:
