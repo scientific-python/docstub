@@ -15,17 +15,17 @@ import lark.visitors
 from ._report import ContextReporter
 from ._utils import DocstubError
 
-logger: Final = logging.getLogger(__name__)
+logger: Final[logging.Logger] = logging.getLogger(__name__)
 
 
-grammar_path: Final = Path(__file__).parent / "doctype.lark"
+grammar_path: Final[Path] = Path(__file__).parent / "doctype.lark"
 
 with grammar_path.open() as file:
-    _grammar: Final = file.read()
+    _grammar: Final[str] = file.read()
 
 # TODO try passing `transformer=DoctypeTransformer()`, may be faster [1]
 # [1] https://lark-parser.readthedocs.io/en/latest/classes.html#:~:text=after%20the%20parse%2C-,but%20faster,-)
-_lark: Final = lark.Lark(_grammar, propagate_positions=True)
+_lark: Final[lark.Lark] = lark.Lark(_grammar, propagate_positions=True)
 
 
 def flatten_recursive(iterable):
@@ -80,10 +80,12 @@ class Term(str):
 
     Attributes
     ----------
-    __slots__ : Final
+    kind : TermKind
+    pos : tuple of (int, int) or None
+    __slots__ : Final[ClassVar[tuple[str, ...]]]
     """
 
-    __slots__ = ("kind", "pos", "value")
+    __slots__ = ("kind", "pos")
 
     def __new__(cls, value, *, kind, pos=None):
         """
@@ -92,6 +94,10 @@ class Term(str):
         value : str
         kind : TermKind or str
         pos : tuple of (int, int), optional
+
+        Returns
+        -------
+        cls : Self
         """
         self = super().__new__(cls, value)
         self.kind = TermKind(kind)
@@ -201,7 +207,7 @@ class Expr:
         return str(self)
 
 
-BLACKLISTED_QUALNAMES: Final = set(keyword.kwlist) - {"None", "True", "False"}
+BLACKLISTED_QUALNAMES: Final[set[str]] = set(keyword.kwlist) - {"None", "True", "False"}
 
 
 class BlacklistedQualname(DocstubError):

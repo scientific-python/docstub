@@ -7,7 +7,7 @@ from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import indent
-from typing import Any, Final, Self
+from typing import Any, ClassVar, Final, Self
 
 import lark
 import lark.visitors
@@ -16,14 +16,14 @@ from _typeshed import Incomplete
 from ._report import ContextReporter
 from ._utils import DocstubError
 
-logger: Final
+logger: Final[logging.Logger]
 
-grammar_path: Final
+grammar_path: Final[Path]
 
 with grammar_path.open() as file:
-    _grammar: Final
+    _grammar: Final[str]
 
-_lark: Final
+_lark: Final[lark.Lark]
 
 def flatten_recursive(iterable: Iterable[Iterable | str]) -> Generator[str]: ...
 def insert_between(iterable: Iterable, *, sep: Any) -> list[Any]: ...
@@ -35,12 +35,14 @@ class TermKind(enum.StrEnum):
     SYNTAX = enum.auto()
 
 class Term(str):
+    kind: TermKind
+    pos: tuple[int, int] | None
 
-    __slots__: Final
+    __slots__: Final[ClassVar[tuple[str, ...]]]
 
     def __new__(
         cls, value: str, *, kind: TermKind | str, pos: tuple[int, int] | None = ...
-    ) -> None: ...
+    ) -> Self: ...
     def __repr__(self) -> str: ...
     def __getnewargs_ex__(self) -> tuple[tuple[Any, ...], dict[str, Any]]: ...
 
@@ -63,7 +65,7 @@ class Expr:
     def __str__(self) -> str: ...
     def as_code(self) -> str: ...
 
-BLACKLISTED_QUALNAMES: Final
+BLACKLISTED_QUALNAMES: Final[set[str]]
 
 class BlacklistedQualname(DocstubError):
     pass
