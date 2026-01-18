@@ -12,6 +12,7 @@ from typing import Final, Self
 import lark
 import lark.visitors
 
+from ._report import ContextReporter
 from ._utils import DocstubError
 
 logger: Final = logging.getLogger(__name__)
@@ -152,7 +153,7 @@ class Expr:
 
         Returns
         -------
-        names : list of Expr or {1}
+        names : list of Self
         """
         cls = type(self)
         for child in self.children:
@@ -188,7 +189,7 @@ class Expr:
 
     def print_tree(self):
         """Print full hierarchy as a tree."""
-        print(self.format_tree())
+        print(self.format_tree())  # noqa: T201
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: '{self.as_code()}' rule='{self.rule}'>"
@@ -209,6 +210,14 @@ class BlacklistedQualname(DocstubError):
 
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
+    def __init__(self, *, reporter=None):
+        """
+        Parameters
+        ----------
+        reporter : ~.ContextReporter
+        """
+        self.reporter = reporter or ContextReporter(logger=logger)
+
     def start(self, tree):
         """
         Parameters
@@ -220,29 +229,6 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out : Expr
         """
         return Expr(rule="start", children=tree.children)
-
-    def qualname(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : Term
-        """
-        children = tree.children
-        _qualname = ".".join(children)
-
-        if _qualname in BLACKLISTED_QUALNAMES:
-            raise BlacklistedQualname(_qualname)
-
-        _qualname = Term(
-            _qualname,
-            kind=TermKind.NAME,
-            pos=(tree.meta.start_pos, tree.meta.end_pos),
-        )
-        return _qualname
 
     def qualname(self, tree):
         """
@@ -381,11 +367,11 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = self._format_subscription(items, rule="natlang_literal")
 
         if len(tree.children) == 1:
-            logger.warning(
-                "natural language literal with one item `%s`, "
-                "consider using `%s` to improve readability",
+            details = ("Consider using `%s` to improve readability", "".join(out))
+            self.reporter.warn(
+                "Natural language literal with one item: `{%s}`",
                 tree.children[0],
-                "".join(out),
+                details=details,
             )
         return out
 
@@ -524,16 +510,14 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return expr
 
 
-_transformer: Final = DoctypeTransformer()
-
-
-def parse_doctype(doctype):
+def parse_doctype(doctype, *, reporter=None):
     """Turn a type description in a docstring into a type annotation.
 
     Parameters
     ----------
     doctype : str
         The doctype to parse.
+    reporter : ~.ContextReporter, optional
 
     Returns
     -------
@@ -553,5 +537,6 @@ def parse_doctype(doctype):
     <Expr: 'ndarray[float | int]' rule='start'>
     """
     tree = _lark.parse(doctype)
-    expression = _transformer.transform(tree=tree)
+    transformer = DoctypeTransformer(reporter=reporter)
+    expression = transformer.transform(tree=tree)
     return expression

@@ -95,7 +95,7 @@ class ContextReporter:
             Optional formatting arguments for `short`.
         log_level : int
             The logging level.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -118,7 +118,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         *args : Any
             Optional formatting arguments for `short`.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -135,7 +135,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         *args : Any
             Optional formatting arguments for `short`.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -152,7 +152,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         *args : Any
             Optional formatting arguments for `short`.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -169,7 +169,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         *args : Any
             Optional formatting arguments for `short`.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """
@@ -186,7 +186,7 @@ class ContextReporter:
             A short summarizing report that shouldn't wrap over multiple lines.
         *args : Any
             Optional formatting arguments for `short`.
-        details : str, optional
+        details : str or tuple of (Any, ...), optional
             An optional multiline report with more details.
         **log_kw : Any
         """

@@ -10,7 +10,6 @@ import click
 import lark
 import lark.visitors
 import numpydoc.docscrape as npds
-from _typeshed import Incomplete as Expr
 
 from ._analysis import PyImport, TypeMatcher
 from ._doctype import BlacklistedQualname, Expr, Term, TermKind, parse_doctype

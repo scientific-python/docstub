@@ -78,7 +78,7 @@ literal.1: qualname "[" literal_item ("," literal_item)* "]"
 
 // An single item in a literal expression (or `optional`). We must also allow
 // for qualified names, since a "class" or enum can be used as a literal too.
-literal_item: ELLIPSES | STRING | SIGNED_NUMBER | qualname
+literal_item: STRING | SIGNED_NUMBER | qualname
 
 
 // Natural language forms of the subscription expression for containers.

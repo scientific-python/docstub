@@ -29,7 +29,7 @@ def _update_qualnames(expr, *, _parents=()):
 
     Parameters
     ----------
-    expr : Expr
+    expr : ~.Expr
     _parents : tuple of (~._doctype.Expr, ...)
 
     Yields
@@ -266,7 +266,7 @@ def doctype_to_annotation(doctype, *, matcher=None, reporter=None, stats=None):
     stats = Stats() if stats is None else stats
 
     try:
-        expression = parse_doctype(doctype)
+        expression = parse_doctype(doctype, reporter=reporter)
         stats.inc_counter("transformed_doctypes")
         reporter.debug(
             "Transformed doctype", details=("   %s\n-> %s", doctype, expression)

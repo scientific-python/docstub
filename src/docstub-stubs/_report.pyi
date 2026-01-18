@@ -35,23 +35,43 @@ class ContextReporter:
         short: str,
         *args: Any,
         log_level: int,
-        details: str | None = ...,
+        details: str | tuple[Any, ...] | None = ...,
         **log_kw: Any
     ) -> None: ...
     def debug(
-        self, short: str, *args: Any, details: str | None = ..., **log_kw: Any
+        self,
+        short: str,
+        *args: Any,
+        details: str | tuple[Any, ...] | None = ...,
+        **log_kw: Any
     ) -> None: ...
     def info(
-        self, short: str, *args: Any, details: str | None = ..., **log_kw: Any
+        self,
+        short: str,
+        *args: Any,
+        details: str | tuple[Any, ...] | None = ...,
+        **log_kw: Any
     ) -> None: ...
     def warn(
-        self, short: str, *args: Any, details: str | None = ..., **log_kw: Any
+        self,
+        short: str,
+        *args: Any,
+        details: str | tuple[Any, ...] | None = ...,
+        **log_kw: Any
     ) -> None: ...
     def error(
-        self, short: str, *args: Any, details: str | None = ..., **log_kw: Any
+        self,
+        short: str,
+        *args: Any,
+        details: str | tuple[Any, ...] | None = ...,
+        **log_kw: Any
     ) -> None: ...
     def critical(
-        self, short: str, *args: Any, details: str | None = ..., **log_kw: Any
+        self,
+        short: str,
+        *args: Any,
+        details: str | tuple[Any, ...] | None = ...,
+        **log_kw: Any
     ) -> None: ...
     def __post_init__(self) -> None: ...
     @staticmethod

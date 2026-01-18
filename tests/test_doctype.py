@@ -176,9 +176,9 @@ class Test_parse_doctype:
         assert expr.as_code() == "Literal[True]"
         assert caplog.messages == ["Natural language literal with one item: `{True}`"]
         assert caplog.records[0].levelno == logging.WARNING
-        assert (
-            caplog.records[0].details
-            == "Consider using `Literal[True]` to improve readability"
+        assert caplog.records[0].details == (
+            "Consider using `%s` to improve readability",
+            "Literal[True]",
         )
 
     @pytest.mark.parametrize(
@@ -217,15 +217,25 @@ class Test_parse_doctype:
             "Callable[..., str]",
             "Callable[[], str]",
             "Callback[...]",
-            "Callable[Concatenate[int, float], str]",
-            "Callable[Concatenate[int, ...], str]",
-            "Callable[P, str]",
         ],
     )
     def test_callable(self, doctype):
         expr = parse_doctype(doctype)
         assert expr.as_code() == doctype
         assert "callable" in [e.rule for e in expr.sub_expressions]
+
+    @pytest.mark.parametrize(
+        "doctype",
+        [
+            "Callable[Concatenate[int, float], str]",
+            "Callable[Concatenate[int, ...], str]",
+            "Callable[P, str]",
+        ],
+    )
+    def test_callable_subscriptions_form(self, doctype):
+        expr = parse_doctype(doctype)
+        assert expr.as_code() == doctype
+        assert "callable" not in [e.rule for e in expr.sub_expressions]
 
     @pytest.mark.parametrize(
         "doctype",

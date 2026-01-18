@@ -5,8 +5,8 @@ import pytest
 from docstub._analysis import PyImport
 from docstub._docstrings import (
     Annotation,
-    doctype_to_annotation,
     DocstringAnnotations,
+    doctype_to_annotation,
 )
 
 
@@ -37,26 +37,25 @@ class Test_Annotation:
 
 
 class Test_doctype_to_annotation:
-
-    def test_unknown_name(self):
+    def test_unknown_name(self, caplog):
         # Simple unknown name is aliased to typing.Any
         annotation = doctype_to_annotation("a")
         assert annotation.value == "a"
         assert annotation.imports == {
             PyImport(import_="Incomplete", from_="_typeshed", as_="a")
         }
-        assert unknown_names == [("a", 0, 1)]
+        assert caplog.messages == ["Unknown name in doctype: 'a'"]
 
-    def test_unknown_qualname(self):
+    def test_unknown_qualname(self, caplog):
         # Unknown qualified name is escaped and aliased to typing.Any as well
         annotation = doctype_to_annotation("a.b")
         assert annotation.value == "a_b"
         assert annotation.imports == {
             PyImport(import_="Incomplete", from_="_typeshed", as_="a_b")
         }
-        assert unknown_names == [("a.b", 0, 3)]
+        assert caplog.messages == ["Unknown name in doctype: 'a.b'"]
 
-    def test_multiple_unknown_names(self):
+    def test_multiple_unknown_names(self, caplog):
         # Multiple names are aliased to typing.Any
         annotation = doctype_to_annotation("a.b of c")
         assert annotation.value == "a_b[c]"
@@ -64,7 +63,10 @@ class Test_doctype_to_annotation:
             PyImport(import_="Incomplete", from_="_typeshed", as_="a_b"),
             PyImport(import_="Incomplete", from_="_typeshed", as_="c"),
         }
-        assert unknown_names == [("a.b", 0, 3), ("c", 7, 8)]
+        assert sorted(caplog.messages) == [
+            "Unknown name in doctype: 'a.b'",
+            "Unknown name in doctype: 'c'",
+        ]
 
 
 class Test_DocstringAnnotations:
