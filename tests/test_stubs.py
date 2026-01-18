@@ -51,10 +51,11 @@ class Test_get_docstring_node:
         func_def = matches[0]
 
         assert isinstance(func_def, cst.FunctionDef)
-        docstring_node = _get_docstring_node(func_def)
+        docstring_node, docstring_result = _get_docstring_node(func_def)
 
         assert isinstance(docstring_node, cst.SimpleString)
         assert docstring_node.value == docstring
+        assert docstring_result == docstring.strip('"')
 
     def test_func_without_docstring(self):
         code = '''
@@ -74,9 +75,10 @@ class Test_get_docstring_node:
         func_def = matches[0]
 
         assert isinstance(func_def, cst.FunctionDef)
-        docstring_node = _get_docstring_node(func_def)
+        docstring_node, docstring = _get_docstring_node(func_def)
 
         assert docstring_node is None
+        assert docstring is None
 
 
 MODULE_ATTRIBUTE_TEMPLATE = '''\
