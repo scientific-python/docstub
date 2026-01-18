@@ -6,7 +6,7 @@ import libcst as cst
 import libcst.matchers as cstm
 import pytest
 
-from docstub._stubs import Py2StubTransformer, _get_docstring_node
+from docstub._stubs import Py2StubTransformer, _dataclass_matcher, _get_docstring_node
 
 
 class Test_get_docstring_node:
@@ -51,10 +51,11 @@ class Test_get_docstring_node:
         func_def = matches[0]
 
         assert isinstance(func_def, cst.FunctionDef)
-        docstring_node = _get_docstring_node(func_def)
+        docstring_node, docstring_result = _get_docstring_node(func_def)
 
         assert isinstance(docstring_node, cst.SimpleString)
         assert docstring_node.value == docstring
+        assert docstring_result == docstring.strip('"')
 
     def test_func_without_docstring(self):
         code = '''
@@ -74,9 +75,10 @@ class Test_get_docstring_node:
         func_def = matches[0]
 
         assert isinstance(func_def, cst.FunctionDef)
-        docstring_node = _get_docstring_node(func_def)
+        docstring_node, docstring = _get_docstring_node(func_def)
 
         assert docstring_node is None
+        assert docstring is None
 
 
 MODULE_ATTRIBUTE_TEMPLATE = '''\
@@ -761,3 +763,27 @@ class Test_Py2StubTransformer:
         transformer = Py2StubTransformer()
         result = transformer.python_to_stub(source)
         assert expected == result
+
+
+@pytest.mark.parametrize(
+    ("decorators", "expected"),
+    [
+        ("@dataclass", True),
+        ("@dataclass(frozen=True)", True),
+        ("@dataclasses.dataclass(frozen=True)", True),
+        ("@dc.dataclass", True),
+        ("", False),
+        ("@other", False),
+        ("@other(dataclass=True)", False),
+    ],
+)
+def test_dataclass_matcher(decorators, expected):
+    source = dedent(
+        """
+        {decorators}
+        class Foo:
+            pass
+        """
+    ).format(decorators=decorators)
+    class_def = cst.parse_statement(source)
+    assert cstm.matches(class_def, _dataclass_matcher) is expected
