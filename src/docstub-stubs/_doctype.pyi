@@ -7,7 +7,7 @@ from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import indent
-from typing import Any, ClassVar, Final, Self
+from typing import Any, Final, Self
 
 import lark
 import lark.visitors
@@ -38,7 +38,7 @@ class Term(str):
     kind: TermKind
     pos: tuple[int, int] | None
 
-    __slots__: Final[ClassVar[tuple[str, ...]]]
+    __slots__: Final[tuple[str, ...]]
 
     def __new__(
         cls, value: str, *, kind: TermKind | str, pos: tuple[int, int] | None = ...

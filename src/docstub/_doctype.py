@@ -82,7 +82,7 @@ class Term(str):
     ----------
     kind : TermKind
     pos : tuple of (int, int) or None
-    __slots__ : Final[ClassVar[tuple[str, ...]]]
+    __slots__ : Final[tuple[str, ...]]
     """
 
     __slots__ = ("kind", "pos")
