@@ -8,7 +8,6 @@ from textwrap import indent
 from typing import Any, ClassVar, Literal, Self, TextIO
 
 import click
-from pre_commit.envcontext import UNSET
 
 from ._cli_help import should_strip_ansi
 from ._utils import naive_natsort_key

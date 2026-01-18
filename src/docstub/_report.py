@@ -7,7 +7,6 @@ from pathlib import Path
 from textwrap import indent
 
 import click
-from pre_commit.envcontext import UNSET
 
 from ._cli_help import should_strip_ansi
 from ._utils import naive_natsort_key
@@ -602,7 +601,7 @@ class Stats(Mapping):
         -------
         value : list[Any] or int
         """
-        if key in self._stats or default is UNSET:
+        if key in self._stats or default is self._UNSET:
             return self._stats.pop(key)
         return default
 
