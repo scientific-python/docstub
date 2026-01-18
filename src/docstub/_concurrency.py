@@ -56,7 +56,7 @@ class LoggingProcessExecutor:
 
     max_workers: int | None = None
     logging_handlers: tuple[logging.Handler, ...] = ()
-    initializer: Callable | None = None
+    initializer: Callable[..., None] | None = None
     initargs: tuple | None = ()
 
     @staticmethod
@@ -67,7 +67,7 @@ class LoggingProcessExecutor:
         ----------
         queue : multiprocessing.Queue
         worker_log_level : int
-        initializer : Callable
+        initializer : Callable[..., None]
         initargs : tuple of Any
         """
         queue_handler = logging.handlers.QueueHandler(queue)

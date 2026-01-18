@@ -384,6 +384,35 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out = f"{_container}[{_content}]"
         return out
 
+    def param_spec(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : str
+        """
+        _content = ", ".join(tree.children)
+        out = f"[{_content}]"
+        return out
+
+    def callable(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : str
+        """
+        _callable, *_content = tree.children
+        _content = ", ".join(_content)
+        out = f"{_callable}[{_content}]"
+        return out
+
     def natlang_literal(self, tree):
         """
         Parameters
