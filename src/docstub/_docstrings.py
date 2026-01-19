@@ -2,6 +2,7 @@
 
 import logging
 import traceback
+import warnings
 from dataclasses import dataclass, field
 from functools import cached_property
 
@@ -366,13 +367,19 @@ class DocstringAnnotations:
         stats : ~.Stats, optional
         """
         self.docstring = docstring
-        self.np_docstring = npds.NumpyDocString(docstring)
         self.matcher = matcher or TypeMatcher()
         self.stats = Stats() if stats is None else stats
 
         if reporter is None:
             reporter = ContextReporter(logger=logger, line=0)
         self.reporter = reporter.copy_with(logger=logger)
+
+        with warnings.catch_warnings(record=True) as records:
+            self.np_docstring = npds.NumpyDocString(docstring)
+        for message in records:
+            short = "Warning in NumPyDoc while parsing docstring"
+            details = message.message.args[0]
+            self.reporter.warn(short, details=details)
 
     @cached_property
     def attributes(self):

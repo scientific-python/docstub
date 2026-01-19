@@ -2,6 +2,7 @@
 
 import logging
 import traceback
+import warnings
 from collections.abc import Generator, Iterable
 from dataclasses import dataclass, field
 from functools import cached_property

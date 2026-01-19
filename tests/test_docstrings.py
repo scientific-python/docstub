@@ -282,3 +282,23 @@ class Test_DocstringAnnotations:
 
         assert "d" not in annotations.parameters
         assert "e" not in annotations.parameters
+
+    @pytest.mark.filterwarnings("default:Unknown section:UserWarning:numpydoc")
+    def test_unknown_section_logged(self, caplog):
+        docstring = dedent(
+            """
+            Parameters
+            ----------
+            a : bool
+
+            To Do
+            -----
+            An unknown section
+            """
+        )
+        annotations = DocstringAnnotations(docstring)
+        assert len(annotations.parameters) == 1
+        assert annotations.parameters["a"].value == "bool"
+
+        assert caplog.messages == ["Warning in NumPyDoc while parsing docstring"]
+        assert caplog.records[0].details == "Unknown section To Do"
