@@ -2,9 +2,9 @@
 
 import logging
 import traceback
+import warnings
 from dataclasses import dataclass, field
 from functools import cached_property
-from pathlib import Path
 
 import click
 import lark
@@ -16,44 +16,60 @@ import numpydoc.docscrape as npds
 #   types and imports. I think that could very well be done at a higher level,
 #   e.g. in the stubs module.
 from ._analysis import PyImport, TypeMatcher
-from ._report import ContextReporter
-from ._utils import DocstubError, escape_qualname
+from ._doctype import BlacklistedQualname, Term, TermKind, parse_doctype
+from ._report import ContextReporter, Stats
+from ._utils import escape_qualname
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-here: Path = Path(__file__).parent
-grammar_path: Path = here / "doctype.lark"
+def _update_qualnames(expr, *, _parents=()):
+    """Yield and receive names in `expr`.
 
-
-with grammar_path.open() as file:
-    _grammar: str = file.read()
-
-_lark: lark.Lark = lark.Lark(_grammar, propagate_positions=True, strict=True)
-
-
-def _find_one_token(tree, *, name):
-    """Find token with a specific type name in tree.
+    This generator works as a coroutine.
 
     Parameters
     ----------
-    tree : lark.Tree
-    name : str
-        Name of the token to find in the children of `tree`.
+    expr : ~.Expr
+    _parents : tuple of (~._doctype.Expr, ...)
 
-    Returns
-    -------
-    token : lark.Token
+    Yields
+    ------
+    parents : tuple of (~._doctype.Expr, ...)
+    name : ~._doctype.Term
+
+    Receives
+    --------
+    new_name : str
+
+    Examples
+    --------
+    >>> from docstub._doctype import parse_doctype
+    >>> expr = parse_doctype("tuple of (tuple or str, ...)")
+    >>> updater = _update_qualnames(expr)
+    >>> for parents, name in updater:
+    ...     if name == "tuple" and parents[-1].rule == "union":
+    ...         updater.send("list")
+    ...     if name == "str":
+    ...         updater.send("bytes")
+    >>> expr.as_code()
+    'tuple[list | bytes, ...]'
     """
-    tokens = [
-        child
-        for child in tree.children
-        if hasattr(child, "type") and child.type == name
-    ]
-    if len(tokens) != 1:
-        msg = f"expected exactly one Token of type {name}, found {len(tokens)}"
-        raise ValueError(msg)
-    return tokens[0]
+    _parents += (expr,)
+    children = expr.children.copy()
+
+    for i, child in enumerate(children):
+        if hasattr(child, "children"):
+            yield from _update_qualnames(child, _parents=_parents)
+
+        elif child.kind == TermKind.NAME:
+            new_name = yield _parents, child
+            if new_name is not None:
+                new_term = Term(new_name, kind=child.kind)
+                expr.children[i] = new_term
+                # `send` was called, yield `None` to return from `send`,
+                # otherwise send would return the next child
+                yield
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -184,396 +200,6 @@ FallbackAnnotation: Annotation = Annotation(
 )
 
 
-class QualnameIsKeyword(DocstubError):
-    """Raised when a qualname is a blacklisted Python keyword."""
-
-
-@lark.visitors.v_args(tree=True)
-class DoctypeTransformer(lark.visitors.Transformer):
-    """Transformer for docstring type descriptions (doctypes).
-
-    Attributes
-    ----------
-    matcher : ~.TypeMatcher
-    stats : dict[str, Any]
-    blacklisted_qualnames : ClassVar[frozenset[str]]
-        All Python keywords [1]_ are blacklisted from use in qualnames except for ``True``
-        ``False`` and ``None``.
-
-    References
-    ----------
-    .. [1] https://docs.python.org/3/reference/lexical_analysis.html#keywords
-
-    Examples
-    --------
-    >>> transformer = DoctypeTransformer()
-    >>> annotation, unknown_names = transformer.doctype_to_annotation(
-    ...     "tuple of (int or ndarray)"
-    ... )
-    >>> annotation.value
-    'tuple[int | ndarray]'
-    >>> unknown_names
-    [('ndarray', 17, 24)]
-    """
-
-    blacklisted_qualnames = frozenset(
-        {
-            "await",
-            "else",
-            "import",
-            "pass",
-            "break",
-            "except",
-            "in",
-            "raise",
-            "class",
-            "finally",
-            "is",
-            "return",
-            "and",
-            "continue",
-            "for",
-            "lambda",
-            "try",
-            "as",
-            "def",
-            "from",
-            "nonlocal",
-            "while",
-            "assert",
-            "del",
-            "global",
-            "not",
-            "with",
-            "async",
-            "elif",
-            "if",
-            "or",
-            "yield",
-        }
-    )
-
-    def __init__(self, *, matcher=None, **kwargs):
-        """
-        Parameters
-        ----------
-        matcher : ~.TypeMatcher, optional
-        kwargs : dict[Any, Any], optional
-            Keyword arguments passed to the init of the parent class.
-        """
-        if matcher is None:
-            matcher = TypeMatcher()
-
-        self.matcher = matcher
-
-        self._reporter = None
-        self._collected_imports = None
-        self._unknown_qualnames = None
-
-        super().__init__(**kwargs)
-
-        self.stats = {
-            "doctype_syntax_errors": 0,
-            "transformed_doctypes": 0,
-        }
-
-    def doctype_to_annotation(self, doctype, *, reporter=None):
-        """Turn a type description in a docstring into a type annotation.
-
-        Parameters
-        ----------
-        doctype : str
-            The doctype to parse.
-        reporter : ~.ContextReporter
-
-        Returns
-        -------
-        annotation : Annotation
-            The parsed annotation.
-        unknown_qualnames : list[tuple[str, int, int]]
-            A set containing tuples. Each tuple contains a qualname, its start and its
-            end index relative to the given `doctype`.
-        """
-        try:
-            self._reporter = reporter or ContextReporter(logger=logger)
-            self._collected_imports = set()
-            self._unknown_qualnames = []
-            tree = _lark.parse(doctype)
-            value = super().transform(tree=tree)
-            annotation = Annotation(
-                value=value, imports=frozenset(self._collected_imports)
-            )
-            self.stats["transformed_doctypes"] += 1
-            return annotation, self._unknown_qualnames
-        except (
-            lark.exceptions.LexError,
-            lark.exceptions.ParseError,
-            QualnameIsKeyword,
-        ):
-            self.stats["doctype_syntax_errors"] += 1
-            raise
-        finally:
-            self._reporter = None
-            self._collected_imports = None
-            self._unknown_qualnames = None
-
-    def qualname(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : lark.Token
-        """
-        children = tree.children
-        _qualname = ".".join(children)
-
-        _qualname = self._match_import(_qualname, meta=tree.meta)
-
-        if _qualname in self.blacklisted_qualnames:
-            msg = (
-                f"qualname {_qualname!r} in docstring type description "
-                "is a reserved Python keyword and not allowed"
-            )
-            raise QualnameIsKeyword(msg)
-
-        _qualname = lark.Token(type="QUALNAME", value=_qualname)
-        return _qualname
-
-    def rst_role(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : lark.Token
-        """
-        qualname = _find_one_token(tree, name="QUALNAME")
-        return qualname
-
-    def union(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : str
-        """
-        out = " | ".join(tree.children)
-        return out
-
-    def subscription(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : str
-        """
-        _container, *_content = tree.children
-        _content = ", ".join(_content)
-        assert _content
-        out = f"{_container}[{_content}]"
-        return out
-
-    def param_spec(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : str
-        """
-        _content = ", ".join(tree.children)
-        out = f"[{_content}]"
-        return out
-
-    def callable(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : str
-        """
-        _callable, *_content = tree.children
-        _content = ", ".join(_content)
-        out = f"{_callable}[{_content}]"
-        return out
-
-    def natlang_literal(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : str
-        """
-        out = ", ".join(tree.children)
-        out = f"Literal[{out}]"
-
-        if len(tree.children) == 1:
-            self._reporter.warn(
-                "Natural language literal with one item: `{%s}`",
-                tree.children[0],
-                details=f"Consider using `{out}` to improve readability",
-            )
-
-        if self.matcher is not None:
-            _, py_import = self.matcher.match("Literal")
-            if py_import.has_import:
-                self._collected_imports.add(py_import)
-        return out
-
-    def natlang_container(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : str
-        """
-        return self.subscription(tree)
-
-    def natlang_array(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : str
-        """
-        name = _find_one_token(tree, name="ARRAY_NAME")
-        children = [child for child in tree.children if child != name]
-        if children:
-            name = f"{name}[{', '.join(children)}]"
-        return str(name)
-
-    def array_name(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : lark.Token
-        """
-        # Treat `array_name` as `qualname`, but mark it as an array name,
-        # so we know which one to treat as the container in `array_expression`
-        # This currently relies on a hack that only allows specific names
-        # in `array_expression` (see `ARRAY_NAME` terminal in gramar)
-        qualname = self.qualname(tree)
-        qualname = lark.Token("ARRAY_NAME", str(qualname))
-        return qualname
-
-    def shape(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : lark.visitors._DiscardType
-        """
-        # self._reporter.debug("Dropping shape information %r", tree)
-        return lark.Discard
-
-    def optional_info(self, tree):
-        """
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        out : lark.visitors._DiscardType
-        """
-        # self._reporter.debug("Dropping optional info %r", tree)
-        return lark.Discard
-
-    def __default__(self, data, children, meta):
-        """Unpack children of rule nodes by default.
-
-        Parameters
-        ----------
-        data : lark.Token
-            The rule-token of the current node.
-        children : list[lark.Token]
-            The children of the current node.
-        meta : lark.tree.Meta
-            Meta information for the current node.
-
-        Returns
-        -------
-        out : lark.Token or list[lark.Token]
-            Either a token or list of tokens.
-        """
-        if isinstance(children, list) and len(children) == 1:
-            out = children[0]
-            if hasattr(out, "type"):
-                out.type = data.upper()  # Turn rule into "token"
-        else:
-            out = children
-        return out
-
-    def _match_import(self, qualname, *, meta):
-        """Match `qualname` to known imports or alias to "Incomplete".
-
-        Parameters
-        ----------
-        qualname : str
-        meta : lark.tree.Meta
-            Location metadata for the `qualname`, used to report possible errors.
-
-        Returns
-        -------
-        matched_qualname : str
-            Possibly modified or normalized qualname.
-        """
-        if self.matcher is not None:
-            annotation_name, py_import = self.matcher.match(qualname)
-        else:
-            annotation_name = None
-            py_import = None
-
-        if py_import and py_import.has_import:
-            self._collected_imports.add(py_import)
-
-        if annotation_name:
-            matched_qualname = annotation_name
-        else:
-            # Unknown qualname, alias to `Incomplete`
-            self._unknown_qualnames.append((qualname, meta.start_pos, meta.end_pos))
-            matched_qualname = escape_qualname(qualname)
-            any_alias = PyImport(
-                from_="_typeshed",
-                import_="Incomplete",
-                as_=matched_qualname,
-            )
-            self._collected_imports.add(any_alias)
-        return matched_qualname
-
-
 def _uncombine_numpydoc_params(params):
     """Split combined NumPyDoc parameters.
 
@@ -600,13 +226,121 @@ def _uncombine_numpydoc_params(params):
             yield param
 
 
+def _red_partial_underline(doctype, *, start, stop):
+    """Underline a part of a string with red '^'.
+
+    Parameters
+    ----------
+    doctype : str
+    start : int
+    stop : int
+
+    Returns
+    -------
+    underlined : str
+    """
+    width = stop - start
+    assert width > 0
+    underline = click.style("^" * width, fg="red", bold=True)
+    underlined = f"{doctype}\n{' ' * start}{underline}\n"
+    return underlined
+
+
+def doctype_to_annotation(doctype, *, matcher=None, reporter=None, stats=None):
+    """Convert a type description to a Python-ready type.
+
+    Parameters
+    ----------
+    doctype : str
+    matcher : ~.TypeMatcher, optional
+    reporter : ~.ContextReporter, optional
+    stats : ~.Stats, optional
+
+    Returns
+    -------
+    annotation : Annotation
+        The transformed type, ready to be inserted into a stub file, with
+        necessary imports attached.
+    """
+    matcher = matcher or TypeMatcher()
+    reporter = reporter or ContextReporter(logger=logger)
+    stats = Stats() if stats is None else stats
+
+    try:
+        expression = parse_doctype(doctype, reporter=reporter)
+        stats.inc_counter("transformed_doctypes")
+        reporter.debug(
+            "Transformed doctype", details=("   %s\n-> %s", doctype, expression)
+        )
+
+        imports = set()
+        unknown_qualnames = set()
+        updater = _update_qualnames(expression)
+        for _, name in updater:
+            search_name = str(name)
+            matched_name, py_import = matcher.match(search_name)
+            if matched_name is None:
+                assert py_import is None
+                unknown_qualnames.add((search_name, *name.pos))
+                matched_name = escape_qualname(search_name)
+            _ = updater.send(matched_name)
+            assert _ is None
+
+            if py_import is None:
+                incomplete_alias = PyImport(
+                    from_="_typeshed",
+                    import_="Incomplete",
+                    as_=matched_name,
+                )
+                imports.add(incomplete_alias)
+            elif py_import.has_import:
+                imports.add(py_import)
+
+        annotation = Annotation(value=str(expression), imports=frozenset(imports))
+
+    except (
+        lark.exceptions.LexError,
+        lark.exceptions.ParseError,
+    ) as error:
+        details = None
+        if hasattr(error, "get_context"):
+            details = error.get_context(doctype)
+            details = details.replace("^", click.style("^", fg="red", bold=True))
+        stats.inc_counter("doctype_syntax_errors")
+        reporter.error("Invalid syntax in docstring type annotation", details=details)
+        return FallbackAnnotation
+
+    except lark.visitors.VisitError as error:
+        original_error = error.orig_exc
+        if isinstance(original_error, BlacklistedQualname):
+            msg = "Blacklisted keyword argument in doctype"
+            details = _red_partial_underline(
+                doctype,
+                start=error.obj.meta.start_pos,
+                stop=error.obj.meta.end_pos,
+            )
+        else:
+            msg = "Unexpected error while parsing doctype"
+            tb = traceback.format_exception(original_error)
+            tb = "\n".join(tb)
+            details = f"doctype: {doctype!r}\n\n{tb}"
+        reporter.error(msg, details=details)
+        return FallbackAnnotation
+
+    else:
+        for name, start_col, stop_col in unknown_qualnames:
+            details = _red_partial_underline(doctype, start=start_col, stop=stop_col)
+            reporter.error(f"Unknown name in doctype: {name!r}", details=details)
+        return annotation
+
+
 class DocstringAnnotations:
     """Collect annotations in a given docstring.
 
     Attributes
     ----------
     docstring : str
-    transformer : DoctypeTransformer
+    matcher : ~.TypeMatcher
     reporter : ~.ContextReporter
 
     Examples
@@ -618,78 +352,34 @@ class DocstringAnnotations:
     ... b : some invalid syntax
     ... c : unknown.symbol
     ... '''
-    >>> transformer = DoctypeTransformer()
-    >>> annotations = DocstringAnnotations(docstring, transformer=transformer)
+    >>> annotations = DocstringAnnotations(docstring)
     >>> annotations.parameters.keys()
     dict_keys(['a', 'b', 'c'])
     """
 
-    def __init__(self, docstring, *, transformer, reporter=None):
+    def __init__(self, docstring, *, matcher=None, reporter=None, stats=None):
         """
         Parameters
         ----------
         docstring : str
-        transformer : DoctypeTransformer
+        matcher : ~.TypeMatcher, optional
         reporter : ~.ContextReporter, optional
+        stats : ~.Stats, optional
         """
         self.docstring = docstring
-        self.np_docstring = npds.NumpyDocString(docstring)
-        self.transformer = transformer
+        self.matcher = matcher or TypeMatcher()
+        self.stats = Stats() if stats is None else stats
 
         if reporter is None:
             reporter = ContextReporter(logger=logger, line=0)
         self.reporter = reporter.copy_with(logger=logger)
 
-    def _doctype_to_annotation(self, doctype, ds_line=0):
-        """Convert a type description to a Python-ready type.
-
-        Parameters
-        ----------
-        doctype : str
-            The type description of a parameter or return value, as extracted from
-            a docstring.
-        ds_line : int, optional
-            The line number relative to the docstring.
-
-        Returns
-        -------
-        annotation : Annotation
-            The transformed type, ready to be inserted into a stub file, with
-            necessary imports attached.
-        """
-        reporter = self.reporter.copy_with(line_offset=ds_line)
-
-        try:
-            annotation, unknown_qualnames = self.transformer.doctype_to_annotation(
-                doctype, reporter=reporter
-            )
-            reporter.debug(
-                "Transformed doctype", details=("   %s\n-> %s", doctype, annotation)
-            )
-
-        except (lark.exceptions.LexError, lark.exceptions.ParseError) as error:
-            details = None
-            if hasattr(error, "get_context"):
-                details = error.get_context(doctype)
-                details = details.replace("^", click.style("^", fg="red", bold=True))
-            reporter.error(
-                "Invalid syntax in docstring type annotation", details=details
-            )
-            return FallbackAnnotation
-
-        except lark.visitors.VisitError as e:
-            tb = "\n".join(traceback.format_exception(e.orig_exc))
-            details = f"doctype: {doctype!r}\n\n{tb}"
-            reporter.error("Unexpected error while parsing doctype", details=details)
-            return FallbackAnnotation
-
-        else:
-            for name, start_col, stop_col in unknown_qualnames:
-                width = stop_col - start_col
-                error_underline = click.style("^" * width, fg="red", bold=True)
-                details = f"{doctype}\n{' ' * start_col}{error_underline}\n"
-                reporter.error(f"Unknown name in doctype: {name!r}", details=details)
-            return annotation
+        with warnings.catch_warnings(record=True) as records:
+            self.np_docstring = npds.NumpyDocString(docstring)
+        for message in records:
+            short = "Warning in NumPyDoc while parsing docstring"
+            details = message.message.args[0]
+            self.reporter.warn(short, details=details)
 
     @cached_property
     def attributes(self):
@@ -858,7 +548,13 @@ class DocstringAnnotations:
                 continue
 
             ds_line = self._find_docstring_line(param.name, param.type)
-            annotation = self._doctype_to_annotation(param.type, ds_line=ds_line)
+
+            annotation = doctype_to_annotation(
+                doctype=param.type,
+                matcher=self.matcher,
+                reporter=self.reporter.copy_with(line_offset=ds_line),
+                stats=self.stats,
+            )
             annotated_params[param.name.strip()] = annotation
 
         return annotated_params

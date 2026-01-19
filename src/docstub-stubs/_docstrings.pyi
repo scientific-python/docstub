@@ -2,11 +2,10 @@
 
 import logging
 import traceback
+import warnings
 from collections.abc import Generator, Iterable
 from dataclasses import dataclass, field
 from functools import cached_property
-from pathlib import Path
-from typing import Any, ClassVar
 
 import click
 import lark
@@ -14,20 +13,15 @@ import lark.visitors
 import numpydoc.docscrape as npds
 
 from ._analysis import PyImport, TypeMatcher
-from ._report import ContextReporter
-from ._utils import DocstubError, escape_qualname
+from ._doctype import BlacklistedQualname, Expr, Term, TermKind, parse_doctype
+from ._report import ContextReporter, Stats
+from ._utils import escape_qualname
 
 logger: logging.Logger
 
-here: Path
-grammar_path: Path
-
-with grammar_path.open() as file:
-    _grammar: str
-
-_lark: lark.Lark
-
-def _find_one_token(tree: lark.Tree, *, name: str) -> lark.Token: ...
+def _update_qualnames(
+    expr: Expr, *, _parents: tuple[Expr, ...] = ...
+) -> Generator[tuple[tuple[Expr, ...], Term], str]: ...
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Annotation:
 
@@ -54,57 +48,31 @@ class Annotation:
 
 FallbackAnnotation: Annotation
 
-class QualnameIsKeyword(DocstubError):
-    pass
-
-class DoctypeTransformer(lark.visitors.Transformer):
-    matcher: TypeMatcher
-    stats: dict[str, Any]
-
-    blacklisted_qualnames: ClassVar[frozenset[str]]
-
-    def __init__(
-        self, *, matcher: TypeMatcher | None = ..., **kwargs: dict[Any, Any]
-    ) -> None: ...
-    def doctype_to_annotation(
-        self, doctype: str, *, reporter: ContextReporter | None = ...
-    ) -> tuple[Annotation, list[tuple[str, int, int]]]: ...
-    def qualname(self, tree: lark.Tree) -> lark.Token: ...
-    def rst_role(self, tree: lark.Tree) -> lark.Token: ...
-    def union(self, tree: lark.Tree) -> str: ...
-    def subscription(self, tree: lark.Tree) -> str: ...
-    def param_spec(self, tree: lark.Tree) -> str: ...
-    def callable(self, tree: lark.Tree) -> str: ...
-    def natlang_literal(self, tree: lark.Tree) -> str: ...
-    def natlang_container(self, tree: lark.Tree) -> str: ...
-    def natlang_array(self, tree: lark.Tree) -> str: ...
-    def array_name(self, tree: lark.Tree) -> lark.Token: ...
-    def shape(self, tree: lark.Tree) -> lark.visitors._DiscardType: ...
-    def optional_info(self, tree: lark.Tree) -> lark.visitors._DiscardType: ...
-    def __default__(
-        self, data: lark.Token, children: list[lark.Token], meta: lark.tree.Meta
-    ) -> lark.Token | list[lark.Token]: ...
-    def _match_import(self, qualname: str, *, meta: lark.tree.Meta) -> str: ...
-
 def _uncombine_numpydoc_params(
     params: list[npds.Parameter],
 ) -> Generator[npds.Parameter]: ...
+def _red_partial_underline(doctype: str, *, start: int, stop: int) -> str: ...
+def doctype_to_annotation(
+    doctype: str,
+    *,
+    matcher: TypeMatcher | None = ...,
+    reporter: ContextReporter | None = ...,
+    stats: Stats | None = ...,
+) -> Annotation: ...
 
 class DocstringAnnotations:
     docstring: str
-    transformer: DoctypeTransformer
+    matcher: TypeMatcher
     reporter: ContextReporter
 
     def __init__(
         self,
         docstring: str,
         *,
-        transformer: DoctypeTransformer,
+        matcher: TypeMatcher | None = ...,
         reporter: ContextReporter | None = ...,
+        stats: Stats | None = ...,
     ) -> None: ...
-    def _doctype_to_annotation(
-        self, doctype: str, ds_line: int = ...
-    ) -> Annotation: ...
     @cached_property
     def attributes(self) -> dict[str, Annotation]: ...
     @cached_property

@@ -159,43 +159,6 @@ def pyfile_checksum(path):
     return key
 
 
-def update_with_add_values(*mappings, out=None):
-    """Merge mappings while adding together their values.
-
-    Parameters
-    ----------
-    mappings : Mapping[Hashable, int or Sequence]
-    out : dict, optional
-
-    Returns
-    -------
-    out : dict, optional
-
-    Examples
-    --------
-    >>> stats_1 = {"errors": 2, "warnings": 0, "unknown": ["string", "integer"]}
-    >>> stats_2 = {"unknown": ["func"], "errors": 1}
-    >>> update_with_add_values(stats_1, stats_2)
-    {'errors': 3, 'warnings': 0, 'unknown': ['string', 'integer', 'func']}
-
-    >>> _ = update_with_add_values(stats_1, out=stats_2)
-    >>> stats_2
-    {'unknown': ['func', 'string', 'integer'], 'errors': 3, 'warnings': 0}
-
-    >>> update_with_add_values({"lines": (1, 33)}, {"lines": (42,)})
-    {'lines': (1, 33, 42)}
-    """
-    if out is None:
-        out = {}
-    for m in mappings:
-        for key, value in m.items():
-            if hasattr(value, "__add__"):
-                out[key] = out.setdefault(key, type(value)()) + value
-            else:
-                raise TypeError(f"Don't know how to 'add' {value!r}")
-    return out
-
-
 class DocstubError(Exception):
     """An error raised by docstub."""
 

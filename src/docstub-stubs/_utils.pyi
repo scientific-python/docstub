@@ -2,7 +2,7 @@
 
 import itertools
 import re
-from collections.abc import Callable, Hashable, Mapping, Sequence
+from collections.abc import Callable
 from functools import lru_cache, wraps
 from pathlib import Path
 from typing import Any
@@ -15,9 +15,6 @@ def _resolve_path_before_caching(
 ) -> Callable[[Path], str]: ...
 def module_name_from_path(path: Path) -> str: ...
 def pyfile_checksum(path: Path) -> str: ...
-def update_with_add_values(
-    *mappings: Mapping[Hashable, int | Sequence], out: dict | None = ...
-) -> dict: ...
 
 class DocstubError(Exception):
     pass

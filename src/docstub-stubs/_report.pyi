@@ -2,6 +2,7 @@
 
 import dataclasses
 import logging
+from collections.abc import Hashable, Iterator, Mapping, Sequence
 from pathlib import Path
 from textwrap import indent
 from typing import Any, ClassVar, Literal, Self, TextIO
@@ -33,23 +34,43 @@ class ContextReporter:
         short: str,
         *args: Any,
         log_level: int,
-        details: str | None = ...,
+        details: str | tuple[Any, ...] | None = ...,
         **log_kw: Any
     ) -> None: ...
     def debug(
-        self, short: str, *args: Any, details: str | None = ..., **log_kw: Any
+        self,
+        short: str,
+        *args: Any,
+        details: str | tuple[Any, ...] | None = ...,
+        **log_kw: Any
     ) -> None: ...
     def info(
-        self, short: str, *args: Any, details: str | None = ..., **log_kw: Any
+        self,
+        short: str,
+        *args: Any,
+        details: str | tuple[Any, ...] | None = ...,
+        **log_kw: Any
     ) -> None: ...
     def warn(
-        self, short: str, *args: Any, details: str | None = ..., **log_kw: Any
+        self,
+        short: str,
+        *args: Any,
+        details: str | tuple[Any, ...] | None = ...,
+        **log_kw: Any
     ) -> None: ...
     def error(
-        self, short: str, *args: Any, details: str | None = ..., **log_kw: Any
+        self,
+        short: str,
+        *args: Any,
+        details: str | tuple[Any, ...] | None = ...,
+        **log_kw: Any
     ) -> None: ...
     def critical(
-        self, short: str, *args: Any, details: str | None = ..., **log_kw: Any
+        self,
+        short: str,
+        *args: Any,
+        details: str | tuple[Any, ...] | None = ...,
+        **log_kw: Any
     ) -> None: ...
     def __post_init__(self) -> None: ...
     @staticmethod
@@ -80,3 +101,22 @@ class LogCounter(logging.NullHandler):
 def setup_logging(
     *, verbosity: Literal[-2, -1, 0, 1, 2, 3], group_errors: bool
 ) -> tuple[ReportHandler, LogCounter]: ...
+def update_with_add_values(
+    *mappings: Mapping[Hashable, int | Sequence], out: dict | None = ...
+) -> dict: ...
+
+class Stats(Mapping):
+    class _UNSET:
+        pass
+
+    def __init__(self, stats: dict[str, list[Any] | str] | None = ...) -> None: ...
+    def __getitem__(self, key: str) -> list[Any] | int: ...
+    def __iter__(self) -> Iterator: ...
+    def __len__(self) -> int: ...
+    def inc_counter(self, key: str, *, inc: int = ...) -> None: ...
+    def append_to_list(self, key: str, value: Any) -> None: ...
+    @classmethod
+    def merge(cls, *stats: Self) -> Self: ...
+    def __repr__(self) -> str: ...
+    def pop(self, key: str, *, default: Any = ...) -> list[Any] | int: ...
+    def pop_all(self) -> dict[str, list[Any] | int]: ...
