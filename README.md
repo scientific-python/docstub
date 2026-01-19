@@ -19,11 +19,11 @@ It does so by supporting widely used readable conventions such as `array of dtyp
 
 Specific guides:
 
-- [Installation](https://docstub.readthedocs.io/stable/installation.html)
-- [Introduction](https://docstub.readthedocs.io/stable/introduction.html)
-- [Contributing](https://docstub.readthedocs.io/latest/development/contributing.html)
+- [Installation (stable)](https://docstub.readthedocs.io/stable/installation.html)
+- [Introduction (stable)](https://docstub.readthedocs.io/stable/introduction.html)
+- [Contributing (latest)](https://docstub.readthedocs.io/latest/development/contributing.html)
 
-Our [release notes](https://docstub.readthedocs.io/latest/release_notes/index.html) are in [docs/release_notes/](docs/release_notes).
+Our [release notes (latest)](https://docstub.readthedocs.io/latest/release_notes/index.html) are in [docs/release_notes/](docs/release_notes).
 
 Our project follows [Scientific Python's Code of Conduct](https://scientific-python.org/code_of_conduct/).
 
