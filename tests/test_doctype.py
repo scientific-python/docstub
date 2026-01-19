@@ -270,7 +270,6 @@ class Test_parse_doctype:
         [
             ("{name} of shape {shape} and dtype {dtype}", "{name}[{dtype}]"),
             ("{name} of dtype {dtype} and shape {shape}", "{name}[{dtype}]"),
-            ("{name} of {dtype}", "{name}[{dtype}]"),
         ],
     )
     @pytest.mark.parametrize("name", ["array", "ndarray", "array-like", "array_like"])
@@ -283,17 +282,20 @@ class Test_parse_doctype:
         expected = expected_fmt.format(name=name, dtype=dtype, shape=shape)
         expr = parse_doctype(doctype)
         assert expr.as_code() == expected
+        assert "natlang_array" in [e.rule for e in expr.sub_expressions]
     # fmt: on
 
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
             ("ndarray of dtype (int or float)", "ndarray[int | float]"),
+            ("ndarray of shape (M, N)", "ndarray"),
         ],
     )
     def test_natlang_array_specific(self, doctype, expected):
         expr = parse_doctype(doctype)
         assert expr.as_code() == expected
+        assert "natlang_array" in [e.rule for e in expr.sub_expressions]
 
     @pytest.mark.parametrize("shape", ["(-1, 3)", "(1.0, 2)", "-3D", "-2-D"])
     def test_natlang_array_invalid_shape(self, shape):

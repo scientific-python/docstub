@@ -1,4 +1,4 @@
-"""Parsing of doctypes."""
+"""Parsing & transformation of doctypes into Python-compatible syntax."""
 
 import enum
 import keyword
@@ -34,10 +34,18 @@ def flatten_recursive(iterable):
     Parameters
     ----------
     iterable : Iterable[Iterable or str]
+        An iterable containing nested iterables or strings. Only strings are
+        supported as "leafs" for now.
 
     Yields
     ------
     item : str
+
+    Examples
+    --------
+    >>> nested = ["only", ["strings", ("and", "iterables"), "are", ["allowed"]]]
+    >>> list(flatten_recursive(nested))
+    ['only', 'strings', 'and', 'iterables', 'are', 'allowed']
     """
     for item in iterable:
         if isinstance(item, str):
@@ -59,6 +67,12 @@ def insert_between(iterable, *, sep):
     Returns
     -------
     out : list[Any]
+
+    Examples
+    --------
+    >>> code = ["a", "b", "c", ]
+    >>> list(insert_between(code, sep=" | "))
+    ['a', ' | ', 'b', ' | ', 'c']
     """
     out = []
     for item in iterable:
@@ -68,6 +82,8 @@ def insert_between(iterable, *, sep):
 
 
 class TermKind(enum.StrEnum):
+    """Encodes the different kinds of :class:`Term`."""
+
     # docstub: off
     NAME = enum.auto()
     LITERAL = enum.auto()
@@ -83,6 +99,17 @@ class Term(str):
     kind : TermKind
     pos : tuple of (int, int) or None
     __slots__ : Final[tuple[str, ...]]
+
+    Examples
+    --------
+    >>> ''.join(
+    ...     [
+    ...         Term("int", kind="name"),
+    ...         Term(" | ", kind="syntax"),
+    ...         Term("float", kind="name")
+    ...     ]
+    ... )
+    'int | float'
     """
 
     __slots__ = ("kind", "pos")
@@ -216,6 +243,16 @@ class BlacklistedQualname(DocstubError):
 
 @lark.visitors.v_args(tree=True)
 class DoctypeTransformer(lark.visitors.Transformer):
+    """Transform parsed doctypes into Python-compatible syntax.
+
+    Examples
+    --------
+    >>> tree = _lark.parse("int or tuple of (int, ...)")
+    >>> transformer = DoctypeTransformer()
+    >>> str(transformer.transform(tree=tree))
+    'int | tuple[int, ...]'
+    """
+
     def __init__(self, *, reporter=None):
         """
         Parameters
@@ -310,6 +347,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
+        assert len(tree.children) > 1
         return self._format_subscription(tree.children, rule="subscription")
 
     def param_spec(self, tree):
@@ -341,6 +379,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
+        assert len(tree.children) > 1
         return self._format_subscription(tree.children, rule="callable")
 
     def literal(self, tree):
@@ -353,6 +392,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
+        assert len(tree.children) > 1
         out = self._format_subscription(tree.children, rule="literal")
         return out
 
@@ -372,6 +412,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         ]
         out = self._format_subscription(items, rule="natlang_literal")
 
+        assert len(tree.children) >= 1
         if len(tree.children) == 1:
             details = ("Consider using `%s` to improve readability", "".join(out))
             self.reporter.warn(
@@ -409,6 +450,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
+        assert len(tree.children) >= 1
         return self._format_subscription(tree.children, rule="natlang_container")
 
     def natlang_array(self, tree):
@@ -490,7 +532,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return lark.Discard
 
     def _format_subscription(self, sequence, *, rule):
-        """
+        """Format a `name[...]` style expression.
+
         Parameters
         ----------
         sequence : Sequence[str]
@@ -502,17 +545,20 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         sep = Term(", ", kind=TermKind.SYNTAX)
         container, *content = sequence
-        content = insert_between(content, sep=sep)
-        assert content
-        expr = Expr(
-            rule=rule,
-            children=[
+        assert container
+
+        if content:
+            content = insert_between(content, sep=sep)
+            children = [
                 container,
                 Term("[", kind=TermKind.SYNTAX),
                 *content,
                 Term("]", kind=TermKind.SYNTAX),
-            ],
-        )
+            ]
+        else:
+            children = [container]
+
+        expr = Expr(rule=rule, children=children)
         return expr
 
 
@@ -534,6 +580,8 @@ def parse_doctype(doctype, *, reporter=None):
     lark.exceptions.VisitError
         Raised when the transformation is interrupted by an exception.
         See :cls:`lark.exceptions.VisitError`.
+    BlacklistedQualname
+        Raised when a qualname is a forbidden keyword.
 
     Examples
     --------
