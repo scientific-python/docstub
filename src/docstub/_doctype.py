@@ -259,7 +259,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         ----------
         reporter : ~.ContextReporter
         """
-        self.reporter = reporter or ContextReporter(logger=logger)
+        reporter = reporter or ContextReporter(logger=logger)
+        self.reporter = reporter.copy_with(logger=logger)
 
     def start(self, tree):
         """
