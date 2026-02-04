@@ -228,8 +228,9 @@ class ReportHandler(logging.StreamHandler):
     level_to_color : ClassVar[dict[int, str]]
     """
 
+    # Use "safe" colors (https://blog.xoria.org/terminal-colors/)
     level_to_color = {
-        logging.DEBUG: "bright_black",
+        logging.DEBUG: "green",
         logging.INFO: "cyan",
         logging.WARNING: "yellow",
         logging.ERROR: "red",
