@@ -4,6 +4,7 @@ Its interface declaration is in `_cli.py`.
 """
 
 import logging
+import sys
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -276,6 +277,8 @@ def generate_stubs(
         verbosity=verbosity, group_errors=group_errors
     )
 
+    logger.debug("Command line args: %s", sys.orig_argv)
+
     root_path = Path(root_path)
     if root_path.is_file():
         logger.warning(
@@ -290,6 +293,7 @@ def generate_stubs(
 
     config = _load_configuration(config_paths)
     config = config.merge(Config(ignore_files=list(ignore)))
+    logger.debug("Fully loaded config:\n%s", config)
 
     types, type_prefixes = _collect_type_info(
         root_path, ignore=config.ignore_files, cache=not no_cache

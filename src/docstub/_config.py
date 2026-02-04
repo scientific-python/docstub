@@ -2,6 +2,7 @@ import dataclasses
 import logging
 import tomllib
 from pathlib import Path
+from pprint import pformat
 from typing import ClassVar
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -71,6 +72,9 @@ class Config:
         sources = " | ".join(str(s) for s in self.config_paths)
         formatted = f"<{type(self).__name__}: {sources}>"
         return formatted
+
+    def __str__(self) -> str:
+        return pformat(self.to_dict())
 
     @staticmethod
     def validate(mapping):

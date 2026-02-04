@@ -230,6 +230,8 @@ def clean(verbose, quiet):
     verbosity = _calc_verbosity(verbose=verbose, quiet=quiet)
     app.setup_logging(verbosity=verbosity, group_errors=False)
 
+    logger.debug("Command line args: %s", sys.orig_argv)
+
     path = app.cache_dir_in_cwd()
     if path.exists():
         try:
