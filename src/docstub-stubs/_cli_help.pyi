@@ -3,7 +3,7 @@
 import logging
 import os
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable
 from typing import IO, Any, ClassVar
 
 import click
@@ -32,7 +32,7 @@ class HelpFormatter(click.formatting.HelpFormatter):
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
     def write_dl(
         self,
-        rows: Sequence[tuple[str, str]],
+        rows: Iterable[tuple[str, str]],
         *args: Any,
         **kwargs: Any,
     ) -> None: ...
