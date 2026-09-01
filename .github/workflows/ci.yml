@@ -117,4 +117,4 @@ jobs:
 
       - name: Check tests/ with basedpyright
         run: |
-          basedpyright tests/
+          basedpyright --level=warning --stats tests/
