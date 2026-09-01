@@ -95,7 +95,7 @@ class HelpFormatter(click.formatting.HelpFormatter):
 
         Parameters
         ----------
-        rows : Sequence[tuple[str, str]]
+        rows : Iterable[tuple[str, str]]
         *args, **kwargs : Any
         """
         if not rows[0][0].strip().startswith("-"):
