@@ -62,7 +62,7 @@ class ContextReporter:
 
         Parameters
         ----------
-        logger : logging.Logger
+        logger : logging.Logger, optional
         path : Path, optional
         line : int, optional
         line_offset : int, optional

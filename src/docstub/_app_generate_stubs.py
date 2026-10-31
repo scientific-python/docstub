@@ -19,6 +19,7 @@ from ._analysis import (
 from ._cache import CACHE_DIR_NAME, FileCache
 from ._concurrency import LoggingProcessExecutor, guess_concurrency_params
 from ._config import Config
+from ._doctype import DoctypeTranspiler
 from ._path_utils import (
     STUB_HEADER_COMMENT,
     find_package_root,
@@ -59,8 +60,8 @@ def _load_configuration(config_paths=None):
 
     if config_paths:
         for path in config_paths:
+            add_config = Config.from_file(path)
             logger.info("Using %s", path)
-            add_config = Config.from_toml(path)
             config = config.merge(add_config)
 
     else:
@@ -72,8 +73,14 @@ def _load_configuration(config_paths=None):
 
         docstub_toml = Path.cwd() / "docstub.toml"
         if docstub_toml.is_file():
-            logger.info("Using %s", docstub_toml)
             add_config = Config.from_toml(docstub_toml)
+            logger.info("Using %s", docstub_toml)
+            config = config.merge(add_config)
+
+        docstub_py = Path.cwd() / "docstub.py"
+        if docstub_py.is_file():
+            add_config = Config.from_pyfile(docstub_py)
+            logger.info("Using %s", docstub_py)
             config = config.merge(add_config)
 
     return config
@@ -315,10 +322,13 @@ def generate_stubs(
         for prefix, module in config.type_prefixes.items()
     }
 
+    doctype_transpiler = DoctypeTranspiler()
     matcher = TypeMatcher(
         types=types, type_prefixes=type_prefixes, type_nicknames=config.type_nicknames
     )
-    stub_transformer = Py2StubTransformer(matcher=matcher)
+    stub_transformer = Py2StubTransformer(
+        matcher=matcher, doctype_transpiler=doctype_transpiler
+    )
 
     if not out_dir:
         if root_path.is_file():

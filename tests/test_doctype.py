@@ -4,10 +4,17 @@ import lark
 import lark.exceptions
 import pytest
 
-from docstub._doctype import BLACKLISTED_QUALNAMES, parse_doctype
+from docstub._doctype import (
+    BLACKLISTED_QUALNAMES,
+    DoctypeTranspiler,
+    DoctypeTransformer,
+    Term,
+    Expr,
+    insert_between,
+)
 
 
-class Test_parse_doctype:
+class Test_DoctypeTranspiler:
     @pytest.mark.parametrize(
         "doctype",
         [
@@ -27,12 +34,12 @@ class Test_parse_doctype:
     )
     def test_edge_case_errors(self, doctype):
         with pytest.raises(lark.exceptions.UnexpectedInput):
-            parse_doctype(doctype)
+            DoctypeTranspiler()(doctype)
 
     @pytest.mark.parametrize("doctype", BLACKLISTED_QUALNAMES)
     def test_reserved_keywords(self, doctype):
         with pytest.raises(lark.exceptions.VisitError):
-            parse_doctype(doctype)
+            DoctypeTranspiler()(doctype)
 
     @pytest.mark.parametrize(
         ("doctype", "expected"),
@@ -42,7 +49,7 @@ class Test_parse_doctype:
         ],
     )
     def test_natlang_union(self, doctype, expected):
-        expr = parse_doctype(doctype)
+        expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
 
     @pytest.mark.parametrize(
@@ -67,7 +74,7 @@ class Test_parse_doctype:
         ],
     )
     def test_subscription(self, doctype, expected):
-        expr = parse_doctype(doctype)
+        expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
 
     @pytest.mark.parametrize(
@@ -93,7 +100,7 @@ class Test_parse_doctype:
         ],
     )
     def test_natlang_container(self, doctype, expected):
-        expr = parse_doctype(doctype)
+        expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
 
     @pytest.mark.parametrize(
@@ -113,7 +120,7 @@ class Test_parse_doctype:
     )
     def test_subscription_error(self, doctype):
         with pytest.raises(lark.exceptions.UnexpectedInput):
-            parse_doctype(doctype)
+            DoctypeTranspiler()(doctype)
 
     @pytest.mark.parametrize(
         ("doctype"),
@@ -136,7 +143,7 @@ class Test_parse_doctype:
         ],
     )
     def test_literals(self, doctype):
-        expr = parse_doctype(doctype)
+        expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == doctype
         assert "literal" in [e.rule for e in expr.sub_expressions]
 
@@ -167,12 +174,12 @@ class Test_parse_doctype:
         ],
     )
     def test_natlang_literals(self, doctype, expected):
-        expr = parse_doctype(doctype)
+        expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
         assert "natlang_literal" in [e.rule for e in expr.sub_expressions]
 
     def test_single_natlang_literal_warning(self, caplog):
-        expr = parse_doctype("{True}")
+        expr = DoctypeTranspiler()("{True}")
         assert expr.as_code() == "Literal[True]"
         assert caplog.messages == ["Natural language literal with one item: `{True}`"]
         assert caplog.records[0].levelno == logging.WARNING
@@ -205,7 +212,7 @@ class Test_parse_doctype:
     )
     def test_optional_info(self, doctype, expected, optional_info):
         doctype_with_optional = doctype + optional_info
-        expr = parse_doctype(doctype_with_optional)
+        expr = DoctypeTranspiler()(doctype_with_optional)
         assert expr.as_code() == expected
 
     @pytest.mark.parametrize(
@@ -220,7 +227,7 @@ class Test_parse_doctype:
         ],
     )
     def test_callable(self, doctype):
-        expr = parse_doctype(doctype)
+        expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == doctype
         assert "callable" in [e.rule for e in expr.sub_expressions]
 
@@ -233,7 +240,7 @@ class Test_parse_doctype:
         ],
     )
     def test_callable_subscriptions_form(self, doctype):
-        expr = parse_doctype(doctype)
+        expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == doctype
         assert "callable" not in [e.rule for e in expr.sub_expressions]
 
@@ -247,7 +254,7 @@ class Test_parse_doctype:
     )
     def test_callable_error(self, doctype):
         with pytest.raises(lark.exceptions.UnexpectedInput):
-            parse_doctype(doctype)
+            DoctypeTranspiler()(doctype)
 
     @pytest.mark.parametrize(
         ("doctype", "expected"),
@@ -261,7 +268,7 @@ class Test_parse_doctype:
         ],
     )
     def test_rst_role(self, doctype, expected):
-        expr = parse_doctype(doctype)
+        expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
 
     # fmt: off
@@ -280,7 +287,7 @@ class Test_parse_doctype:
     def test_natlang_array(self, fmt, expected_fmt, name, dtype, shape):
         doctype = fmt.format(name=name, dtype=dtype, shape=shape)
         expected = expected_fmt.format(name=name, dtype=dtype, shape=shape)
-        expr = parse_doctype(doctype)
+        expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
         assert "natlang_array" in [e.rule for e in expr.sub_expressions]
     # fmt: on
@@ -293,7 +300,7 @@ class Test_parse_doctype:
         ],
     )
     def test_natlang_array_specific(self, doctype, expected):
-        expr = parse_doctype(doctype)
+        expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
         assert "natlang_array" in [e.rule for e in expr.sub_expressions]
 
@@ -301,4 +308,95 @@ class Test_parse_doctype:
     def test_natlang_array_invalid_shape(self, shape):
         doctype = f"array of shape {shape}"
         with pytest.raises(lark.exceptions.UnexpectedInput):
-            _ = parse_doctype(doctype)
+            _ = DoctypeTranspiler()(doctype)
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("ndarray of dtype uint8 or int", "ndarray[uint8] | int"),
+            ("ndarray of dtype in {uint8, uint16}", "ndarray[uint8 | uint16]"),
+            # ("ndarray of dtype (uint8, uint16)", "ndarray[uint8 | uint16]"),
+        ],
+    )
+    def test_grammar_only_override(self, doctype, expected):
+        grammar = """
+        %import doctype (start, dtype, qualname, WS_INLINE)
+        dtype_union : "in {" qualname ("," qualname)+ "}" -> union
+        %override dtype: qualname | dtype_union
+        %ignore WS_INLINE
+        """
+        transpile = DoctypeTranspiler(grammar=grammar)
+        expr = transpile(doctype)
+        assert expr.as_code() == expected
+        assert "natlang_array" in [e.rule for e in expr.sub_expressions]
+        assert "dtype" in [e.rule for e in expr.sub_expressions]
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("int or float", "Union[int, float]"),
+            (
+                "int or tuple[int or float, ...]",
+                "Union[int, tuple[Union[int, float], ...]]",
+            ),
+        ],
+    )
+    def test_transformer_only_override(self, doctype, expected):
+
+        class Transformer(DoctypeTransformer):
+            def union(self, children):
+                out = self._format_subscription(["Union", *children], rule="union")
+                return out
+
+        transpile = DoctypeTranspiler(transformer=Transformer())
+        expr = transpile(doctype)
+        assert expr.as_code() == expected
+        assert "union" in [e.rule for e in expr.sub_expressions]
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("(int) -> bool", "Callable[[int], bool]"),
+            ("(str, bytes) -> int or bool", "Callable[[str, bytes], int | bool]"),
+        ],
+    )
+    def test_grammar_transformer_override(self, doctype, expected):
+        grammar = """
+        %import doctype (start, _type, WS_INLINE)
+        
+        params: _type ("," _type)*
+
+        natlang_callable : "(" params ") ->" _type
+        
+        %extend _type: natlang_callable
+        
+        %ignore WS_INLINE
+        """
+
+        class Transformer(lark.visitors.Transformer):
+            def start(self, children):
+                return Expr(rule="start", children=children)
+
+            def params(self, children):
+                sep = Term(", ", kind="syntax")
+                content = insert_between(children, sep=sep)
+                items = [
+                    Term("[", kind="syntax"),
+                    *content,
+                    Term("]", kind="syntax"),
+                ]
+                out = Expr(rule="params", children=items)
+                return out
+
+            def natlang_callable(self, children):
+                items = [Term("Callable", kind="name"), *children]
+                out = DoctypeTransformer._format_subscription(
+                    items, rule="natlang_callable"
+                )
+                return out
+
+        transpile = DoctypeTranspiler(grammar=grammar, transformer=Transformer())
+        expr = transpile(doctype)
+        assert expr.as_code() == expected
+        assert "natlang_callable" in [e.rule for e in expr.sub_expressions]
+        assert "params" in [e.rule for e in expr.sub_expressions]

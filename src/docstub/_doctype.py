@@ -18,14 +18,8 @@ from ._utils import DocstubError
 logger: Final[logging.Logger] = logging.getLogger(__name__)
 
 
-grammar_path: Final[Path] = Path(__file__).parent / "doctype.lark"
-
-with grammar_path.open() as file:
-    _grammar: Final[str] = file.read()
-
-# TODO try passing `transformer=DoctypeTransformer()`, may be faster [1]
-# [1] https://lark-parser.readthedocs.io/en/latest/classes.html#:~:text=after%20the%20parse%2C-,but%20faster,-)
-_lark: Final[lark.Lark] = lark.Lark(_grammar, propagate_positions=True)
+DOCTYPE_GRAMMAR_PATH: Final[Path] = Path(__file__).parent / "doctype.lark"
+DOCTYPE_GRAMMAR: Final[str] = DOCTYPE_GRAMMAR_PATH.read_text()
 
 
 def flatten_recursive(iterable):
@@ -532,7 +526,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         logger.debug("dropping extra info")
         return lark.Discard
 
-    def _format_subscription(self, sequence, *, rule):
+    @staticmethod
+    def _format_subscription(sequence, *, rule):
         """Format a `name[...]` style expression.
 
         Parameters
@@ -563,35 +558,79 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return expr
 
 
-def parse_doctype(doctype, *, reporter=None):
-    """Turn a type description in a docstring into a type annotation.
+class DoctypeTranspiler:
+    """Transpile a :term:`doctype` into a structured expression.
 
-    Parameters
-    ----------
-    doctype : str
-        The doctype to parse.
-    reporter : ~.ContextReporter, optional
-
-    Returns
-    -------
-    parsed : Expr
-
-    Raises
-    ------
-    lark.exceptions.VisitError
-        Raised when the transformation is interrupted by an exception.
-        See :cls:`lark.exceptions.VisitError`.
-    BlacklistedQualname
-        Raised when a qualname is a forbidden keyword.
+    This is could be a simple function, but as a class dependency injection with
+    custom grammars or transformers is made easier.
 
     Examples
     --------
-    >>> parse_doctype("tuple of (int, ...)")
+    >>> transpile = DoctypeTranspiler()
+    >>> transpile("tuple of (int, ...)")
     <Expr: 'tuple[int, ...]' rule='start'>
-    >>> parse_doctype("ndarray of dtype (float or int)")
+    >>> transpile("ndarray of dtype (float or int)")
     <Expr: 'ndarray[float | int]' rule='start'>
     """
-    tree = _lark.parse(doctype)
-    transformer = DoctypeTransformer(reporter=reporter)
-    expression = transformer.transform(tree=tree)
-    return expression
+
+    def __init__(self, *, grammar=DOCTYPE_GRAMMAR, transformer=None, reporter=None):
+        """
+        Parameters
+        ----------
+        grammar : str, optional
+            Use custom grammar to parse doctypes. You can reuse parts of the
+            default grammar (see ``DOCTYPE_GRAMMAR_PATH`) with
+            ``%import doctype (start, ...)``.
+        transformer : DoctypeTransformer, optional
+            Use a custom transformer to transform the parsed tree.
+        reporter : ~.ContextReporter, optional
+            Pass file and line context for logging.
+        """
+        default_transformer = DoctypeTransformer(reporter=reporter)
+
+        if transformer is None:
+            transformer = default_transformer
+
+        if grammar != DOCTYPE_GRAMMAR:
+            # A custom grammar may import the existing doctype grammar. In that
+            # case Lark will put imported rules into their own "doctype__" prefixed
+            # namespace. By providing `DoctypeTransformer` for that namespace we
+            # make it work.
+            transformer = lark.visitors.merge_transformers(
+                transformer, doctype=default_transformer
+            )
+
+        self.reporter = reporter
+        self._grammar = grammar
+        self._transformer = transformer
+        # TODO If we used an LARL conforming grammar we could pass the `transformer`
+        #  directly here which should be faster [1]
+        # [1] https://lark-parser.readthedocs.io/en/latest/classes.html#lark:~:text=faster
+        self._parser = lark.Lark(
+            grammar=grammar,
+            propagate_positions=True,
+            import_paths=[DOCTYPE_GRAMMAR_PATH.parent],
+        )
+
+    def __call__(self, doctype):
+        """Transpile single doctype into a structured expression.
+
+        Parameters
+        ----------
+        doctype : str
+
+        Returns
+        -------
+        parsed : Expr
+
+        Raises
+        ------
+        lark.exceptions.VisitError
+            Raised when the transformation is interrupted by an exception.
+            See :cls:`lark.exceptions.VisitError`.
+        BlacklistedQualname
+            Raised when a qualname is a forbidden keyword.
+        """
+        tree = self._parser.parse(doctype)
+        expression = self._transformer.transform(tree=tree)
+        return expression

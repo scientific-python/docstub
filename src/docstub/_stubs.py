@@ -322,13 +322,15 @@ class Py2StubTransformer(cst.CSTTransformer):
     )
     _Annotation_None: ClassVar[cst.Annotation] = cst.Annotation(cst.Name("None"))
 
-    def __init__(self, *, matcher=None):
+    def __init__(self, *, matcher=None, doctype_transpiler=None):
         """
         Parameters
         ----------
         matcher : ~.TypeMatcher
+        doctype_transpiler : ~.DoctypeTranspiler, optional
         """
         self.matcher = matcher
+        self.doctype_transpiler = doctype_transpiler
         self.reporter = ContextReporter(logger=logger)
         self.stats = Stats()
         # Relevant docstring for the current context
@@ -915,6 +917,7 @@ class Py2StubTransformer(cst.CSTTransformer):
                     matcher=self.matcher,
                     reporter=reporter,
                     stats=self.stats,
+                    doctype_transpiler=self.doctype_transpiler,
                 )
             except (SystemExit, KeyboardInterrupt):
                 raise

@@ -16,7 +16,7 @@ import numpydoc.docscrape as npds
 #   types and imports. I think that could very well be done at a higher level,
 #   e.g. in the stubs module.
 from ._analysis import PyImport, TypeMatcher
-from ._doctype import BlacklistedQualname, Term, TermKind, parse_doctype
+from ._doctype import BlacklistedQualname, Term, TermKind, DoctypeTranspiler
 from ._report import ContextReporter, Stats
 from ._utils import escape_qualname
 
@@ -246,7 +246,9 @@ def _red_partial_underline(doctype, *, start, stop):
     return underlined
 
 
-def doctype_to_annotation(doctype, *, matcher=None, reporter=None, stats=None):
+def doctype_to_annotation(
+    doctype, *, matcher=None, reporter=None, stats=None, transpiler=None
+):
     """Convert a type description to a Python-ready type.
 
     Parameters
@@ -255,6 +257,7 @@ def doctype_to_annotation(doctype, *, matcher=None, reporter=None, stats=None):
     matcher : ~.TypeMatcher, optional
     reporter : ~.ContextReporter, optional
     stats : ~.Stats, optional
+    transpiler : –.DoctypeTranspiler, optional
 
     Returns
     -------
@@ -265,9 +268,10 @@ def doctype_to_annotation(doctype, *, matcher=None, reporter=None, stats=None):
     matcher = matcher or TypeMatcher()
     reporter = reporter or ContextReporter(logger=logger)
     stats = Stats() if stats is None else stats
+    transpiler = transpiler or DoctypeTranspiler(reporter=reporter)
 
     try:
-        expression = parse_doctype(doctype, reporter=reporter)
+        expression = transpiler(doctype)
         stats.inc_counter("transformed_doctypes")
         reporter.debug(
             "Transformed doctype", details=("   %s\n-> %s", doctype, expression)
@@ -357,7 +361,15 @@ class DocstringAnnotations:
     dict_keys(['a', 'b', 'c'])
     """
 
-    def __init__(self, docstring, *, matcher=None, reporter=None, stats=None):
+    def __init__(
+        self,
+        docstring,
+        *,
+        matcher=None,
+        reporter=None,
+        stats=None,
+        doctype_transpiler=None,
+    ):
         """
         Parameters
         ----------
@@ -365,10 +377,12 @@ class DocstringAnnotations:
         matcher : ~.TypeMatcher, optional
         reporter : ~.ContextReporter, optional
         stats : ~.Stats, optional
+        doctype_transpiler : ~.DoctypeTranspiler, optional
         """
         self.docstring = docstring
         self.matcher = matcher or TypeMatcher()
         self.stats = Stats() if stats is None else stats
+        self.doctype_transpiler = doctype_transpiler
 
         if reporter is None:
             reporter = ContextReporter(logger=logger, line=0)
@@ -554,6 +568,7 @@ class DocstringAnnotations:
                 matcher=self.matcher,
                 reporter=self.reporter.copy_with(line_offset=ds_line),
                 stats=self.stats,
+                transpiler=self.doctype_transpiler,
             )
             annotated_params[param.name.strip()] = annotation
 
