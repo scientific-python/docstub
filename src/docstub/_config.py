@@ -3,7 +3,7 @@ import logging
 import tomllib
 from pathlib import Path
 from pprint import pformat
-from typing import ClassVar, Callable
+from typing import ClassVar
 
 import lark.visitors
 
@@ -63,6 +63,12 @@ class Config:
 
     @classmethod
     def from_file(cls, path):
+        """
+
+        Parameters
+        ----------
+        path : Path
+        """
         if path.suffix.lower() == ".toml":
             return cls.from_toml(path)
         elif path.suffix.lower() == ".py":

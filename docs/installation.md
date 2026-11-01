@@ -19,7 +19,7 @@ In case you want to check out an unreleased version you can install the latest v
 pip install 'docstub @ git+https://github.com/scientific-python/docstub'
 ```
 
-You can append `@COMMIT_SHA` to the repository URL above to intall a specific version other that the `main` branch.
+You can append `@COMMIT_SHA` to the repository URL above to install a specific version other that the `main` branch.
 
 :::{tip}
 If you are want to set up a development environment instead, checkout the [Contribution guide](development/contributing.md).

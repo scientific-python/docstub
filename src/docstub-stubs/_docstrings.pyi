@@ -13,7 +13,7 @@ import lark.visitors
 import numpydoc.docscrape as npds
 
 from ._analysis import PyImport, TypeMatcher
-from ._doctype import BlacklistedQualname, Expr, Term, TermKind, parse_doctype
+from ._doctype import BlacklistedQualname, DoctypeTranspiler, Expr, Term, TermKind
 from ._report import ContextReporter, Stats
 from ._utils import escape_qualname
 
@@ -58,6 +58,7 @@ def doctype_to_annotation(
     matcher: TypeMatcher | None = ...,
     reporter: ContextReporter | None = ...,
     stats: Stats | None = ...,
+    transpiler: DoctypeTranspiler | None = ...,
 ) -> Annotation: ...
 
 class DocstringAnnotations:
@@ -72,6 +73,7 @@ class DocstringAnnotations:
         matcher: TypeMatcher | None = ...,
         reporter: ContextReporter | None = ...,
         stats: Stats | None = ...,
+        doctype_transpiler: DoctypeTranspiler | None = ...,
     ) -> None: ...
     @cached_property
     def attributes(self) -> dict[str, Annotation]: ...

@@ -151,6 +151,14 @@ class LoggingProcessExecutor:
             logger.debug("Calling `cancel_join_thread` on queue")
             self._queue.cancel_join_thread()
 
+        elif exc_type:
+            logger.exception("Unexpected error in worker")
+            logger.debug("Terminating workers")
+            self._pool.terminate_workers()
+            # Ensure that the queue doesn't block (not sure if necessary)
+            logger.debug("Calling `cancel_join_thread` on queue")
+            self._queue.cancel_join_thread()
+
         else:
             # We want to wait for any log record to reach the listener
             logger.debug("Shutting down pool")

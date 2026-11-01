@@ -69,6 +69,7 @@ In the future, docstub may warn against or disallow nesting these natural langua
 :::
 
 
+(natlang-array)=
 ## Shape and dtype syntax for arrays
 
 This expression allows adding shape and datatype information for data structures like [NumPy arrays](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html).

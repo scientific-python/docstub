@@ -30,6 +30,7 @@ extensions = [
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
     "typing": ("https://typing.python.org/en/latest/", None),
+    "lark": ("https://lark-parser.readthedocs.io/en/latest/", None)
 }
 
 myst_enable_extensions = [

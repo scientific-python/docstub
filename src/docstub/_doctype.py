@@ -5,6 +5,7 @@ import keyword
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from textwrap import indent
 from typing import Final, Self
@@ -241,7 +242,9 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
     Examples
     --------
-    >>> tree = _lark.parse("int or tuple of (int, ...)")
+    >>> import lark
+    >>> parser = lark.Lark(DOCTYPE_GRAMMAR, propagate_positions=True)
+    >>> tree = parser.parse("int or tuple of (int, ...)")
     >>> transformer = DoctypeTransformer()
     >>> str(transformer.transform(tree=tree))
     'int | tuple[int, ...]'
@@ -581,7 +584,7 @@ class DoctypeTranspiler:
             Use custom grammar to parse doctypes. You can reuse parts of the
             default grammar (see ``DOCTYPE_GRAMMAR_PATH`) with
             ``%import doctype (start, ...)``.
-        transformer : DoctypeTransformer, optional
+        transformer : lark.visitors.Transformer, optional
             Use a custom transformer to transform the parsed tree.
         reporter : ~.ContextReporter, optional
             Pass file and line context for logging.
@@ -603,14 +606,6 @@ class DoctypeTranspiler:
         self.reporter = reporter
         self._grammar = grammar
         self._transformer = transformer
-        # TODO If we used an LARL conforming grammar we could pass the `transformer`
-        #  directly here which should be faster [1]
-        # [1] https://lark-parser.readthedocs.io/en/latest/classes.html#lark:~:text=faster
-        self._parser = lark.Lark(
-            grammar=grammar,
-            propagate_positions=True,
-            import_paths=[DOCTYPE_GRAMMAR_PATH.parent],
-        )
 
     def __call__(self, doctype):
         """Transpile single doctype into a structured expression.
@@ -634,3 +629,26 @@ class DoctypeTranspiler:
         tree = self._parser.parse(doctype)
         expression = self._transformer.transform(tree=tree)
         return expression
+
+    @cached_property
+    def _parser(self):
+        """Initialize Lark parser.
+
+        Use a cached property to construct the lark parser as few times as
+        possible just before use. Doing that in the ``__init__`` doesn't work
+        because :class:`lark.Lark` is not pickle-able; and we want to pickle
+        this class for dependency injection before forking.
+
+        Returns
+        -------
+        parser : lark.Lark
+        """
+        # TODO If we used an LARL conforming grammar we could pass the `transformer`
+        #  directly here which should be faster [1]
+        # [1] https://lark-parser.readthedocs.io/en/latest/classes.html#lark:~:text=faster
+        parser = lark.Lark(
+            grammar=self._grammar,
+            propagate_positions=True,
+            import_paths=[DOCTYPE_GRAMMAR_PATH.parent],
+        )
+        return parser

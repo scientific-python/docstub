@@ -44,8 +44,8 @@ def _update_qualnames(expr, *, _parents=()):
 
     Examples
     --------
-    >>> from docstub._doctype import parse_doctype
-    >>> expr = parse_doctype("tuple of (tuple or str, ...)")
+    >>> from docstub._doctype import DoctypeTranspiler
+    >>> expr = DoctypeTranspiler()("tuple of (tuple or str, ...)")
     >>> updater = _update_qualnames(expr)
     >>> for parents, name in updater:
     ...     if name == "tuple" and parents[-1].rule == "union":
@@ -257,7 +257,7 @@ def doctype_to_annotation(
     matcher : ~.TypeMatcher, optional
     reporter : ~.ContextReporter, optional
     stats : ~.Stats, optional
-    transpiler : –.DoctypeTranspiler, optional
+    transpiler : ~.DoctypeTranspiler, optional
 
     Returns
     -------

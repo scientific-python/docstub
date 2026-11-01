@@ -13,6 +13,7 @@ from ._analysis import PyImport, TypeCollector, TypeMatcher, common_known_types
 from ._cache import CACHE_DIR_NAME, FileCache
 from ._concurrency import LoggingProcessExecutor, guess_concurrency_params
 from ._config import Config
+from ._doctype import DoctypeTranspiler
 from ._path_utils import (
     STUB_HEADER_COMMENT,
     find_package_root,

@@ -7,6 +7,15 @@
 ignore_files = []
 
 
+# Override the default grammar with your own. You can import, override and
+# extend rules and terminals from "doctype.lark". Note that if your grammar
+# results in a modified tree, you need to implement a custom transformer as
+# well.
+#doctype_grammar = """
+#%import doctype (start, WS_INLINE)
+#%ignore WS_INLINE
+#"""
+
 # Types and their external modules to use in docstrings.
 # Docstub can't yet automatically discover where to import types from other
 # packages from. Instead, you can provide this information explicitly.

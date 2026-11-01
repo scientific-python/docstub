@@ -139,7 +139,7 @@ Adopting docstub on a large codebase may initially generate many errors.
 Two command line options can help addressing these errors gradually:
 
 * `--group-errors` will group identical errors together.
-  This helps identifying common groups of errors that may be addressed in one go.
+  This helps to identify common groups of errors that may be addressed in one go.
 
 * `--allow-errors` puts an upper limit (["ratchet"](https://qntm.org/ratchet)) on the number of allowed errors.
   This way you can adjust the upper bound of allowed errors as they are addressed.

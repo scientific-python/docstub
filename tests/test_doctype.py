@@ -334,18 +334,17 @@ class Test_DoctypeTranspiler:
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
-            ("int or float", "Union[int, float]"),
-            (
-                "int or tuple[int or float, ...]",
-                "Union[int, tuple[Union[int, float], ...]]",
-            ),
+            ("int or float or complex", "complex | float | int"),
+            ("int or tuple[int or float, ...]", "int | tuple[float | int, ...]"),
         ],
     )
     def test_transformer_only_override(self, doctype, expected):
-
+        @lark.visitors.v_args(tree=True)
         class Transformer(DoctypeTransformer):
-            def union(self, children):
-                out = self._format_subscription(["Union", *children], rule="union")
+            def union(self, tree):
+                # Sort items in union alphabetically
+                tree.children = sorted(tree.children, key=str)
+                out = super().union(tree)
                 return out
 
         transpile = DoctypeTranspiler(transformer=Transformer())
