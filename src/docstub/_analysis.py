@@ -627,4 +627,5 @@ class TypeMatcher:
         else:
             self.stats.append_to_list("unknown_type_names", search)
 
+        assert bool(type_name) == bool(py_import)  # Both or neither should be `None`
         return type_name, py_import

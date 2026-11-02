@@ -5,7 +5,7 @@ import keyword
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, lru_cache
 from pathlib import Path
 from textwrap import indent
 from typing import Final, Self
@@ -140,7 +140,7 @@ class Term(str):
         return (), kwargs
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class Expr:
     """An expression that forms or is part of a doctype.
 
@@ -153,7 +153,11 @@ class Expr:
     """
 
     rule: str
-    children: list[Self | Term]
+    children: tuple[Self | Term]
+
+    def __post_init__(self):
+        assert isinstance(self.rule, str)
+        assert isinstance(self.children, tuple)
 
     @property
     def terms(self):
@@ -269,7 +273,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
-        return Expr(rule="start", children=tree.children)
+        return Expr(rule="start", children=tuple(tree.children))
 
     def qualname(self, tree):
         """
@@ -306,7 +310,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         # Drop rst_prefix
         children = [c for c in tree.children if isinstance(c, Term)]
-        expr = Expr(rule="rst_role", children=children)
+        expr = Expr(rule="rst_role", children=tuple(children))
         return expr
 
     def ELLIPSES(self, token):
@@ -332,7 +336,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out : Expr
         """
         sep = Term(" | ", kind=TermKind.SYNTAX)
-        expr = Expr(rule="union", children=insert_between(tree.children, sep=sep))
+        children = insert_between(tree.children, sep=sep)
+        expr = Expr(rule="union", children=tuple(children))
         return expr
 
     def subscription(self, tree):
@@ -364,7 +369,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
             *insert_between(tree.children, sep=sep),
             Term("]", kind=TermKind.SYNTAX),
         ]
-        expr = Expr(rule="param_spec", children=children)
+        expr = Expr(rule="param_spec", children=tuple(children))
         return expr
 
     def callable(self, tree):
@@ -488,7 +493,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
-        return Expr(rule="dtype", children=tree.children)
+        return Expr(rule="dtype", children=tuple(tree.children))
 
     def shape(self, tree):
         """
@@ -557,7 +562,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         else:
             children = [container]
 
-        expr = Expr(rule=rule, children=children)
+        expr = Expr(rule=rule, children=tuple(children))
         return expr
 
 
@@ -603,10 +608,11 @@ class DoctypeTranspiler:
                 transformer, doctype=default_transformer
             )
 
-        self.reporter = reporter
+        self.reporter = reporter or ContextReporter(logger=logger)
         self._grammar = grammar
         self._transformer = transformer
 
+    @lru_cache(maxsize=1000)  # TODO find a way to report hits & misses
     def __call__(self, doctype):
         """Transpile single doctype into a structured expression.
 

@@ -5,7 +5,7 @@ import keyword
 import logging
 from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, lru_cache
 from pathlib import Path
 from textwrap import indent
 from typing import Any, Final, Self
@@ -43,12 +43,13 @@ class Term(str):
     def __repr__(self) -> str: ...
     def __getnewargs_ex__(self) -> tuple[tuple[Any, ...], dict[str, Any]]: ...
 
-@dataclass(slots=True)
+@dataclass(slots=True, frozen=True)
 class Expr:
 
     rule: str
-    children: list[Self | Term]
+    children: tuple[Self | Term]
 
+    def __post_init__(self) -> None: ...
     @property
     def terms(self) -> list[Term]: ...
     @property

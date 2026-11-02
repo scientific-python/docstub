@@ -488,7 +488,7 @@ def update_with_add_values(*mappings, out=None):
 
 
 class Stats(Mapping):
-    """Collect statistics
+    """Collect statistics.
 
     Examples
     --------

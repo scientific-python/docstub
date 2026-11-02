@@ -374,7 +374,7 @@ class Test_DoctypeTranspiler:
 
         class Transformer(lark.visitors.Transformer):
             def start(self, children):
-                return Expr(rule="start", children=children)
+                return Expr(rule="start", children=tuple(children))
 
             def params(self, children):
                 sep = Term(", ", kind="syntax")
@@ -384,7 +384,7 @@ class Test_DoctypeTranspiler:
                     *content,
                     Term("]", kind="syntax"),
                 ]
-                out = Expr(rule="params", children=items)
+                out = Expr(rule="params", children=tuple(items))
                 return out
 
             def natlang_callable(self, children):

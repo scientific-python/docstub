@@ -13,15 +13,12 @@ import lark.visitors
 import numpydoc.docscrape as npds
 
 from ._analysis import PyImport, TypeMatcher
-from ._doctype import BlacklistedQualname, DoctypeTranspiler, Expr, Term, TermKind
+from ._doctype import BlacklistedQualname, DoctypeTranspiler, TermKind
 from ._report import ContextReporter, Stats
 from ._utils import escape_qualname
 
 logger: logging.Logger
 
-def _update_qualnames(
-    expr: Expr, *, _parents: tuple[Expr, ...] = ...
-) -> Generator[tuple[tuple[Expr, ...], Term], str]: ...
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Annotation:
 

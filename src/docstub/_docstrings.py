@@ -12,64 +12,15 @@ import lark.visitors
 import numpydoc.docscrape as npds
 
 # TODO Uncouple docstrings & analysis module
-#   It should be possible to transform docstrings without matching to valid
-#   types and imports. I think that could very well be done at a higher level,
-#   e.g. in the stubs module.
+#  Matching types and imports in the _stubs.py would give the opportunity to
+#  cache extraction of annotations from docstrings. May be a good performance
+#  improvement but would require marking qualnames in annotations.
 from ._analysis import PyImport, TypeMatcher
-from ._doctype import BlacklistedQualname, Term, TermKind, DoctypeTranspiler
+from ._doctype import BlacklistedQualname, DoctypeTranspiler, TermKind
 from ._report import ContextReporter, Stats
 from ._utils import escape_qualname
 
 logger: logging.Logger = logging.getLogger(__name__)
-
-
-def _update_qualnames(expr, *, _parents=()):
-    """Yield and receive names in `expr`.
-
-    This generator works as a coroutine.
-
-    Parameters
-    ----------
-    expr : ~.Expr
-    _parents : tuple of (~._doctype.Expr, ...)
-
-    Yields
-    ------
-    parents : tuple of (~._doctype.Expr, ...)
-    name : ~._doctype.Term
-
-    Receives
-    --------
-    new_name : str
-
-    Examples
-    --------
-    >>> from docstub._doctype import DoctypeTranspiler
-    >>> expr = DoctypeTranspiler()("tuple of (tuple or str, ...)")
-    >>> updater = _update_qualnames(expr)
-    >>> for parents, name in updater:
-    ...     if name == "tuple" and parents[-1].rule == "union":
-    ...         updater.send("list")
-    ...     if name == "str":
-    ...         updater.send("bytes")
-    >>> expr.as_code()
-    'tuple[list | bytes, ...]'
-    """
-    _parents += (expr,)
-    children = expr.children.copy()
-
-    for i, child in enumerate(children):
-        if hasattr(child, "children"):
-            yield from _update_qualnames(child, _parents=_parents)
-
-        elif child.kind == TermKind.NAME:
-            new_name = yield _parents, child
-            if new_name is not None:
-                new_term = Term(new_name, kind=child.kind)
-                expr.children[i] = new_term
-                # `send` was called, yield `None` to return from `send`,
-                # otherwise send would return the next child
-                yield
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -277,30 +228,39 @@ def doctype_to_annotation(
             "Transformed doctype", details=("   %s\n-> %s", doctype, expression)
         )
 
+        updated_terms = []
         imports = set()
         unknown_qualnames = set()
-        updater = _update_qualnames(expression)
-        for _, name in updater:
-            search_name = str(name)
+
+        for term in expression.terms:
+            if term.kind != TermKind.NAME:
+                # Syntax or literal, leave as is and continue to next term
+                updated_terms.append(term)
+                continue
+
+            search_name = str(term)
             matched_name, py_import = matcher.match(search_name)
+
             if matched_name is None:
                 assert py_import is None
-                unknown_qualnames.add((search_name, *name.pos))
+                unknown_qualnames.add((search_name, *term.pos))
                 matched_name = escape_qualname(search_name)
-            _ = updater.send(matched_name)
-            assert _ is None
+            updated_terms.append(matched_name)
 
             if py_import is None:
+                # Did not find match, alias to `_typeshed.Incomplete`
                 incomplete_alias = PyImport(
                     from_="_typeshed",
                     import_="Incomplete",
                     as_=matched_name,
                 )
                 imports.add(incomplete_alias)
+
             elif py_import.has_import:
                 imports.add(py_import)
 
-        annotation = Annotation(value=str(expression), imports=frozenset(imports))
+        updated_terms = "".join(updated_terms)
+        annotation = Annotation(value=updated_terms, imports=frozenset(imports))
 
     except (
         lark.exceptions.LexError,
