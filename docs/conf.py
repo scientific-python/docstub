@@ -1,10 +1,13 @@
 # Configuration file for the Sphinx documentation builder.
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import sys
 import inspect
 import shutil
 from datetime import date
 from pathlib import Path
+from subprocess import check_output
+from functools import cache
 
 import setuptools_scm
 
@@ -32,6 +35,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
+    "sphinx.ext.linkcode",
     "sphinx_copybutton",
     "myst_parser",
     "numpydoc",
@@ -62,6 +66,69 @@ autodoc_member_order = "alphabetical"
 numpydoc_show_class_members = False
 
 add_module_names = False
+
+
+@cache
+def get_git_revision_hash():
+    """Extract hash of current revision."""
+    output = check_output(["git", "rev-parse", "HEAD"])
+    full_hash = output.decode().strip()
+    return full_hash
+
+
+def linkcode_resolve(domain, info):
+    """Resolve link for code objects.
+
+    This function is a hook called by the sphinx extension linkcode [1]_.
+    Loosely inspired by a function in NumPy [2]_.
+
+    Parameters
+    ----------
+    domain : str
+        Specifies the language domain of the given object.
+    info : dict
+        A dictionary describing the object.
+
+    Returns
+    -------
+    url : str
+        An URL to the source code.
+
+    References
+    ---------
+    .. [1] http://www.sphinx-doc.org/en/master/usage/extensions/linkcode.html
+    .. [2] https://github.com/numpy/numpy/blob/cbf3a081271a43e980e3c2f76625deb43fd53922/doc/source/conf.py#L303-L357
+    """
+    if domain != "py" or "module" not in info or "fullname" not in info:
+        return None
+
+    # Get reference to the object, start with the module
+    obj = sys.modules.get(info["module"])
+    for part in info["fullname"].split("."):
+        try:
+            obj = getattr(obj, part)
+        except AttributeError:
+            # Not all attributes exist, e.g. instance attributes
+            return None
+    # Strip decorators which would resolve to the source of the decorator
+    obj = inspect.unwrap(obj)
+
+    file = info["module"].replace(".", "/")
+    try:
+        source, start_line = inspect.getsourcelines(obj)
+    except (TypeError, OSError):
+        # Skip unexpected types, occurs when `obj` isn't a module, class, method,
+        # function, etc.
+        return None
+    stop_line = start_line + len(source) - 1
+
+    template = "https://github.com/scientific-python/docstub/blob/{revision}/src/{file}.py#L{start}-{stop}"
+    revision = get_git_revision_hash()
+    assert len(revision) == 40
+    url = template.format(
+        revision=revision, file=file, start=start_line, stop=stop_line
+    )
+    return url
 
 
 # -- HTML output --------------------------------------------------------------
