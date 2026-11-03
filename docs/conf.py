@@ -1,20 +1,21 @@
 # Configuration file for the Sphinx documentation builder.
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-import sys
+# ruff: noqa: T201
+
 import inspect
 import shutil
+import sys
 from datetime import date
+from functools import cache
 from pathlib import Path
 from subprocess import check_output
-from functools import cache
 
 import setuptools_scm
 
 import docstub
 from docstub._path_utils import walk_source_package
 from docstub._utils import module_name_from_path
-
 
 # -- Project information ------------------------------------------------------
 
@@ -248,8 +249,7 @@ def autodoc_skip_members(app, obj_type, name, obj, skip, options):
         # `autodoc_default_options = {"private-members": True}`
         # doesn't solve this on its own
         return False
-    else:
-        return None  # Default behavior
+    return None  # Default behavior
 
 
 def truncate_signature_defaults(
