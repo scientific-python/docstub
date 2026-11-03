@@ -1,4 +1,10 @@
-"""Parsing & transformation of doctypes into Python-compatible syntax."""
+"""Doctype transpiling.
+
+Attributes
+----------
+grammar_path :
+    Path to the grammar.
+"""
 
 import enum
 import keyword

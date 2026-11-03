@@ -1,4 +1,4 @@
-"""Command line interface of docstub.
+"""Command line interface.
 
 The imports of this file should be structured such, that displaying help text
 for the command line is as fast as possible. As such optional imports that may

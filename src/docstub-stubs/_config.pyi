@@ -12,6 +12,7 @@ logger: logging.Logger
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class Config:
+
     TEMPLATE_PATH: ClassVar[Path]
     NUMPY_PATH: ClassVar[Path]
 

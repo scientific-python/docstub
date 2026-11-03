@@ -34,3 +34,16 @@ article .align-default {
     margin-bottom: 0;
 
 }
+
+/* Use more readable sizes and spacing for headings */
+h2, .h2 {
+    font-size: 1.5em;
+    margin-top: 3rem;
+}
+h3, .h3 {
+    font-size: 1.25em;
+    margin-top: 1rem;
+}
+h4, .h4 {
+    font-size: 1.1em;
+}

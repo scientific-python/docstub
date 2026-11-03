@@ -33,6 +33,7 @@ development/index
 command_line
 configuration
 typing_syntax
+python_api/index
 glossary
 release_notes/index
 :::

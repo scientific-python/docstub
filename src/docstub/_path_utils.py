@@ -258,8 +258,8 @@ def walk_source_package(path, *, ignore=()):
     ignore : Sequence[str], optional
         Don't yield files matching these glob-like patterns. The pattern is
         interpreted relative to the root of the Python package unless it starts
-        with "/". See :ref:`glob.translate(..., recursive=True, include_hidden=True)`
-        for more details on the precise implementation.
+        with "/". See :func:`glob.translate` with recursion and hidden files
+        enabled for more details on the precise implementation.
 
     Yields
     ------
@@ -283,18 +283,22 @@ def walk_source_package(path, *, ignore=()):
     >>> this_file = Path(__file__)
 
     Walk `path` to current file
+
     >>> package_files = sorted(walk_source_package(this_file))
     >>> len(package_files)
     1
+
     >>> package_files[0].as_posix()
     '.../docstub/_path_utils.py'
 
     Walk `path` to directory of current file
+
     >>> package_files = walk_source_package(this_file.parent)
     >>> sorted(package_files)
     [.../docstub/__init__.py'), ...]
 
     Ignoring all files ending with '.py' will return nothing
+
     >>> next(walk_source_package(this_file.parent, ignore=("*.py")))
     Traceback (most recent call last):
         ...
@@ -333,8 +337,8 @@ def walk_source_and_targets(root_path, target_dir, *, ignore=()):
     ignore : Sequence[str], optional
         Don't yield files matching these glob-like patterns. The pattern is
         interpreted relative to the root of the Python package unless it starts
-        with "/". See :ref:`glob.translate(..., recursive=True, include_hidden=True)`
-        for more details on the precise implementation.
+        with "/". See :func:`glob.translate` with recursion and hidden files
+        enabled for more details on the precise implementation.
 
     Yields
     ------

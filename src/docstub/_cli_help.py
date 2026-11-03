@@ -1,3 +1,5 @@
+"""*Help* formatting for the command line interface."""
+
 import logging
 import os
 import re
@@ -32,7 +34,7 @@ except Exception:
 
 
 def should_strip_ansi(stream=None, color=None):
-    """
+    """Determine if ANSI color codes should be stripped.
 
     Parameters
     ----------

@@ -1,4 +1,4 @@
-"""Report errors and information to the user."""
+"""Reporting for the command line."""
 
 import dataclasses
 import logging
@@ -30,7 +30,7 @@ class ContextReporter:
 
     Examples
     --------
-    Setup logging for doctest, note the use of :cls:`ErrorHandler`
+    Setup logging for doctest, note the use of :class:`ErrorHandler`
 
     >>> import sys
     >>> import logging
@@ -217,7 +217,7 @@ class ContextReporter:
 
 
 class ReportHandler(logging.StreamHandler):
-    """Custom handler to group and style reports from :cls:`ContextReporter`.
+    """Custom handler to group and style reports from :class:`ContextReporter`.
 
     Attributes
     ----------
