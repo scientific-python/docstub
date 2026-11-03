@@ -2,9 +2,9 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 import inspect
+import shutil
 from datetime import date
 from pathlib import Path
-import shutil
 
 import setuptools_scm
 
@@ -130,21 +130,26 @@ def is_private_qualname(name):
     return any(p.startswith("_") for p in parts)
 
 
-def write_python_api(module):
+def write_python_api(module, *, exclude_modules=()):
     """Create ``python_api/index.rst`` as an entrypoint for autosummary.
 
     Parameters
     ----------
     module : ModuleType
+    exclude_modules : tuple[str, ...]
     """
     package_path = Path(module.__file__).parent
 
     names = sorted(
         module_name_from_path(path) for path in walk_source_package(package_path)
     )
+    names = [n for n in names if n not in exclude_modules]
+
+    # Sort private modules after public ones
     public_names = [n for n in names if not is_private_qualname(n)]
     private_names = [n for n in names if is_private_qualname(n)]
     names = public_names + private_names
+
     names = [f"  {name}" for name in names]
     content = "\n".join([PYTHON_API_TEMPLATE, *names])
 
@@ -159,7 +164,10 @@ def write_python_api(module):
     print(f"[conf.py] wrote {index_path}")
 
 
-write_python_api(docstub)
+write_python_api(
+    docstub,
+    exclude_modules=("docstub.__main__", "docstub._version"),
+)
 
 
 # -- Patch Sphinx --------------------------------------------------------------
@@ -167,6 +175,7 @@ write_python_api(docstub)
 
 def autodoc_skip_members(app, obj_type, name, obj, skip, options):
     """Force autosummary to show private members too."""
+    # TODO ensure that click commands are included as well
     if name.startswith("_") and not name.startswith("__"):
         # Force autosummary to show private members to,
         # `autodoc_default_options = {"private-members": True}`
