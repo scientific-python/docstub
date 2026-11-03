@@ -40,6 +40,7 @@ dependencies = [
     "lark >=1.1.9",
     "black >=24.4.2",
     "isort >=5.13.2",
+    "pluggy",
 ]
 
 [project.urls]

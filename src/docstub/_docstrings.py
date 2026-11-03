@@ -16,9 +16,9 @@ import numpydoc.docscrape as npds
 #  cache extraction of annotations from docstrings. May be a good performance
 #  improvement but would require marking qualnames in annotations.
 from ._analysis import PyImport, TypeMatcher
-from ._doctype import BlacklistedQualname, DoctypeTranspiler, TermKind
 from ._report import ContextReporter, Stats
 from ._utils import escape_qualname
+from .doctype import BlacklistedQualname, DoctypeTranspiler, TermKind
 
 logger: logging.Logger = logging.getLogger(__name__)
 

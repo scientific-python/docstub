@@ -3,6 +3,7 @@
 Its interface declaration is in `_cli.py`.
 """
 
+import importlib.util
 import logging
 import sys
 import time
@@ -10,6 +11,9 @@ from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 
+import pluggy
+
+from . import plugins, doctype
 from ._analysis import (
     PyImport,
     TypeCollector,
@@ -19,7 +23,6 @@ from ._analysis import (
 from ._cache import CACHE_DIR_NAME, FileCache
 from ._concurrency import LoggingProcessExecutor, guess_concurrency_params
 from ._config import Config
-from ._doctype import DoctypeTranspiler
 from ._path_utils import (
     STUB_HEADER_COMMENT,
     find_package_root,
@@ -28,6 +31,7 @@ from ._path_utils import (
 )
 from ._report import Stats, setup_logging
 from ._stubs import Py2StubTransformer, try_format_stub
+from ._utils import escape_qualname
 from ._version import __version__
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -60,7 +64,7 @@ def _load_configuration(config_paths=None):
 
     if config_paths:
         for path in config_paths:
-            add_config = Config.from_file(path)
+            add_config = Config.from_toml(path)
             logger.info("Using %s", path)
             config = config.merge(add_config)
 
@@ -77,13 +81,63 @@ def _load_configuration(config_paths=None):
             logger.info("Using %s", docstub_toml)
             config = config.merge(add_config)
 
-        docstub_py = Path.cwd() / "docstub.py"
-        if docstub_py.is_file():
-            add_config = Config.from_pyfile(docstub_py)
-            logger.info("Using %s", docstub_py)
-            config = config.merge(add_config)
-
     return config
+
+
+def _import_standalone_module_from_path(path, *, module_name=None):
+    """Import standalone module at the given file path.
+
+    "Standalone" because relative imports inside the loaded module may not work?
+
+    Parameters
+    ----------
+    path : Path
+        Path to a Python file.
+    module_name : str, optional
+        The name to load the module as. Derived from `path` if not provided.
+        The functions raises if such a module already exists in :mod:`sys.modules`.
+
+    Returns
+    -------
+    module : ModuleType
+    """
+    module_name = module_name or escape_qualname(str(path))
+    if module_name in sys.modules.keys():
+        raise RuntimeError(f"module {module_name} already defined")
+
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_plugins(paths=()):
+    """Load plugins for docstub.
+
+    Parameters
+    ----------
+    paths : Iterable of (Path, ...)
+        File paths to load plugins from.
+
+    Returns
+    -------
+    manager : pluggy.PluginManager
+    """
+    manager = pluggy.PluginManager("docstub")
+    manager.add_hookspecs(plugins)
+
+    # Loading plugins via entrypoints is intentionally not supported (for now)
+    # manager.load_setuptools_entrypoints("docstub")
+
+    for path in paths:
+        plugin_module = _import_standalone_module_from_path(path)
+        manager.register(plugin_module)
+        hooks = manager.get_hookcallers(plugin_module)
+        logger.info("Registered plugin at %s (%i hook(s))", path, len(hooks))
+        logger.debug("Hooks implemented by plugin at %s:\n%r", path, hooks)
+
+    return manager
 
 
 def _collect_type_info(root_path, *, ignore=(), cache=False):
@@ -302,6 +356,9 @@ def generate_stubs(
     config = config.merge(Config(ignore_files=list(ignore)))
     logger.debug("Fully loaded config:\n%s", config)
 
+    plugin_manager = _load_plugins(config.plugin_paths)
+    plugin_hooks = plugin_manager.hook
+
     types, type_prefixes = _collect_type_info(
         root_path, ignore=config.ignore_files, cache=not no_cache
     )
@@ -322,7 +379,11 @@ def generate_stubs(
         for prefix, module in config.type_prefixes.items()
     }
 
-    doctype_transpiler = DoctypeTranspiler()
+    grammar = plugin_hooks.docstub_load_doctype_grammar()
+    doctype_transformer = plugin_hooks.docstub_load_doctype_transformer()
+    doctype_transpiler = doctype.DoctypeTranspiler(
+        grammar=grammar, transformer=doctype_transformer
+    )
     matcher = TypeMatcher(
         types=types, type_prefixes=type_prefixes, type_nicknames=config.type_nicknames
     )

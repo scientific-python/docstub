@@ -87,7 +87,7 @@ class TermKind(enum.StrEnum):
 
 
 class Term(str):
-    """A terminal / symbol representing an atomic part of a doctype.
+    """A terminal / symbol representing an atomic part in an annotation expression.
 
     Attributes
     ----------
@@ -142,7 +142,7 @@ class Term(str):
 
 @dataclass(slots=True, frozen=True)
 class Expr:
-    """An expression that forms or is part of a doctype.
+    """An annotation expression.
 
     Parameters
     ----------
@@ -156,7 +156,7 @@ class Expr:
     children: tuple[Self | Term]
 
     def __post_init__(self):
-        assert isinstance(self.rule, str)
+        assert isinstance(self.rule, str) and self.rule
         assert isinstance(self.children, tuple)
 
     @property
@@ -439,6 +439,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         assert not other
         kind = TermKind.LITERAL
         if isinstance(item, Term):
+            # Preserve kind=Name for qualnames in literal expressions
             kind = item.kind
         out = Term(item, kind=kind, pos=(tree.meta.start_pos, tree.meta.end_pos))
         return out
@@ -572,6 +573,20 @@ class DoctypeTranspiler:
     This is could be a simple function, but as a class dependency injection with
     custom grammars or transformers is made easier.
 
+    Parameters
+    ----------
+    grammar : str, optional
+        Use custom grammar to parse doctypes. You can reuse parts of the
+        default grammar (see ``DOCTYPE_GRAMMAR_PATH`) with
+        ``%import doctype (start, ...)``.
+    grammar_import_paths : tuple of (Path, ...)
+        Additional paths to directories with grammars that are imported in
+        `grammar`.
+    transformer : lark.visitors.Transformer, optional
+        Use a custom transformer to transform the parsed tree.
+    reporter : ~.ContextReporter, optional
+        Pass file and line context for logging.
+
     Examples
     --------
     >>> transpile = DoctypeTranspiler()
@@ -581,19 +596,14 @@ class DoctypeTranspiler:
     <Expr: 'ndarray[float | int]' rule='start'>
     """
 
-    def __init__(self, *, grammar=DOCTYPE_GRAMMAR, transformer=None, reporter=None):
-        """
-        Parameters
-        ----------
-        grammar : str, optional
-            Use custom grammar to parse doctypes. You can reuse parts of the
-            default grammar (see ``DOCTYPE_GRAMMAR_PATH`) with
-            ``%import doctype (start, ...)``.
-        transformer : lark.visitors.Transformer, optional
-            Use a custom transformer to transform the parsed tree.
-        reporter : ~.ContextReporter, optional
-            Pass file and line context for logging.
-        """
+    def __init__(
+        self,
+        *,
+        grammar=DOCTYPE_GRAMMAR,
+        grammar_import_paths=(DOCTYPE_GRAMMAR_PATH.parent,),
+        transformer=None,
+        reporter=None,
+    ):
         default_transformer = DoctypeTransformer(reporter=reporter)
 
         if transformer is None:
@@ -610,6 +620,7 @@ class DoctypeTranspiler:
 
         self.reporter = reporter or ContextReporter(logger=logger)
         self._grammar = grammar
+        self._grammar_import_paths = grammar_import_paths
         self._transformer = transformer
 
     @lru_cache(maxsize=1000)  # TODO find a way to report hits & misses
@@ -634,6 +645,7 @@ class DoctypeTranspiler:
         """
         tree = self._parser.parse(doctype)
         expression = self._transformer.transform(tree=tree)
+        assert isinstance(expression, Expr)
         return expression
 
     @cached_property
@@ -655,6 +667,6 @@ class DoctypeTranspiler:
         parser = lark.Lark(
             grammar=self._grammar,
             propagate_positions=True,
-            import_paths=[DOCTYPE_GRAMMAR_PATH.parent],
+            import_paths=list(self._grammar_import_paths),
         )
         return parser

@@ -96,8 +96,9 @@ class DoctypeTranspiler:
         self,
         *,
         grammar: str = ...,
+        grammar_import_paths: tuple[Path, ...] = ...,
         transformer: lark.visitors.Transformer | None = ...,
-        reporter: ContextReporter | None = ...
+        reporter: ContextReporter | None = ...,
     ) -> None: ...
     def __call__(self, doctype: str) -> Expr: ...
     @cached_property

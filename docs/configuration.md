@@ -4,9 +4,6 @@ Docstub will automatically look for the following configuration files in the cur
 
 - `pyproject.toml`
 - `docstub.toml`
-- `docstub.py`
-
-We recommend using the TOML format for configuration files unless you need to use the Python format to provide your own [](#doctype_transformer).
 
 Alternatively, config files can also be passed in the command line with the `--config` option.
 In this case, docstub will **not** look for configuration files in the current directory.
@@ -20,8 +17,7 @@ One such file is [`numpy_config.toml`](../src/docstub/numpy_config.toml) which p
 
 ## Configuration fields
 
-All configuration must be declared inside a `[tool.docstub]` table when using the TOML format.
-With the Python format, these must be symbols defined at the global module scope.
+All configuration must be declared inside a `[tool.docstub]` table.
 
 
 ### `ignore_files`
@@ -42,6 +38,25 @@ ignore_files = [
 ```
 
 - Will ignore any directory anywhere that is named `tests`.
+
+
+### `plugin_paths`
+
+[TOML type](https://toml.io/en/latest): array of string(s)
+
+File paths to Python files that implement Docstub's [plugin specification]().
+Relative paths will be treated as relative to the configuration file's directory.
+
+**Example:**
+
+```toml
+[tool.docstub]
+plugin_paths = [
+    "tools/docstub_extend_syntax.py",
+]
+```
+
+- Will load `docstub_extend_syntax.py` as a plugin.
 
 
 ### `types`

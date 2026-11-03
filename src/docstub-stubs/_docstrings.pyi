@@ -13,9 +13,9 @@ import lark.visitors
 import numpydoc.docscrape as npds
 
 from ._analysis import PyImport, TypeMatcher
-from ._doctype import BlacklistedQualname, DoctypeTranspiler, TermKind
 from ._report import ContextReporter, Stats
 from ._utils import escape_qualname
+from .doctype import BlacklistedQualname, DoctypeTranspiler, TermKind
 
 logger: logging.Logger
 

@@ -14,9 +14,9 @@ from _typeshed import Incomplete
 
 from ._analysis import PyImport, TypeMatcher
 from ._docstrings import Annotation, DocstringAnnotations, FallbackAnnotation
-from ._doctype import DoctypeTransformer, DoctypeTranspiler
 from ._report import ContextReporter, Stats
 from ._utils import module_name_from_path
+from .doctype import DoctypeTransformer, DoctypeTranspiler
 
 logger: logging.Logger
 
