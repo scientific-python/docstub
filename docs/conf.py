@@ -123,7 +123,7 @@ def linkcode_resolve(domain, info):
         return None
     stop_line = start_line + len(source) - 1
 
-    template = "https://github.com/scientific-python/docstub/blob/{revision}/src/{file}.py#L{start}-{stop}"
+    template = "https://github.com/scientific-python/docstub/blob/{revision}/src/{file}.py#L{start}-L{stop}"
     revision = get_git_revision_hash()
     assert len(revision) == 40
     url = template.format(
