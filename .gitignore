@@ -1,5 +1,6 @@
 # Project specific folders
 stubs/
+docs/python_api/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
