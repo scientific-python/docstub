@@ -1,4 +1,4 @@
-"""Transform types defined in docstrings to Python parsable types."""
+"""Annotation extraction from docstrings."""
 
 import logging
 import traceback

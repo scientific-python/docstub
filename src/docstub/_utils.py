@@ -1,3 +1,5 @@
+"""Generic utilities."""
+
 import itertools
 import re
 from functools import lru_cache, wraps

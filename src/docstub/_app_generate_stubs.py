@@ -1,6 +1,7 @@
-"""Implementation of `docstub run`.
+"""Implementation of ``docstub run``.
 
-Its interface declaration is in `_cli.py`.
+Its interface declaration is in ``_cli.py``. Splitting declaration and
+implementation (with slow imports) speeds up the ``--help`` option.
 """
 
 import logging
@@ -88,8 +89,8 @@ def _collect_type_info(root_path, *, ignore=(), cache=False):
     ignore : Sequence[str], optional
         Don't yield files matching these glob-like patterns. The pattern is
         interpreted relative to the root of the Python package unless it starts
-        with "/". See :ref:`glob.translate(..., recursive=True, include_hidden=True)`
-        for more details on the precise implementation.
+        with "/". See :func:`glob.translate` with recursion and hidden files
+        enabled for more details on the precise implementation.
     cache : bool, optional
         Cache collected types.
 
@@ -140,6 +141,7 @@ def _collect_type_info(root_path, *, ignore=(), cache=False):
 
 @contextmanager
 def _log_execution_time():
+    """Measure and log execution time of wrapped function or block."""
     start = time.time()
     try:
         yield
@@ -255,7 +257,8 @@ def generate_stubs(
     no_cache,
     verbosity,
 ):
-    """
+    """Generate Python stub files (implementation of ``docstub run``).
+
     Parameters
     ----------
     root_path : Path

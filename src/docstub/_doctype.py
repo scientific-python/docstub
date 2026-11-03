@@ -1,4 +1,10 @@
-"""Parsing & transformation of doctypes into Python-compatible syntax."""
+"""Doctype transpiling.
+
+Attributes
+----------
+grammar_path :
+    Path to the grammar.
+"""
 
 import enum
 import keyword
@@ -580,7 +586,7 @@ def parse_doctype(doctype, *, reporter=None):
     ------
     lark.exceptions.VisitError
         Raised when the transformation is interrupted by an exception.
-        See :cls:`lark.exceptions.VisitError`.
+        See :class:`lark.exceptions.VisitError`.
     BlacklistedQualname
         Raised when a qualname is a forbidden keyword.
 

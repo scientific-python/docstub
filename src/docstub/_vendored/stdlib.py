@@ -14,10 +14,20 @@ from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor as _ProcessPoolExecutor
 
 
-# Vendored `fnmatch._translate` from Python 3.13.4 because it isn't available in
-# earlier Python versions and needed for `glob_translate` below. Copied from
-# https://github.com/python/cpython/blob/8a526ec7cbea8fafc9dae4b3dd6371906b9be342/Lib/fnmatch.py#L85-L154
 def _fnmatch_translate(pat: str, STAR: str, QUESTION_MARK: str) -> str:
+    """Translate a shell PATTERN to a regular expression.
+
+    There is no way to quote meta-characters.
+
+    Notes
+    -----
+    Vendored ``fnmatch._translate`` from Python 3.13.4 [1]_ because it isn't
+    available in earlier Python versions and needed for :func:`glob_translate`.
+
+    References
+    ----------
+    .. [1] https://github.com/python/cpython/blob/8a526ec7cbea8fafc9dae4b3dd6371906b9be342/Lib/fnmatch.py#L85-L154
+    """
     res = []
     add = res.append
     i, n = 0, len(pat)
@@ -90,9 +100,6 @@ def _fnmatch_translate(pat: str, STAR: str, QUESTION_MARK: str) -> str:
     return res
 
 
-# Vendored `glob.translate` from Python 3.13.4 because it isn't available in
-# earlier Python versions. Copied from
-# https://github.com/python/cpython/blob/8a526ec7cbea8fafc9dae4b3dd6371906b9be342/Lib/glob.py#L267-L319
 def glob_translate(
     pat: str,
     *,
@@ -111,6 +118,15 @@ def glob_translate(
     If a sequence of separator characters is given to `seps`, they will be
     used to split the pattern into segments and match path separators. If not
     given, os.path.sep and os.path.altsep (where available) are used.
+
+    Notes
+    -----
+    Vendored :func:`glob.translate` from Python 3.13.4 [1]_ because it isn't
+    available in earlier Python versions.
+
+    References
+    ----------
+    .. [1] https://github.com/python/cpython/blob/8a526ec7cbea8fafc9dae4b3dd6371906b9be342/Lib/glob.py#L267-L319
     """
     if not seps:
         if os.path.altsep:

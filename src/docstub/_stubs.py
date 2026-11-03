@@ -1,4 +1,4 @@
-"""Transform Python source files to typed stub files.
+"""Stub file generation from source files.
 
 Attributes
 ----------
@@ -45,6 +45,7 @@ def try_format_stub(stub: str) -> str:
 
 
 class ScopeType(enum.StrEnum):
+    """Encode the type of scope (function, class, method, ...)."""
     # docstub: off
     MODULE = "module"
     CLASS = "class"
@@ -74,7 +75,13 @@ _dataclass_matcher: cstm.ClassDef = cstm.ClassDef(
 # TODO use `libcst.metadata.ScopeProvider` instead
 @dataclass(slots=True, frozen=True)
 class _Scope:
-    """"""
+    """Information about the current scope (function, class, method, ...).
+
+    Attributes
+    ----------
+    type : ScopeType
+    node : cst.CSTNode
+    """
 
     type: ScopeType
     node: cst.CSTNode | None = None

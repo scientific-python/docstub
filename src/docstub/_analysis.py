@@ -1,4 +1,4 @@
-"""Collect type information."""
+"""Collection of type information."""
 
 import builtins
 import importlib

@@ -1,4 +1,4 @@
-"""Tools for parallel processing."""
+"""Parallel processing."""
 
 import logging
 import logging.handlers
@@ -24,7 +24,7 @@ class MockPoolExecutor(Executor):
     def map[T](self, fn: Callable[..., T], *iterables, **__) -> Iterator[T]:
         """Returns an iterator equivalent to map(fn, iter).
 
-        Same behavior as :ref:`concurrent.futures.Executor.map` though any
+        Same behavior as :func:`concurrent.futures.Executor.map` though any
         parameters besides `fn` and `iterables` are ignored.
 
         Parameters

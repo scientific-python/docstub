@@ -1,3 +1,5 @@
+"""Configuration loading and validation."""
+
 import dataclasses
 import logging
 import tomllib
@@ -10,6 +12,8 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class Config:
+    """*Dataclass* to handle loading and validation from TOML files."""
+
     TEMPLATE_PATH: ClassVar[Path] = Path(__file__).parent / "config_template.toml"
     NUMPY_PATH: ClassVar[Path] = Path(__file__).parent / "numpy_config.toml"
 
