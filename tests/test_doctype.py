@@ -4,12 +4,12 @@ import lark
 import lark.exceptions
 import pytest
 
-from docstub._doctype import (
+from docstub.doctype import (
     BLACKLISTED_QUALNAMES,
-    DoctypeTranspiler,
     DoctypeTransformer,
-    Term,
+    DoctypeTranspiler,
     Expr,
+    Term,
     insert_between,
 )
 
@@ -362,13 +362,13 @@ class Test_DoctypeTranspiler:
     def test_grammar_transformer_override(self, doctype, expected):
         grammar = """
         %import doctype (start, _type, WS_INLINE)
-        
+
         params: _type ("," _type)*
 
         natlang_callable : "(" params ") ->" _type
-        
+
         %extend _type: natlang_callable
-        
+
         %ignore WS_INLINE
         """
 

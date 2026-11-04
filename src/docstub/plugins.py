@@ -7,7 +7,6 @@ hookimpl : Final[pluggy.HookimplMarker]
 
 import pluggy
 
-
 _hookspec: pluggy.HookspecMarker = pluggy.HookspecMarker("docstub")
 
 hookimpl = pluggy.HookimplMarker("docstub")

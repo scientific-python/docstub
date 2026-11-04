@@ -118,7 +118,7 @@ def _load_plugins(paths=()):
 
     Parameters
     ----------
-    paths : Iterable of (Path, ...)
+    paths : Iterable of Path(s)
         File paths to load plugins from.
 
     Returns

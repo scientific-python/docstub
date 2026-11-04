@@ -8,7 +8,7 @@ Plugins are loaded via the configuration field `plugin_files`.
 ## Example: Implement custom array expression
 
 ```python
-# 
+# docstub_plugin.py
 from docstub.plugins import hookimpl
 
 my_grammar = """

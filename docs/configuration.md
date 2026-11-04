@@ -134,7 +134,7 @@ Note that if your grammar results in a modified tree, you need to implement a [c
 grammar = """
 %import doctype (start, WS_INLINE, ARRAY_NAME)
 
-%extend ARRAY_NAME: "darray" 
+%extend ARRAY_NAME: "darray"
 
 %ignore WS_INLINE
 """
