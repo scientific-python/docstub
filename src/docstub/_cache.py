@@ -1,6 +1,7 @@
 """Caching to disk."""
 
 import logging
+from collections import OrderedDict
 from functools import cached_property
 from typing import Any, Protocol
 
@@ -226,3 +227,122 @@ class FileCache:
             self.cache_misses += 1
 
         return data
+
+
+class LRUMemoryCache:
+    """Simple LRU memory cache.
+
+    Implements a reasonably performant cache policy [1] based on
+    :class:`collections.OrderedDict`. Has better ergonomics than
+    :func:`functools.lru_cache` in some situations.
+
+    Parameters
+    ----------
+    maxsize : int, optional
+        The maximum size to which the cache is allowed to grow.
+
+    Examples
+    --------
+    >>> cache = LRUMemoryCache(maxsize=3)
+    >>> cache[1] = True
+    >>> cache[2] = True
+    >>> cache[3] = True
+    >>> cache[1]  # Cache hit for key=1
+    True
+    >>> cache[4] = True  # Push the oldest item of the cache
+    >>> list(cache)
+    [3, 1, 4]
+
+    References
+    ----------
+    .. [1] https://en.wikipedia.org/wiki/Page_replacement_algorithm#Least_recently_used
+    """
+
+    class _MISS:
+        """Sentinel value to signal a miss internally."""
+
+    def __init__(self, *, maxsize=128):
+        self._cache = OrderedDict()
+        self.maxsize = maxsize
+
+    def __contains__(self, key):
+        """Check if an item is cached at `key`.
+
+        Parameters
+        ----------
+        key : Hashable
+
+        Returns
+        -------
+        is_cached : bool
+        """
+        return key in self._cache
+
+    def __getitem__(self, key):
+        """Get an existing item from the cache.
+
+        Parameters
+        ----------
+        key : Hashable
+
+        Returns
+        -------
+        value : Any
+        """
+        value = self._cache[key]
+        self._cache.move_to_end(key)
+        return value
+
+    def get(self, key, *, default=None):
+        """Get an item from the cache with fallback.
+
+        Parameters
+        ----------
+        key : Hashable
+        default : Any, optional
+            Value to fall back to if item is not cached.
+
+        Returns
+        -------
+        value : Any
+        """
+        value = self._cache.get(key, self._MISS)
+        if value is self._MISS:
+            value = default
+        else:
+            self._cache.move_to_end(key)
+        return value
+
+    def __setitem__(self, key, value):
+        """Add item to the cache.
+
+        Parameters
+        ----------
+        key : Hashable
+        value : Any
+        """
+        if key in self._cache:
+            self._cache.pop(key)
+        self._cache[key] = value
+        if len(self._cache) > self.maxsize:
+            self._cache.popitem(last=False)
+
+    def __len__(self):
+        """Return current size of the cache.
+
+        Returns
+        -------
+        current_size : int
+        """
+        return len(self._cache)
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}: {len(self)} (maxsize={self.maxsize}>"
+
+    def __iter__(self):
+        """
+        Returns
+        -------
+        keys : Iterable[Any]
+        """
+        return iter(self._cache)

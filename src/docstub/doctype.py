@@ -11,7 +11,7 @@ import keyword
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
-from functools import cached_property, lru_cache
+from functools import cached_property
 from pathlib import Path
 from textwrap import indent
 from typing import Final, Self
@@ -19,7 +19,8 @@ from typing import Final, Self
 import lark
 import lark.visitors
 
-from ._report import ContextReporter
+from ._cache import LRUMemoryCache
+from ._report import ContextReporter, Stats
 from ._utils import DocstubError
 
 logger: Final[logging.Logger] = logging.getLogger(__name__)
@@ -162,7 +163,8 @@ class Expr:
     children: tuple[Self | Term]
 
     def __post_init__(self):
-        assert isinstance(self.rule, str) and self.rule
+        assert isinstance(self.rule, str)
+        assert self.rule
         assert isinstance(self.children, tuple)
 
     @property
@@ -584,7 +586,7 @@ class DoctypeTranspiler:
     grammar : str, optional
         Use custom grammar to parse doctypes. You can reuse parts of the
         default grammar (see ``DOCTYPE_GRAMMAR_PATH`) with
-        ``%import doctype (start, ...)``.
+        ``%import doctype (start, ...)``. Defaults to ``DOCTYPE_GRAMMAR``.
     grammar_import_paths : tuple of (Path, ...)
         Additional paths to directories with grammars that are imported in
         `grammar`.
@@ -592,6 +594,9 @@ class DoctypeTranspiler:
         Use a custom transformer to transform the parsed tree.
     reporter : ~.ContextReporter, optional
         Pass file and line context for logging.
+    max_cache_size : int, optional
+        Size of the LRU cache used to cache transpiled doctypes. Setting it
+        to 0, disables the cache.
 
     Examples
     --------
@@ -605,13 +610,16 @@ class DoctypeTranspiler:
     def __init__(
         self,
         *,
-        grammar=DOCTYPE_GRAMMAR,
+        grammar=None,
         grammar_import_paths=(DOCTYPE_GRAMMAR_PATH.parent,),
         transformer=None,
         reporter=None,
+        max_cache_size=1000,
     ):
-        default_transformer = DoctypeTransformer(reporter=reporter)
+        if grammar is None:
+            grammar = DOCTYPE_GRAMMAR
 
+        default_transformer = DoctypeTransformer(reporter=reporter)
         if transformer is None:
             transformer = default_transformer
 
@@ -624,12 +632,19 @@ class DoctypeTranspiler:
                 transformer, doctype=default_transformer
             )
 
+        self.max_cache_size = max_cache_size
         self.reporter = reporter or ContextReporter(logger=logger)
+        self._stats = Stats()
         self._grammar = grammar
         self._grammar_import_paths = grammar_import_paths
         self._transformer = transformer
 
-    @lru_cache(maxsize=1000)  # TODO find a way to report hits & misses
+        # Can't easily use `lru_cache` here because it should not be applied to
+        # methods (B19, https://docs.astral.sh/ruff/rules/cached-instance-method).
+        # An awkward workaround, assigning the LRU wrapper to the instance
+        # instead of class, wouldn't be pickle-able.
+        self._lru_cache = LRUMemoryCache(maxsize=max_cache_size)
+
     def __call__(self, doctype):
         """Transpile single doctype into a structured expression.
 
@@ -649,10 +664,24 @@ class DoctypeTranspiler:
         BlacklistedQualname
             Raised when a qualname is a forbidden keyword.
         """
+        if doctype in self._lru_cache:
+            self._stats.inc_counter("doctype_transpiler_cache_hits")
+            return self._lru_cache[doctype]
+
         tree = self._parser.parse(doctype)
         expression = self._transformer.transform(tree=tree)
         assert isinstance(expression, Expr)
+
+        self._lru_cache[doctype] = expression
+        self._stats.inc_counter("doctype_transpiler_cache_misses")
         return expression
+
+    @property
+    def stats(self):
+        self._stats.append_to_list(
+            "doctype_transpiler_curr_cache_size", len(self._lru_cache)
+        )
+        return self._stats
 
     @cached_property
     def _parser(self):

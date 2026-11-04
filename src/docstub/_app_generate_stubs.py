@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pluggy
 
-from . import plugins, doctype
+from . import doctype, plugins
 from ._analysis import (
     PyImport,
     TypeCollector,
@@ -103,7 +103,7 @@ def _import_standalone_module_from_path(path, *, module_name=None):
     module : ModuleType
     """
     module_name = module_name or escape_qualname(str(path))
-    if module_name in sys.modules.keys():
+    if module_name in sys.modules:
         raise RuntimeError(f"module {module_name} already defined")
 
     spec = importlib.util.spec_from_file_location(module_name, path)
@@ -298,7 +298,9 @@ def _generate_single_stub(task):
         fo.write(stub_content)
 
     stats = Stats.merge(
-        stub_transformer.stats.pop_all(), stub_transformer.matcher.stats.pop_all()
+        stub_transformer.stats.pop_all(),
+        stub_transformer.matcher.stats.pop_all(),
+        stub_transformer.doctype_transpiler.stats.pop_all(),
     )
 
     return stats
@@ -444,13 +446,17 @@ def generate_stubs(
         output_handler.group_errors = False
 
     # Report basic statistics
+    logger.debug(
+        "DoctypeTranspiler caching stats: hits=%i, misses=%i, maxsize=%i",
+        stats.pop("doctype_transpiler_cache_hits", 0),
+        stats.pop("doctype_transpiler_cache_misses", 0),
+        max(stats.pop("doctype_transpiler_curr_cache_size", [0])),
+    )
+    logger.info("Recognized type names: %i", stats.pop("matched_type_names", 0))
+    logger.info("Transformed doctypes: %i", stats.pop("transformed_doctypes", 0))
+
     total_warnings = error_counter.warning_count
     total_errors = error_counter.error_count
-
-    logger.info("Recognized type names: %i", stats.pop("matched_type_names", default=0))
-    logger.info(
-        "Transformed doctypes: %i", stats.pop("transformed_doctypes", default=0)
-    )
     if total_warnings:
         logger.warning("Warnings: %i", total_warnings)
     if "doctype_syntax_errors" in stats:
