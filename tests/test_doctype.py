@@ -1,4 +1,5 @@
 import logging
+from itertools import product
 
 import lark
 import lark.exceptions
@@ -310,6 +311,9 @@ class Test_DoctypeTranspiler:
         with pytest.raises(lark.exceptions.UnexpectedInput):
             _ = DoctypeTranspiler()(doctype)
 
+
+class Test_DoctypeTranspiler_override:
+
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
@@ -318,7 +322,7 @@ class Test_DoctypeTranspiler:
             # ("ndarray of dtype (uint8, uint16)", "ndarray[uint8 | uint16]"),
         ],
     )
-    def test_grammar_only_override(self, doctype, expected):
+    def test_in_dtype(self, doctype, expected):
         grammar = """
         %import doctype (start, dtype, qualname, WS_INLINE)
         dtype_union : "in {" qualname ("," qualname)+ "}" -> union
@@ -338,7 +342,7 @@ class Test_DoctypeTranspiler:
             ("int or tuple[int or float, ...]", "int | tuple[float | int, ...]"),
         ],
     )
-    def test_transformer_only_override(self, doctype, expected):
+    def test_transformer_only(self, doctype, expected):
         @lark.visitors.v_args(tree=True)
         class Transformer(DoctypeTransformer):
             def union(self, tree):
@@ -359,16 +363,12 @@ class Test_DoctypeTranspiler:
             ("(str, bytes) -> int or bool", "Callable[[str, bytes], int | bool]"),
         ],
     )
-    def test_grammar_transformer_override(self, doctype, expected):
+    def test_natlang_callable(self, doctype, expected):
         grammar = """
         %import doctype (start, _type, WS_INLINE)
-
         params: _type ("," _type)*
-
         natlang_callable : "(" params ") ->" _type
-
         %extend _type: natlang_callable
-
         %ignore WS_INLINE
         """
 
@@ -399,3 +399,60 @@ class Test_DoctypeTranspiler:
         assert expr.as_code() == expected
         assert "natlang_callable" in [e.rule for e in expr.sub_expressions]
         assert "params" in [e.rule for e in expr.sub_expressions]
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("{Iterable, Sequence} of int(s)", "Iterable[int] | Sequence[int]"),
+            (
+                "{list, set} of {int, float}",
+                "list[int] | list[float] | set[int] | set[float]",
+            ),
+        ],
+    )
+    def test_expansion_of_qualnames(self, doctype, expected):
+        grammar = """
+        %import doctype (start, WS_INLINE, qualname)
+        %extend qualname: "{" qualname ("," qualname)+ "}" -> expansion
+        %ignore WS_INLINE
+        """
+
+        class ExpansionTransformer(DoctypeTransformer):
+            def start(self, children):
+                children = map(self._expand_expression, children)
+                return Expr(rule="start", children=tuple(children))
+
+            def expansion(self, children):
+                return Expr(rule="expansion", children=tuple(children))
+
+            def _expand_expression(self, expr):
+                expansions = expr.filter(rule="expansion")
+                if not expansions:
+                    return expr
+
+                # Create Cartesian product of all expansions where each
+                # value is prefixed by the expansion it will replace
+                expansions = [
+                    [(expansion, value) for value in expansion.children]
+                    for expansion in expansions
+                ]
+                combinations = list(product(*expansions))
+
+                # Create a new expression for each combination
+                interpolated = []
+                for combination in combinations:
+                    new_expr = expr
+                    for expansion, value in combination:
+                        new_expr = new_expr.replace(expansion, value)
+                    interpolated.append(new_expr)
+
+                # Join new expressions as union
+                full_expr = self.union(lark.Tree("union", children=interpolated))
+                return full_expr
+
+        transpile = DoctypeTranspiler(
+            grammar=grammar, transformer=ExpansionTransformer()
+        )
+        expr = transpile(doctype)
+        assert expr.as_code() == expected
+        assert list(expr.filter(rule="natlang_array")) == []
