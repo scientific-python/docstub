@@ -185,7 +185,7 @@ class Expr:
         -------
         names : list of Term
         """
-        return [term for term in self.terms if term.kind == TermKind.NAME]
+        return self.filter(kind=TermKind.NAME)
 
     @property
     def sub_expressions(self):
@@ -224,7 +224,7 @@ class Expr:
         formatted_children = ",\n".join(formatted_children)
         formatted_children = indent(formatted_children, prefix="  ")
         return (
-            f"{type(self).__name__}({self.rule!r}, children=[\n{formatted_children}])"
+            f"{type(self).__name__}({self.rule!r}, children=(\n{formatted_children}))"
         )
 
     def print_tree(self):
@@ -239,6 +239,55 @@ class Expr:
 
     def as_code(self) -> str:
         return str(self)
+
+    def replace(self, old, new):
+        """
+        Parameters
+        ----------
+        old : Expr or Term
+        new : Expr or Term
+
+        Returns
+        -------
+        replaced : Expr
+        """
+        cls = type(self)
+        new_children = []
+        for child in self.children:
+            if isinstance(child, cls):
+                child = child.replace(old, new)
+            if child == old:
+                child = new
+            new_children.append(child)
+        return cls(rule=self.rule, children=tuple(new_children))
+
+    def filter(self, func=None, /, **attributes):
+        """Filter children of the expression recursively.
+
+        Parameters
+        ----------
+        func : Callable, optional
+            Only return children for which ``func(child)`` is true.
+        attributes :
+            Only return children for which have an attribute with a matching
+            value.
+
+        Yields
+        -------
+        match : Expr or Term
+        """
+        for child in self.children:
+            matches = True
+            if func:
+                matches = func(child)
+            for name, value in attributes.items():
+                if not hasattr(child, name) or getattr(child, name) != value:
+                    matches = False
+                    break
+            if matches:
+                yield child
+            if hasattr(child, "filter"):
+                yield from child.filter(func, **attributes)
 
 
 BLACKLISTED_QUALNAMES: Final[set[str]] = set(keyword.kwlist) - {"None", "True", "False"}
