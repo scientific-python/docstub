@@ -24,7 +24,19 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 def try_format_stub(stub: str) -> str:
-    """Try to format a stub file with isort and black if available."""
+    """Try to format a stub file with isort and black if available.
+
+    Calls isort and black wiht their standard configuration if they are
+    available.
+    """
+
+    # TODO This seems faster even though we invoke a subprocess?
+    #  But `ruff format` doesn't sort imports...
+    # output = subprocess.check_output(
+    #     ["/usr/bin/ruff", "format", "-"], input=stub, text=True
+    # )
+    # return output
+
     try:
         import isort  # noqa: PLC0415
 
