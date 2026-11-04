@@ -160,7 +160,7 @@ class Expr:
     """
 
     rule: str
-    children: tuple[Self | Term]
+    children: tuple[Self | Term, ...]
 
     def __post_init__(self):
         assert isinstance(self.rule, str)
@@ -255,9 +255,9 @@ class Expr:
         new_children = []
         for child in self.children:
             if isinstance(child, cls):
-                child = child.replace(old, new)
+                child = child.replace(old, new)  # noqa: PLW2901
             if child == old:
-                child = new
+                child = new  # noqa: PLW2901
             new_children.append(child)
         return cls(rule=self.rule, children=tuple(new_children))
 
@@ -268,12 +268,12 @@ class Expr:
         ----------
         func : Callable, optional
             Only return children for which ``func(child)`` is true.
-        attributes :
+        attributes : Any
             Only return children for which have an attribute with a matching
             value.
 
         Yields
-        -------
+        ------
         match : Expr or Term
         """
         for child in self.children:

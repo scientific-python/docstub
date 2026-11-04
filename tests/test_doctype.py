@@ -313,7 +313,6 @@ class Test_DoctypeTranspiler:
 
 
 class Test_DoctypeTranspiler_override:
-
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
@@ -435,15 +434,49 @@ class Test_DoctypeTranspiler_override:
         %ignore WS_INLINE
         """
 
+        @lark.visitors.v_args(tree=True)
         class ExpansionTransformer(DoctypeTransformer):
-            def start(self, children):
-                children = map(self._expand_expression, children)
+            def start(self, tree):
+                """Transform "start" rule.
+
+                Parameters
+                ----------
+                tree : lark.Tree
+
+                Returns
+                -------
+                expr : Expr
+                """
+                children = map(self._expand_expression, tree.children)
                 return Expr(rule="start", children=tuple(children))
 
-            def expansion(self, children):
-                return Expr(rule="expansion", children=tuple(children))
+            def expansion(self, tree):
+                """Transform "expansion" rule.
+
+                Actual expansion happens in `start` when the complete expression with
+                all potential expansions can be seen.
+
+                Parameters
+                ----------
+                tree : lark.Tree
+
+                Returns
+                -------
+                expr : Expr
+                """
+                return Expr(rule="expansion", children=tuple(tree.children))
 
             def _expand_expression(self, expr):
+                """Join combination of all expansions in a new union.
+
+                Parameters
+                ----------
+                expr : Expr
+
+                Returns
+                -------
+                expanded : Expr
+                """
                 expansions = expr.filter(rule="expansion")
                 if not expansions:
                     return expr
@@ -465,8 +498,8 @@ class Test_DoctypeTranspiler_override:
                     interpolated.append(new_expr)
 
                 # Join new expressions as union
-                full_expr = self.union(lark.Tree("union", children=interpolated))
-                return full_expr
+                expanded = self.union(lark.Tree("union", children=interpolated))
+                return expanded
 
         transpile = DoctypeTranspiler(
             grammar=grammar, transformer=ExpansionTransformer()

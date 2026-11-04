@@ -1,4 +1,4 @@
 docstub\._version\..*
 docstub._cache.FuncSerializer.__type_params__
-docstub._doctype.TermKind..*
+docstub.doctype.TermKind..*
 (docstub\..*__conditional_annotations__)?

@@ -73,28 +73,37 @@ my_grammar = """
 """
 
 
+@lark.visitors.v_args(tree=True)
 class ExpansionTransformer(DoctypeTransformer):
-    def start(self, children):
-        """
+    def start(self, tree):
+        """Transform "start" rule.
 
         Parameters
         ----------
-        children : list of (Expr or Term)
+        tree : lark.Tree
+
+        Returns
+        -------
+        expr : Expr
         """
-        children = map(self._expand_expression, children)
+        children = map(self._expand_expression, tree.children)
         return Expr(rule="start", children=tuple(children))
 
-    def expansion(self, children):
-        """Transform "expansion" expression.
+    def expansion(self, tree):
+        """Transform "expansion" rule.
 
         Actual expansion happens in `start` when the complete expression with
         all potential expansions can be seen.
 
         Parameters
         ----------
-        children : list of (Expr or Term)
+        tree : lark.Tree
+
+        Returns
+        -------
+        expr : Expr
         """
-        return Expr(rule="expansion", children=tuple(children))
+        return Expr(rule="expansion", children=tuple(tree.children))
 
     def _expand_expression(self, expr):
         """Join combination of all expansions in a new union.
