@@ -2,7 +2,6 @@
 
 import dataclasses
 import logging
-from collections.abc import Mapping
 from pathlib import Path
 from textwrap import indent
 
@@ -487,7 +486,7 @@ def update_with_add_values(*mappings, out=None):
     return out
 
 
-class Stats(Mapping):
+class Stats(dict):
     """Collect statistics.
 
     Examples
@@ -517,31 +516,7 @@ class Stats(Mapping):
         ----------
         stats : dict[str, list[Any] or str]
         """
-        self._stats = {} if stats is None else stats
-
-    def __getitem__(self, key):
-        """Retrieve a statistic.
-
-        Parameters
-        ----------
-        key : str
-
-        Returns
-        -------
-        value : list[Any] or int
-        """
-        return self._stats[key]
-
-    def __iter__(self):
-        """
-        Returns
-        -------
-        out : Iterator
-        """
-        yield from self._stats
-
-    def __len__(self) -> int:
-        return len(self._stats)
+        super().__init__(stats or {})
 
     def inc_counter(self, key, *, inc=1):
         """Increase counter of a statistic.
@@ -551,10 +526,9 @@ class Stats(Mapping):
         key : str
         inc : int, optional
         """
-        if key not in self._stats:
-            self._stats[key] = 0
-        assert isinstance(inc, int)
-        self._stats[key] += inc
+        if key not in self:
+            self[key] = 0
+        self[key] += inc
 
     def append_to_list(self, key, value):
         """Append `value` to statistic.
@@ -564,9 +538,9 @@ class Stats(Mapping):
         key : str
         value : Any
         """
-        if key not in self._stats:
-            self._stats[key] = []
-        self._stats[key].append(value)
+        if key not in self:
+            self[key] = []
+        self[key].append(value)
 
     @classmethod
     def merge(cls, *stats):
@@ -585,26 +559,8 @@ class Stats(Mapping):
         return out
 
     def __repr__(self) -> str:
-        keys = ", ".join(self._stats.keys())
+        keys = ", ".join(self.keys())
         return f"<{type(self).__name__}: {keys}>"
-
-    def pop(self, key, *, default=_UNSET):
-        """Return and remove a statistic from this container.
-
-        Parameters
-        ----------
-        key : str
-        default : Any, optional
-            If given, falls back to the given default value if `key` is not
-            found.
-
-        Returns
-        -------
-        value : list[Any] or int
-        """
-        if key in self._stats or default is self._UNSET:
-            return self._stats.pop(key)
-        return default
 
     def pop_all(self):
         """Return and remove all statistics from this container.
@@ -613,6 +569,6 @@ class Stats(Mapping):
         -------
         stats : dict[str, list[Any] or int]
         """
-        out = self._stats
-        self._stats = {}
+        out = dict(self)
+        self.clear()
         return out
