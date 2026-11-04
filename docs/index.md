@@ -22,7 +22,7 @@ It does so by supporting widely used readable conventions such as `array of dtyp
 
 installation
 introduction
-writing_a_plugin
+create_plugin
 development/index
 :::
 

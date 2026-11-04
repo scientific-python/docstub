@@ -338,6 +338,24 @@ class Test_DoctypeTranspiler_override:
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
+            ("my_array of dtype int", "my_array[int]"),
+            ("my_array of shape (4, 4)", "my_array"),
+        ],
+    )
+    def test_doc_example_new_array_name(self, doctype, expected):
+        grammar = """
+        %import doctype (start, WS_INLINE, ARRAY_NAME)
+        %extend ARRAY_NAME: "my_array"
+        %ignore WS_INLINE
+        """
+        transpile = DoctypeTranspiler(grammar=grammar)
+        expr = transpile(doctype)
+        assert expr.as_code() == expected
+        assert len(list(expr.filter(rule="natlang_array"))) == 1
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
             ("int or float or complex", "complex | float | int"),
             ("int or tuple[int or float, ...]", "int | tuple[float | int, ...]"),
         ],

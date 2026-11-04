@@ -1,5 +1,15 @@
 """Docstub's plugin interface.
 
+The functions prefixed with ``docstub_`` declare hooks that can be implemented
+by plugins. To create a hook, create a function with the same signature and
+decorate it with ``hookimpl``:
+
+>>> from docstub.plugins import hookimpl
+...
+>>> @hookimpl
+... def docstub_load_doctype_grammar():
+...     return "my grammar..."
+
 Attributes
 ----------
 hookimpl : Final[pluggy.HookimplMarker]
@@ -18,7 +28,8 @@ def docstub_load_doctype_grammar():
 
     You can import from doctype's default grammar with::
 
-        %import doctype (start, ...)
+        %import doctype (start, WS_INLINE, ...)
+        %ignore WS_INLINE
 
     Returns
     -------

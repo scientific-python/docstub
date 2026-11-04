@@ -40,11 +40,12 @@ ignore_files = [
 - Will ignore any directory anywhere that is named `tests`.
 
 
+(plugin-paths)=
 ### `plugin_paths`
 
 [TOML type](https://toml.io/en/latest): array of string(s)
 
-File paths to Python files that implement Docstub's [plugin specification]().
+File paths to Python files that implement a [plugin](create_plugin.md).
 Relative paths will be treated as relative to the configuration file's directory.
 
 **Example:**

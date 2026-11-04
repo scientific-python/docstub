@@ -154,7 +154,7 @@ Feel welcome to [open an issue](https://github.com/scientific-python/docstub/iss
 ## Dealing with typing problems
 
 For various reasons – missing features in docstub, or limitations of Python's typing system – it may not always be possible to correctly type something in a docstring.
-In those cases, you docstub provides a few approaches to dealing with this.
+In those cases, docstub provides a few approaches to dealing with this.
 
 
 ### Use inline type annotation
@@ -199,6 +199,11 @@ class Foo:
     c: int
     d: str
 ```
+
+### Create a plugin
+
+Depending on your problem you might be able to deal with it by hooking directly into Docstub's runtime via a plugin. See [](create_plugin.md) for a guide on writing such a plugin.
+
 
 ### Write a manual stub file
 
