@@ -18,7 +18,7 @@ import numpydoc.docscrape as npds
 from ._analysis import PyImport, TypeMatcher
 from ._report import ContextReporter, Stats
 from ._utils import escape_qualname
-from .doctype import BlacklistedQualname, DoctypeTranspiler, TermKind
+from .doctype import DoctypeTranspiler, QualnameIsForbidden, TermKind
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -276,8 +276,8 @@ def doctype_to_annotation(
 
     except lark.visitors.VisitError as error:
         original_error = error.orig_exc
-        if isinstance(original_error, BlacklistedQualname):
-            msg = "Blacklisted keyword argument in doctype"
+        if isinstance(original_error, QualnameIsForbidden):
+            msg = "Forbidden keyword argument in doctype"
             details = _red_partial_underline(
                 doctype,
                 start=error.obj.meta.start_pos,

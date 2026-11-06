@@ -12,9 +12,10 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import cached_property
+from itertools import product
 from pathlib import Path
 from textwrap import indent
-from typing import Final, Self
+from typing import ClassVar, Final, Self
 
 import lark
 import lark.visitors
@@ -83,6 +84,45 @@ def insert_between(iterable, *, sep):
     return out[:-1]
 
 
+def expand_expression(expr, *, expand_rule):
+    """Create union of `expr` form a combination of all matching children.
+
+    Parameters
+    ----------
+    expr : Expr
+        The expression to expand into multiple ones.
+    expand_rule : str
+
+    Returns
+    -------
+    expanded : Expr
+    """
+    expansions = expr.find_all(rule=expand_rule)
+    if not expansions:
+        return expr
+
+    # Create Cartesian product of all expansions where each
+    # value is prefixed by the expansion it will replace
+    expansions = [
+        [(expansion, value) for value in expansion.children] for expansion in expansions
+    ]
+    combinations = list(product(*expansions))
+
+    # Create a new expression for each combination
+    expanded = []
+    for combination in combinations:
+        new_expr = expr
+        for expansion, value in combination:
+            new_expr = new_expr.replace(expansion, value)
+        expanded.append(new_expr)
+
+    # Join new expressions as union
+    sep = Term(" | ", kind=TermKind.SYNTAX)
+    expanded = insert_between(expanded, sep=sep)
+    expanded = Expr(rule="union", children=tuple(expanded))
+    return expanded
+
+
 class TermKind(enum.StrEnum):
     """Encodes the different kinds of :class:`Term`."""
 
@@ -149,13 +189,13 @@ class Term(str):
 
 @dataclass(slots=True, frozen=True)
 class Expr:
-    """An annotation expression.
+    """An expression that groups a logical part of an annotation expression.
 
     Parameters
     ----------
-    rule :
+    rule : str
         The name of the (grammar) rule corresponding to this expression.
-    children : list of (Expr or Term)
+    children : Iterable of (Expr or Term)
         Sub-expressions or terms that make up this expression.
     """
 
@@ -240,8 +280,11 @@ class Expr:
     def as_code(self) -> str:
         return str(self)
 
+    # TODO Candidate for optimization, benchmark
+    #  Introduce `count` parameter, break iteration earlier?
     def replace(self, old, new):
-        """
+        """Replace children in current expression and return new one.
+
         Parameters
         ----------
         old : Expr or Term
@@ -254,21 +297,24 @@ class Expr:
         cls = type(self)
         new_children = []
         for child in self.children:
-            if isinstance(child, cls):
-                child = child.replace(old, new)  # noqa: PLW2901
+            new_child = None
             if child == old:
-                child = new  # noqa: PLW2901
-            new_children.append(child)
-        return cls(rule=self.rule, children=tuple(new_children))
+                new_child = new
+            elif isinstance(child, cls):
+                # Potentially replace in child's children
+                new_child = child.replace(old, new)
+            new_children.append(new_child or child)
+        replaced = cls(rule=self.rule, children=tuple(new_children))
+        return replaced
 
-    def filter(self, func=None, /, **attributes):
-        """Filter children of the expression recursively.
+    def _filter_iter(self, func=None, /, **attrs):
+        """Find matching children in the expression recursively.
 
         Parameters
         ----------
         func : Callable, optional
             Only return children for which ``func(child)`` is true.
-        attributes : Any
+        attrs : Any, optional
             Only return children for which have an attribute with a matching
             value.
 
@@ -280,20 +326,79 @@ class Expr:
             matches = True
             if func:
                 matches = func(child)
-            for name, value in attributes.items():
+            for name, value in attrs.items():
                 if not hasattr(child, name) or getattr(child, name) != value:
                     matches = False
                     break
             if matches:
                 yield child
-            if hasattr(child, "filter"):
-                yield from child.filter(func, **attributes)
+            if hasattr(child, "_filter_iter"):
+                yield from child._filter_iter(func, **attrs)
+
+    def find_all(self, func=None, /, **attrs):
+        """Find all matching children in the expression recursively.
+
+        Parameters
+        ----------
+        func : Callable, optional
+            Only return children for which ``func(child)`` is true.
+        attrs : Any, optional
+            Only return children for which have an attribute with a matching
+            value.
+
+        Returns
+        -------
+        matches : list of (Expr or Term)
+        """
+        return list(self._filter_iter(func, **attrs))
+
+    def try_find_one(self, func=None, /, **attrs):
+        """Try to find one matching child in expression or return None
+
+        Parameters
+        ----------
+        func : Callable, optional
+            Only return children for which ``func(child)`` is true.
+        attrs : Any, optional
+            Only return children for which have an attribute with a matching
+            value.
+
+        Returns
+        -------
+        match : Expr or Term or None
+        """
+        matches = self.find_all(func, **attrs)
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise RuntimeError(f"found multiple matches: {matches}")
+        return None
+
+    def find_one(self, func=None, /, **attrs):
+        """Find exactly one matching child in expression.
+
+        Parameters
+        ----------
+        func : Callable, optional
+            Only return children for which ``func(child)`` is true.
+        attrs : Any, optional
+            Only return children for which have an attribute with a matching
+            value.
+
+        Returns
+        -------
+        match : Expr or Term
+        """
+        one = self.try_find_one(func, **attrs)
+        if one is None:
+            raise RuntimeError("found no match")
+        return one
 
 
-BLACKLISTED_QUALNAMES: Final[set[str]] = set(keyword.kwlist) - {"None", "True", "False"}
+FORBIDDEN_KEYWORDS: Final[set[str]] = set(keyword.kwlist) - {"None", "True", "False"}
 
 
-class BlacklistedQualname(DocstubError):
+class QualnameIsForbidden(DocstubError):
     """Raised when a qualname is a forbidden keyword."""
 
 
@@ -311,6 +416,23 @@ class DoctypeTransformer(lark.visitors.Transformer):
     'int | tuple[int, ...]'
     """
 
+    any_shape_expr: ClassVar[Expr] = Expr(
+        rule="shape",
+        children=(
+            Expr(
+                "subscription",
+                children=(
+                    Term("tuple", kind="name"),
+                    Term("[", kind="syntax"),
+                    Term("Any", kind="name"),
+                    Term(", ", kind="syntax"),
+                    Term("...", kind="literal"),
+                    Term("]", kind="syntax"),
+                ),
+            ),
+        ),
+    )
+
     def __init__(self, *, reporter=None):
         """
         Parameters
@@ -319,6 +441,26 @@ class DoctypeTransformer(lark.visitors.Transformer):
         """
         reporter = reporter or ContextReporter(logger=logger)
         self.reporter = reporter.copy_with(logger=logger)
+
+    def __default__(self, data, children, meta):
+        """Create expression from rule which has no explicit method.
+
+        Parameters
+        ----------
+        data : str
+            Name of the rule/expression.
+        children : list[Expr | Term]
+            Children of the rule/expression.
+        meta : lark.tree.Meta
+            Meta data like position.
+
+        Returns
+        -------
+        expr : Expr
+        """
+        if "__" in data:
+            _prefix, data = data.split("__")
+        return Expr(rule=data, children=tuple(children))
 
     def start(self, tree):
         """
@@ -345,8 +487,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         children = tree.children
         _qualname = ".".join(children)
 
-        if _qualname in BLACKLISTED_QUALNAMES:
-            raise BlacklistedQualname(_qualname)
+        if _qualname in FORBIDDEN_KEYWORDS:
+            raise QualnameIsForbidden(_qualname)
 
         _qualname = Term(
             _qualname,
@@ -408,7 +550,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out : Expr
         """
         assert len(tree.children) > 1
-        return self._format_subscription(tree.children, rule="subscription")
+        return self._create_subscription_expr(tree.children, rule="subscription")
 
     def param_spec(self, tree):
         """
@@ -440,7 +582,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out : Expr
         """
         assert len(tree.children) > 1
-        return self._format_subscription(tree.children, rule="callable")
+        return self._create_subscription_expr(tree.children, rule="callable")
 
     def literal(self, tree):
         """
@@ -453,7 +595,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out : Expr
         """
         assert len(tree.children) > 1
-        out = self._format_subscription(tree.children, rule="literal")
+        out = self._create_subscription_expr(tree.children, rule="literal")
         return out
 
     def natlang_literal(self, tree):
@@ -512,7 +654,7 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out : Expr
         """
         assert len(tree.children) >= 1
-        return self._format_subscription(tree.children, rule="natlang_container")
+        return self._create_subscription_expr(tree.children, rule="natlang_container")
 
     def natlang_array(self, tree):
         """
@@ -524,7 +666,45 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
-        return self._format_subscription(tree.children, rule="natlang_array")
+        match tree.children:
+            # Array without dtype or shape
+            case [Expr(rule="array_name") as array_name]:
+                children = (array_name,)
+
+            # Only dtype
+            case [Expr(rule="array_name") as array_name, Expr(rule="dtype") as dtype]:
+                # Insert missing shape before dtype
+                children = (array_name, self.any_shape_expr, dtype)
+
+            # Only shape
+            case [Expr(rule="array_name") as array_name, Expr(rule="shape") as shape]:
+                children = (array_name, shape)
+
+            # Shape and dtype in any order
+            case [
+                Expr(rule="array_name") as array_name,
+                Expr(rule="shape") as shape,
+                Expr(rule="dtype") as dtype,
+            ] | [
+                Expr(rule="array_name") as array_name,
+                Expr(rule="dtype") as dtype,
+                Expr(rule="shape") as shape,
+            ]:
+                children = (array_name, shape, dtype)
+
+            case _:
+                raise ValueError(f"{tree.children=} did not match a case")
+
+        if str(array_name) in ["array-like", "array_like"]:
+            # `numpy.ArrayLike` is a union and doesn't support subscription.
+            # So return expression without shape and dtype
+            return Expr(rule="natlang_array", children=(array_name,))
+
+        expr = self._create_subscription_expr(children, rule="natlang_array")
+
+        # Expand shapes with optional dimensions and dtype unions
+        expr = expand_expression(expr, expand_rule="to_expand")
+        return expr
 
     def array_name(self, tree):
         """
@@ -537,9 +717,10 @@ class DoctypeTransformer(lark.visitors.Transformer):
         out : Term
         """
         # This currently relies on a hack that only allows specific names
-        # in `array_expression` (see `ARRAY_NAME` terminal in gramar)
+        # in `array_expression` (see `ARRAY_NAME` terminal in grammar)
         qualname = self.qualname(tree)
-        return qualname
+        array_name = Expr(rule="array_name", children=(qualname,))
+        return array_name
 
     def dtype(self, tree):
         """
@@ -551,7 +732,22 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
-        return Expr(rule="dtype", children=tuple(tree.children))
+        children = [Term("np.dtype", kind=TermKind.NAME), *tree.children]
+        expr = self._create_subscription_expr(children, rule="dtype")
+        return expr
+
+    def dtype_to_expand(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : Expr
+        """
+        # Remap to rule=to_expand
+        return Expr(rule="to_expand", children=tuple(tree.children))
 
     def shape(self, tree):
         """
@@ -561,10 +757,52 @@ class DoctypeTransformer(lark.visitors.Transformer):
 
         Returns
         -------
-        out : lark.visitors._DiscardType
+        out : Expr
         """
-        logger.debug("dropping shape information")
-        return lark.Discard
+        if len(tree.children) == 0:
+            # 0-D shape
+            children = self._create_subscription_expr(
+                [Term("tuple", kind=TermKind.NAME), Term("()", kind=TermKind.SYNTAX)],
+                rule="subscription",
+            )
+            shape = Expr(rule="shape", children=(children,))
+            return shape
+
+        expr = Expr(rule="shape", children=tuple(tree.children))
+
+        if expr.find_all(lambda x: x == "...", kind=TermKind.LITERAL):
+            # "..." effectively allows any shape
+            return self.any_shape_expr
+
+        # Count required and optional dimensions
+        required_count = len(expr.find_all(rule="dim"))
+        optional_count = 0
+        for optional in expr.find_all(rule="optional_dimensions"):
+            optional_count += len(optional.find_all(rule="dim"))
+        required_count -= optional_count
+
+        tuple_ = Term("tuple", kind=TermKind.NAME)
+        dim = Term("int", kind=TermKind.NAME)
+
+        # Construct a "shape tuple" for each of the possible dimension lengths
+        shape_tuples = (
+            (tuple_,) + (dim,) * length
+            for length in range(required_count, required_count + optional_count + 1)
+        )
+        shape_tuples = tuple(
+            self._create_subscription_expr(tuple_, rule="subscription")
+            for tuple_ in shape_tuples
+        )
+
+        if len(shape_tuples) > 1:
+            # Mark for expansion later
+            shape_tuples = Expr(rule="to_expand", children=shape_tuples)
+        elif len(shape_tuples) == 1:
+            # Otherwise unpack single tuple
+            shape_tuples = shape_tuples[0]
+
+        shape = Expr(rule="shape", children=(shape_tuples,))
+        return shape
 
     def optional_info(self, tree):
         """
@@ -593,20 +831,23 @@ class DoctypeTransformer(lark.visitors.Transformer):
         return lark.Discard
 
     @staticmethod
-    def _format_subscription(sequence, *, rule):
-        """Format a `name[...]` style expression.
+    def _create_subscription_expr(children, *, rule):
+        """Create a `name[...]` style expression.
 
         Parameters
         ----------
-        sequence : Sequence[str]
+        children : Sequence[str]
+            Children for the created expression, including the name before the square
+            brackets.
         rule : str, optional
+            The `rule` for the created expression.
 
         Returns
         -------
         out : Expr
         """
         sep = Term(", ", kind=TermKind.SYNTAX)
-        container, *content = sequence
+        container, *content = children
         assert container
 
         if content:
@@ -652,8 +893,8 @@ class DoctypeTranspiler:
     >>> transpile = DoctypeTranspiler()
     >>> transpile("tuple of (int, ...)")
     <Expr: 'tuple[int, ...]' rule='start'>
-    >>> transpile("ndarray of dtype (float or int)")
-    <Expr: 'ndarray[float | int]' rule='start'>
+    >>> transpile("ndarray of dtype int and shape (M, N)")
+    <Expr: 'ndarray[tuple[int, int], np.dtype[int]]' rule='start'>
     """
 
     def __init__(

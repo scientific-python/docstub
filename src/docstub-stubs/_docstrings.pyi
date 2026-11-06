@@ -15,7 +15,7 @@ import numpydoc.docscrape as npds
 from ._analysis import PyImport, TypeMatcher
 from ._report import ContextReporter, Stats
 from ._utils import escape_qualname
-from .doctype import BlacklistedQualname, DoctypeTranspiler, TermKind
+from .doctype import DoctypeTranspiler, QualnameIsForbidden, TermKind
 
 logger: logging.Logger
 
