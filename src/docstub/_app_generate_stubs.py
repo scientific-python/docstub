@@ -473,7 +473,7 @@ def generate_stubs(
     if total_errors:
         logger.error("Total errors: %i", total_errors)
 
-    assert len(stats) == 0
+    assert len(stats) == 0, stats
 
     total_fails = total_errors
     if fail_on_warning:

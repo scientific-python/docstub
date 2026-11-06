@@ -529,6 +529,8 @@ class Py2StubTransformer(cst.CSTTransformer):
             annotation_value = ds_annotations.returns.value
 
             if original_node.returns is None:
+                # TODO Supply cst config! Also on other places
+                # https://libcst.readthedocs.io/en/latest/best_practices.html#provide-a-config-when-generating-code-from-templates
                 annotation = cst.Annotation(cst.parse_expression(annotation_value))
                 node_changes["returns"] = annotation
                 # TODO: check imports
