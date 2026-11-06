@@ -17,8 +17,12 @@ _annotation_with_meta: _type ("," optional_info)?
 
 // A type annotation. Can range from a simple qualified name to a complex
 // nested construct of types.
-_type: qualname
-    | union
+_type: _type_without_union | union
+
+
+// Used in `union` to prevent directly nested unions. Without
+// `a | b | c` is parsed as `union(a, union(b, c))`.
+_type_without_union: qualname
     | literal
     | subscription
     | callable
@@ -38,7 +42,7 @@ qualname: (/~/ ".")? (NAME ".")* NAME
 
 
 // An union of different types, joined either by "or" or "|".
-union: _type (_OR _type)+
+union: _type_without_union (_OR _type_without_union)+
 
 
 // Operator used in unions.
@@ -46,7 +50,9 @@ _OR: "or" | "|"
 
 
 // An expression where an object is subscribed with "A[v, ...]".
-subscription: qualname "[" _type ("," _type)* ("," ELLIPSES)? "]"
+// Assign higher priority (`.1`) so it wins over the `literal` rule which has
+// overlap with this one. See description for `literal_item` for more.
+subscription.1: qualname "[" _type ("," _type)* ("," ELLIPSES)? "]"
 
 
 // An expression describing a callable like "Callable[[int], str]"
@@ -70,10 +76,8 @@ natlang_literal: "{" literal_item ("," literal_item)* "}"
 
 
 // A literal expression as supported by Python proper. The rule "subscription"
-// isn't allowed to contain "literal_items", so we need to define this.
-// Assign a higher priority so that things like `Literal[Some.ENUM]` is marked
-// as a literal expression.
-literal.1: qualname "[" literal_item ("," literal_item)* "]"
+// isn't allowed to contain "literal_items", so this rule covers that case.
+literal: qualname "[" literal_item ("," literal_item)* "]"
 
 
 // An single item in a literal expression (or `optional`). We must also allow

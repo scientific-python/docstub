@@ -608,11 +608,8 @@ class DoctypeTransformer(lark.visitors.Transformer):
         -------
         out : Expr
         """
-        items = [
-            Term("Literal", kind=TermKind.NAME),
-            *tree.children,
-        ]
-        out = self._format_subscription(items, rule="natlang_literal")
+        items = [Term("Literal", kind=TermKind.NAME), *tree.children]
+        out = self._create_subscription_expr(items, rule="natlang_literal")
 
         assert len(tree.children) >= 1
         if len(tree.children) == 1:

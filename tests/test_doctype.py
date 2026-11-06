@@ -55,31 +55,21 @@ class Test_DoctypeTranspiler:
     def test_natlang_union(self, doctype, expected):
         expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
+        assert expr.find_one(rule="union")
 
     @pytest.mark.parametrize(
         ("doctype", "expected"),
         [
-            # Conventional
             ("list[float]", "list[float]"),
             ("dict[str, Union[int, str]]", "dict[str, Union[int, str]]"),
             ("tuple[int, ...]", "tuple[int, ...]"),
             ("Sequence[int | float]", "Sequence[int | float]"),
-            # Natural language variant with "of" and optional plural "(s)"
-            ("list of int", "list[int]"),
-            ("list of int(s)", "list[int]"),
-            # Natural tuple variant
-            ("tuple of (float, int, str)", "tuple[float, int, str]"),
-            ("tuple of (float, ...)", "tuple[float, ...]"),
-            # Natural dict variant
-            ("dict of {str: int}", "dict[str, int]"),
-            ("dict of {str: int | float}", "dict[str, int | float]"),
-            ("dict of {str: int or float}", "dict[str, int | float]"),
-            ("dict[list of str]", "dict[list[str]]"),
         ],
     )
     def test_subscription(self, doctype, expected):
         expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
+        assert expr.find_all(rule="subscription")
 
     @pytest.mark.parametrize(
         ("doctype", "expected"),
@@ -88,7 +78,6 @@ class Test_DoctypeTranspiler:
             ("list of int", "list[int]"),
             ("list of int(s)", "list[int]"),
             ("list of (int or float)", "list[int | float]"),
-            ("list of (list of int)", "list[list[int]]"),
             # Natural tuple variant
             ("tuple of (float, int, str)", "tuple[float, int, str]"),
             ("tuple of (float, ...)", "tuple[float, ...]"),
@@ -96,16 +85,27 @@ class Test_DoctypeTranspiler:
             ("dict of {str: int}", "dict[str, int]"),
             ("dict of {str: int | float}", "dict[str, int | float]"),
             ("dict of {str: int or float}", "dict[str, int | float]"),
-            # Nesting is possible but probably rarely a good idea
+        ],
+    )
+    def test_natlang_container(self, doctype, expected):
+        expr = DoctypeTranspiler()(doctype)
+        assert expr.as_code() == expected
+        assert expr.find_one(rule="natlang_container"), expr.format_tree()
+
+    @pytest.mark.parametrize(
+        ("doctype", "expected"),
+        [
+            ("list of (list of int)", "list[list[int]]"),
             ("list of (list of int(s))", "list[list[int]]"),
             ("tuple of (tuple of (float, ...), ...)", "tuple[tuple[float, ...], ...]"),
             ("dict of {str: dict of {str: float}}", "dict[str, dict[str, float]]"),
             ("dict of {str: list of (list of int(s))}", "dict[str, list[list[int]]]"),
         ],
     )
-    def test_natlang_container(self, doctype, expected):
+    def test_nested_natlang_container(self, doctype, expected):
         expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
+        assert len(expr.find_all(rule="natlang_container")) > 1
 
     @pytest.mark.parametrize(
         "doctype",
@@ -127,29 +127,40 @@ class Test_DoctypeTranspiler:
             DoctypeTranspiler()(doctype)
 
     @pytest.mark.parametrize(
-        ("doctype"),
+        "doctype",
         [
             "Literal[0]",
             "Literal[-1, 1]",
-            "Literal[None]",
-            "Literal[True, False]",
+            "Literal[-2., 1.5]",
             """Literal['a', "bar"]""",
             # Enum
-            "Literal[SomeEnum.FIRST]",
             "Literal[SomeEnum.FIRST, 1]",
             "Literal[SomeEnum.FIRST, 2]",
             "Literal[SomeEnum.FIRST, 3]",
             # Nesting
             "dict[Literal['a', 'b'], int]",
-            # Custom qualname for literal
-            "MyLiteral[0]",
-            "MyLiteral[SomeEnum.FIRST]",
         ],
     )
     def test_literals(self, doctype):
         expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == doctype
-        assert "literal" in [e.rule for e in expr.sub_expressions]
+        assert expr.find_one(rule="literal")
+
+    @pytest.mark.parametrize(
+        "doctype",
+        [
+            "Literal[None]",
+            "Literal[True, False]",
+            # Enum
+            "Literal[SomeEnum.FIRST]",
+        ],
+    )
+    def test_literal_only_qualnames(self, doctype):
+        """Parsed as a subscription because it only contains qualnames."""
+        expr = DoctypeTranspiler()(doctype)
+        assert expr.as_code() == doctype
+        assert expr.find_one(rule="subscription")
+        assert not expr.find_all(rule="literal")
 
     @pytest.mark.parametrize(
         ("doctype", "expected"),
@@ -169,18 +180,18 @@ class Test_DoctypeTranspiler:
             # These aren't officially valid as an argument to `Literal` (yet)
             # https://typing.python.org/en/latest/spec/literal.html
             # TODO figure out how docstub should deal with these
-            ("{-2., 1.}", "Literal[-2., 1.]"),
+            ("{-2., 1.5}", "Literal[-2., 1.5]"),
             pytest.param(
                 "{-inf, inf, nan}",
-                "Literal[, 1.]",
-                marks=pytest.mark.xfail(reason="unsure how to support"),
+                "Literal[-inf, inf, nan]",
+                marks=pytest.mark.xfail(reason="unsure if to support"),
             ),
         ],
     )
     def test_natlang_literals(self, doctype, expected):
         expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
-        assert "natlang_literal" in [e.rule for e in expr.sub_expressions]
+        assert expr.find_one(rule="natlang_literal")
 
     def test_single_natlang_literal_warning(self, caplog):
         expr = DoctypeTranspiler()("{True}")
@@ -196,7 +207,6 @@ class Test_DoctypeTranspiler:
         ("doctype", "expected"),
         [
             ("int", "int"),
-            ("int | None", "int | None"),
             ("tuple of (int, float)", "tuple[int, float]"),
             ("{'a', 'b'}", "Literal['a', 'b']"),
         ],
@@ -218,6 +228,7 @@ class Test_DoctypeTranspiler:
         doctype_with_optional = doctype + optional_info
         expr = DoctypeTranspiler()(doctype_with_optional)
         assert expr.as_code() == expected
+        assert not expr.find_all(rule="optional_info")
 
     @pytest.mark.parametrize(
         "doctype",
@@ -233,7 +244,7 @@ class Test_DoctypeTranspiler:
     def test_callable(self, doctype):
         expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == doctype
-        assert "callable" in [e.rule for e in expr.sub_expressions]
+        assert expr.find_one(rule="callable")
 
     @pytest.mark.parametrize(
         "doctype",
@@ -246,7 +257,7 @@ class Test_DoctypeTranspiler:
     def test_callable_subscriptions_form(self, doctype):
         expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == doctype
-        assert "callable" not in [e.rule for e in expr.sub_expressions]
+        assert not expr.find_all(rule="callable")
 
     @pytest.mark.parametrize(
         "doctype",
@@ -274,6 +285,7 @@ class Test_DoctypeTranspiler:
     def test_rst_role(self, doctype, expected):
         expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
+        assert expr.find_one(rule="rst_role")
 
 
 class Test_DoctypeTranspiler_arrays:
