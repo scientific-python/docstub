@@ -44,6 +44,7 @@ extensions = [
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
     "typing": ("https://typing.python.org/en/latest/", None),
     "lark": ("https://lark-parser.readthedocs.io/en/latest/", None),
     "libcst": ("https://libcst.readthedocs.io/en/latest/", None),

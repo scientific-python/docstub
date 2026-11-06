@@ -19,7 +19,7 @@ def example_metric(image, *, mask=None, sigma=1.0, method='standard'):
     ----------
     image : array-like
         First image.
-    mask : array of dtype uint8, optional
+    mask : array of dtype uint8 and shape (M, N), optional
         Second image.
     sigma : float or Iterable of float, default: 1.0
         Sigma value for each dimension in `image`. A single value is broadcast
@@ -51,7 +51,7 @@ will create the [stub file](https://typing.python.org/en/latest/spec/distributin
 # File generated with docstub
 
 from collections.abc import Iterable
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -59,10 +59,10 @@ from numpy.typing import ArrayLike, NDArray
 def example_metric(
     image: ArrayLike,
     *,
-    mask: NDArray[np.uint8] | None = ...,
+    mask: NDArray[tuple[int, int], np.dtype[np.uint8]] | None = ...,
     sigma: float | Iterable[float] = ...,
     method: Literal["standard", "modified"] = ...
-) -> NDArray[float]: ...
+) -> NDArray[tuple[Any, ...], np.dtype[float]]: ...
 ```
 
 <!--- end example.pyi --->

@@ -26,9 +26,7 @@ from docstub.doctype import DoctypeTransformer, Expr, Term
 
 my_grammar = """
 %import doctype (start, WS_INLINE, ARRAY_NAME)
-
 %extend ARRAY_NAME: "my_array"
-
 %ignore WS_INLINE
 """
 
@@ -62,13 +60,11 @@ from itertools import product
 
 import lark
 from docstub.plugins import hookimpl
-from docstub.doctype import DoctypeTransformer, Expr, Term
+from docstub.doctype import DoctypeTransformer, Expr, Term, expand_expression
 
 my_grammar = """
 %import doctype (start, WS_INLINE, qualname)
-
 %extend qualname: "{" qualname ("," qualname)+ "}" -> expansion
-
 %ignore WS_INLINE
 """
 
@@ -86,59 +82,9 @@ class ExpansionTransformer(DoctypeTransformer):
         -------
         expr : Expr
         """
-        children = map(self._expand_expression, tree.children)
-        return Expr(rule="start", children=tuple(children))
-
-    def expansion(self, tree):
-        """Transform "expansion" rule.
-
-        Actual expansion happens in `start` when the complete expression with
-        all potential expansions can be seen.
-
-        Parameters
-        ----------
-        tree : lark.Tree
-
-        Returns
-        -------
-        expr : Expr
-        """
-        return Expr(rule="expansion", children=tuple(tree.children))
-
-    def _expand_expression(self, expr):
-        """Join combination of all expansions in a new union.
-
-        Parameters
-        ----------
-        expr : Expr
-
-        Returns
-        -------
-        expanded : Expr
-        """
-        expansions = expr.filter(rule="expansion")
-        if not expansions:
-            return expr
-
-        # Create Cartesian product of all expansions where each
-        # value is prefixed by the expansion it will replace
-        expansions = [
-            [(expansion, value) for value in expansion.children]
-            for expansion in expansions
-        ]
-        combinations = list(product(*expansions))
-
-        # Create a new expression for each combination
-        interpolated = []
-        for combination in combinations:
-            new_expr = expr
-            for expansion, value in combination:
-                new_expr = new_expr.replace(expansion, value)
-            interpolated.append(new_expr)
-
-        # Join new expressions as union
-        expanded = self.union(lark.Tree("union", children=interpolated))
-        return expanded
+        assert len(tree.children) == 1
+        child = expand_expression(tree.children[0], expand_rule="expansion")
+        return Expr(rule="start", children=(child,))
 
 
 @hookimpl
