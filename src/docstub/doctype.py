@@ -217,30 +217,6 @@ class Expr:
         """
         return list(flatten_recursive(self))
 
-    @property
-    def names(self):
-        """Name terms in the expression.
-
-        Returns
-        -------
-        names : list of Term
-        """
-        return self.filter(kind=TermKind.NAME)
-
-    @property
-    def sub_expressions(self):
-        """Iterate expressions inside the current one.
-
-        Returns
-        -------
-        names : list of Self
-        """
-        cls = type(self)
-        for child in self.children:
-            if isinstance(child, cls):
-                yield child
-                yield from child.sub_expressions
-
     def __iter__(self):
         """Iterate over children of this expression.
 
@@ -953,10 +929,15 @@ class DoctypeTranspiler:
         """
         if doctype in self._lru_cache:
             self._stats.inc_counter("doctype_transpiler_cache_hits")
-            return self._lru_cache[doctype]
+            expression = self._lru_cache[doctype]
+            return expression
 
+        # TODO Cache exceptions raised in this block?
         tree = self._parser.parse(doctype)
-        expression = self._transformer.transform(tree=tree)
+        try:
+            expression = self._transformer.transform(tree=tree)
+        except lark.visitors.VisitError as e:
+            raise e.orig_exc from None  # Unwrap original error
         assert isinstance(expression, Expr)
 
         self._lru_cache[doctype] = expression
