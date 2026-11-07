@@ -305,7 +305,7 @@ class Test_DocstringAnnotations:
 
     def test_missing_section_title_1(self, caplog):
         docstring = dedent(
-            f"""First line.
+            """First line.
 
             Returns
             -------
@@ -324,7 +324,7 @@ class Test_DocstringAnnotations:
 
     def test_missing_section_title_2(self, caplog):
         docstring = dedent(
-            f"""First line.
+            """First line.
 
             Returns
             -------
