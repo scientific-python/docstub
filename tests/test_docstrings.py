@@ -317,6 +317,7 @@ class Test_DocstringAnnotations:
             """
         )
         annotations = DocstringAnnotations(docstring)
+        assert annotations.returns
         assert annotations.returns.value == "bool"
         assert caplog.messages == ["Duplicate name in docstring section 'Returns'"] * 2
         assert caplog.records[0].details == "\n\x1b[31m\x1b[1m^\x1b[0m"
@@ -336,6 +337,7 @@ class Test_DocstringAnnotations:
             """
         )
         annotations = DocstringAnnotations(docstring)
+        assert annotations.returns
         assert annotations.returns.value == "tuple[bool, Incomplete]"
         assert caplog.messages == [
             "Invalid syntax in doctype",
