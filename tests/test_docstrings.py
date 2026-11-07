@@ -302,3 +302,47 @@ class Test_DocstringAnnotations:
 
         assert caplog.messages == ["Warning in NumPyDoc while parsing docstring"]
         assert caplog.records[0].details == "Unknown section To Do"
+
+    def test_missing_section_title_1(self, caplog):
+        docstring = dedent(
+            f"""First line.
+
+            Returns
+            -------
+            bool
+                Some number.
+
+            NumPyDoc parses this paragraph as another parameter (or it tries to).
+            A new section title should precede this to avoid that.
+            """
+        )
+        annotations = DocstringAnnotations(docstring)
+        assert annotations.returns.value == "bool"
+        assert caplog.messages == ["Duplicate name in docstring section 'Returns'"] * 2
+        assert caplog.records[0].details == "\n\x1b[31m\x1b[1m^\x1b[0m"
+        assert caplog.records[1].details == "\n\x1b[31m\x1b[1m^\x1b[0m"
+
+    def test_missing_section_title_2(self, caplog):
+        docstring = dedent(
+            f"""First line.
+
+            Returns
+            -------
+            out : bool
+                Some number.
+
+            NumPyDoc parses this paragraph as another parameter (or it tries to).
+            A new section title should precede this to avoid that.
+            """
+        )
+        annotations = DocstringAnnotations(docstring)
+        assert annotations.returns.value == "tuple[bool, Incomplete]"
+        assert caplog.messages == [
+            "Invalid syntax in doctype",
+            "Duplicate name in docstring section 'Returns'",
+        ]
+        assert caplog.records[0].details == (
+            "NumPyDoc parses this paragraph as another paramet\n"
+            "         \x1b[31m\x1b[1m^\x1b[0m\n"
+        )
+        assert caplog.records[1].details == "\n\x1b[31m\x1b[1m^\x1b[0m"

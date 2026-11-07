@@ -199,7 +199,7 @@ class ContextReporter:
 
     @staticmethod
     def underline(line, *, char="^"):
-        """Underline `line` with the given `char`.
+        r"""Underline `line` with the given `char`.
 
         Parameters
         ----------
@@ -209,9 +209,20 @@ class ContextReporter:
         Returns
         -------
         underlined : str
+
+        Examples
+        --------
+        >>> ContextReporter.underline("foo")
+        'foo\n\x1b[31m\x1b[1m^^^\x1b[0m'
+        >>> ContextReporter.underline("foo", char="x")
+        'foo\n\x1b[31m\x1b[1mxxx\x1b[0m'
+        >>> ContextReporter.underline("")
+        '\n\x1b[31m\x1b[1m^\x1b[0m'
         """
         assert len(char) == 1
-        underlined = f"{line}\n{click.style(char * len(line), fg='red', bold=True)}"
+        # Underline of at least one char, so that it can indicate an empty line
+        underline = char * max(len(line), 1)
+        underlined = f"{line}\n{click.style(underline, fg='red', bold=True)}"
         return underlined
 
 
@@ -340,6 +351,7 @@ class ReportHandler(logging.StreamHandler):
             groups[group_id] = groups.get(group_id, [])
             groups[group_id].append(record)
 
+        # TODO Presort by level and message too?
         # Show largest groups last
         groups_by_size = sorted(groups.values(), key=lambda x: len(x))
 

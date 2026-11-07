@@ -271,7 +271,7 @@ def doctype_to_annotation(
             details = error.get_context(doctype)
             details = details.replace("^", click.style("^", fg="red", bold=True))
         stats.inc_counter("doctype_syntax_errors")
-        reporter.error("Invalid syntax in docstring type annotation", details=details)
+        reporter.error("Invalid syntax in doctype", details=details)
         return FallbackAnnotation
 
     except lark.visitors.VisitError as error:
@@ -516,7 +516,7 @@ class DocstringAnnotations:
 
             if param.name in annotated_params:
                 self.reporter.warn(
-                    "Duplicate parameter / attribute name in docstring",
+                    f"Duplicate name in docstring section '{name}'",
                     details=self.reporter.underline(param.name),
                 )
                 continue
