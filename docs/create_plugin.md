@@ -18,13 +18,9 @@ First we create the plugin:
 ```python
 # my_array_plugin.py
 
-from itertools import product
-
-import lark
 from docstub.plugins import hookimpl
-from docstub.doctype import DoctypeTransformer, Expr, Term
 
-my_grammar = """
+GRAMMAR = """
 %import doctype (start, WS_INLINE, ARRAY_NAME)
 %extend ARRAY_NAME: "my_array"
 %ignore WS_INLINE
@@ -33,7 +29,7 @@ my_grammar = """
 
 @hookimpl
 def docstub_load_doctype_grammar():
-    return my_grammar
+    return GRAMMAR
 ```
 
 The enable the plugin in the configuration:
@@ -62,7 +58,7 @@ import lark
 from docstub.plugins import hookimpl
 from docstub.doctype import DoctypeTransformer, Expr, Term, expand_expression
 
-my_grammar = """
+GRAMMAR = """
 %import doctype (start, WS_INLINE, qualname)
 %extend qualname: "{" qualname ("," qualname)+ "}" -> expansion
 %ignore WS_INLINE
@@ -89,7 +85,7 @@ class ExpansionTransformer(DoctypeTransformer):
 
 @hookimpl
 def docstub_load_doctype_grammar():
-    return my_grammar
+    return GRAMMAR
 
 
 @hookimpl
