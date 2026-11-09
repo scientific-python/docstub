@@ -357,20 +357,20 @@ class Test_DoctypeTranspiler_arrays:
             ("ndarray of dtype int", "ndarray[tuple[Any, ...], np.dtype[int]]"),
             (
                 "ndarray of dtype (int or float)",
-                "ndarray[tuple[Any, ...], np.dtype[int]]"
-                " | ndarray[tuple[Any, ...], np.dtype[float]]",
+                "ndarray[tuple[Any, ...], np.dtype[int | float]]",
             ),
             (
                 "ndarray of dtype (int | float | complex)",
-                "ndarray[tuple[Any, ...], np.dtype[int]]"
-                " | ndarray[tuple[Any, ...], np.dtype[float]]"
-                " | ndarray[tuple[Any, ...], np.dtype[complex]]",
+                "ndarray[tuple[Any, ...], np.dtype[int | float | complex]]",
             ),
         ],
     )
     def test_dtype(self, doctype, expected):
         expr = DoctypeTranspiler()(doctype)
         assert expr.as_code() == expected
+        assert expr.find_one(rule="dtype")
+        if " or " in doctype:
+            assert expr.find_one(rule="union")
 
     @pytest.mark.parametrize(
         ("doctype", "expected"),
@@ -381,10 +381,8 @@ class Test_DoctypeTranspiler_arrays:
             ),
             (
                 "ndarray of dtype (int or float) and shape ([N,] M)",
-                "ndarray[tuple[int], np.dtype[int]]"
-                " | ndarray[tuple[int], np.dtype[float]]"
-                " | ndarray[tuple[int, int], np.dtype[int]]"
-                " | ndarray[tuple[int, int], np.dtype[float]]",
+                "ndarray[tuple[int], np.dtype[int | float]]"
+                " | ndarray[tuple[int, int], np.dtype[int | float]]",
             ),
         ],
     )

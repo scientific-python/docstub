@@ -386,6 +386,18 @@ def generate_stubs(
 
     grammar = plugin_hooks.docstub_load_doctype_grammar()
     doctype_transformer = plugin_hooks.docstub_load_doctype_transformer()
+    if (doctype_transformer and hasattr(doctype_transformer, "dtype_to_expand")) or (
+        grammar and "dtype_to_expand" in grammar
+    ):
+        logger.warning(
+            "The grammar rule 'dtype_to_expand' is deprecated in favor of 'dtype_union'",
+            extra={
+                "details": "It will be removed in v0.9.0. Since `numpy.dtype` supports "
+                "unions, the rule was renamed. Use the rule 'dtype_union' if you want "
+                "to modify this expression in a plugin."
+            },
+        )
+
     doctype_transpiler = doctype.DoctypeTranspiler(
         grammar=grammar, transformer=doctype_transformer
     )

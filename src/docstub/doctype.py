@@ -709,6 +709,18 @@ class DoctypeTransformer(lark.visitors.Transformer):
         expr = self._create_subscription_expr(children, rule="dtype")
         return expr
 
+    def dtype_union(self, tree):
+        """
+        Parameters
+        ----------
+        tree : lark.Tree
+
+        Returns
+        -------
+        out : Expr
+        """
+        return self.union(tree)
+
     def dtype_to_expand(self, tree):
         """
         Parameters

@@ -126,11 +126,15 @@ ARRAY_NAME: "array" | "ndarray" | "array-like" | "array_like"
 
 
 // The dtype used in an array expression.
-dtype: qualname | dtype_to_expand
+dtype: qualname | dtype_union | dtype_to_expand
 
 
-// Dtypes may be specified as a union. But I'm not sure if `np.dtype` accepts
-// a union. So we use expansion here instead.
+// Dtypes may be specified as a union. But we don't want to allow any `_type`,
+// so we define a dtype-specific union.
+dtype_union.1: "(" qualname (_OR qualname)+ ")"
+
+
+// DEPRECATED in favor of `dtype_union`, will be removed in v0.9.0.
 dtype_to_expand: "(" qualname (_OR qualname)+ ")"
 
 
